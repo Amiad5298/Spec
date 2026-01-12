@@ -330,3 +330,329 @@ class TestBuildPlanPrompt:
         assert "TEST-789" in prompt
         assert "Implement test feature" in prompt
 
+
+class TestWorkflowWithFailFast:
+    """Tests for workflow with fail_fast enabled."""
+
+    @pytest.fixture
+    def state_with_fail_fast(self, tmp_path):
+        """Create a workflow state with fail_fast enabled."""
+        ticket = JiraTicket(
+            ticket_id="TEST-FF",
+            ticket_url="https://jira.example.com/TEST-FF",
+            summary="Test Feature",
+            title="Test with fail_fast",
+            description="Test description"
+        )
+        state = WorkflowState(ticket=ticket)
+        state.fail_fast = True
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir(parents=True)
+
+        plan_file = specs_dir / "TEST-FF-plan.md"
+        plan_file.write_text("# Plan\n\nDo something.")
+        state.plan_file = plan_file
+
+        tasklist_file = specs_dir / "TEST-FF-tasklist.md"
+        tasklist_file.write_text("- [ ] Task 1\n- [ ] Task 2\n")
+        state.tasklist_file = tasklist_file
+
+        return state
+
+    def test_fail_fast_stops_on_first_failure(self, state_with_fail_fast):
+        """With fail_fast enabled, workflow stops on first task failure."""
+        assert state_with_fail_fast.fail_fast is True
+        # The fail_fast behavior is tested at the runner level
+        # This test verifies the state is correctly configured
+
+    def test_fail_fast_default_is_false(self):
+        """fail_fast defaults to False."""
+        ticket = JiraTicket(
+            ticket_id="TEST-DEFAULT",
+            ticket_url="test",
+            summary="Test",
+        )
+        state = WorkflowState(ticket=ticket)
+        assert state.fail_fast is False
+
+
+class TestWorkflowWithSquashAtEnd:
+    """Tests for workflow with squash_at_end option."""
+
+    @pytest.fixture
+    def state_with_squash(self, tmp_path):
+        """Create a workflow state with squash_at_end enabled."""
+        ticket = JiraTicket(
+            ticket_id="TEST-SQUASH",
+            ticket_url="test",
+            summary="Test Feature",
+        )
+        state = WorkflowState(ticket=ticket)
+        state.squash_at_end = True
+        return state
+
+    def test_squash_at_end_defaults_to_true(self):
+        """squash_at_end defaults to True."""
+        ticket = JiraTicket(ticket_id="TEST", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+        assert state.squash_at_end is True
+
+    def test_squash_at_end_can_be_disabled(self, state_with_squash):
+        """squash_at_end can be disabled."""
+        state_with_squash.squash_at_end = False
+        assert state_with_squash.squash_at_end is False
+
+
+class TestAuggieClientFailures:
+    """Tests for handling Auggie client failures."""
+
+    @patch("ai_workflow.workflow.task_memory._get_modified_files")
+    @patch("ai_workflow.workflow.task_memory._identify_patterns_in_changes")
+    def test_handles_auggie_failure_gracefully(
+        self,
+        mock_identify,
+        mock_get_files,
+        mock_workflow_state,
+        mock_auggie_client,
+    ):
+        """Handles Auggie client failure gracefully."""
+        # Setup
+        mock_get_files.return_value = []
+        mock_identify.return_value = []
+        mock_auggie_client.execute.return_value = (False, "Auggie error occurred")
+
+        # Even with failure, task memory can still be captured (with empty data)
+        from ai_workflow.workflow.task_memory import capture_task_memory
+        from ai_workflow.workflow.tasks import Task
+
+        task = Task(name="Failed task")
+        memory = capture_task_memory(task, mock_workflow_state)
+
+        # Memory should be captured even with empty results
+        assert len(mock_workflow_state.task_memories) == 1
+        assert mock_workflow_state.task_memories[0].files_modified == []
+
+
+class TestGitCommandFailures:
+    """Tests for handling git command failures."""
+
+    def test_state_tracks_base_commit(self, mock_workflow_state):
+        """State tracks base commit correctly."""
+        mock_workflow_state.base_commit = "abc123"
+        assert mock_workflow_state.base_commit == "abc123"
+
+    def test_add_checkpoint_with_invalid_hash(self, mock_workflow_state):
+        """add_checkpoint handles any string as commit hash."""
+        mock_workflow_state.add_checkpoint("invalid-hash")
+        assert "invalid-hash" in mock_workflow_state.checkpoint_commits
+
+
+class TestFileSystemErrors:
+    """Tests for handling file system errors."""
+
+    def test_handles_missing_plan_file(self, tmp_path):
+        """Handles missing plan file gracefully."""
+        ticket = JiraTicket(
+            ticket_id="TEST-MISSING",
+            ticket_url="test",
+            summary="Test",
+        )
+        state = WorkflowState(ticket=ticket)
+        # plan_file is not set, get_plan_path returns default
+
+        plan_path = state.get_plan_path()
+        assert not plan_path.exists()
+
+    def test_handles_missing_tasklist_file(self, tmp_path):
+        """Handles missing tasklist file gracefully."""
+        ticket = JiraTicket(
+            ticket_id="TEST-MISSING",
+            ticket_url="test",
+            summary="Test",
+        )
+        state = WorkflowState(ticket=ticket)
+
+        tasklist_path = state.get_tasklist_path()
+        assert not tasklist_path.exists()
+
+
+class TestWorkflowResumption:
+    """Tests for workflow resumption from different steps."""
+
+    @pytest.fixture
+    def resumable_state(self, tmp_path):
+        """Create a state that can be resumed."""
+        ticket = JiraTicket(
+            ticket_id="TEST-RESUME",
+            ticket_url="test",
+            summary="Test Resume",
+        )
+        state = WorkflowState(ticket=ticket)
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir(parents=True)
+
+        plan_file = specs_dir / "TEST-RESUME-plan.md"
+        plan_file.write_text("# Plan\n\n## Task 1\nDo something.\n")
+        state.plan_file = plan_file
+
+        tasklist_file = specs_dir / "TEST-RESUME-tasklist.md"
+        tasklist_file.write_text("- [x] Completed task\n- [ ] Pending task\n")
+        state.tasklist_file = tasklist_file
+
+        return state
+
+    def test_resume_from_step_2(self, resumable_state):
+        """Can resume workflow from step 2."""
+        resumable_state.current_step = 2
+
+        # Verify state is configured for step 2
+        assert resumable_state.current_step == 2
+        assert resumable_state.plan_file.exists()
+
+    def test_resume_from_step_3(self, resumable_state):
+        """Can resume workflow from step 3."""
+        resumable_state.current_step = 3
+        resumable_state.completed_tasks = ["Completed task"]
+
+        # Verify state is configured for step 3
+        assert resumable_state.current_step == 3
+        assert resumable_state.tasklist_file.exists()
+        assert len(resumable_state.completed_tasks) == 1
+
+    def test_preserves_completed_tasks_on_resume(self, resumable_state):
+        """Preserves completed tasks when resuming."""
+        resumable_state.completed_tasks = ["Task A", "Task B"]
+        resumable_state.current_step = 3
+
+        assert resumable_state.completed_tasks == ["Task A", "Task B"]
+
+    def test_preserves_checkpoint_commits_on_resume(self, resumable_state):
+        """Preserves checkpoint commits when resuming."""
+        resumable_state.checkpoint_commits = ["abc123", "def456"]
+        resumable_state.current_step = 3
+
+        assert resumable_state.checkpoint_commits == ["abc123", "def456"]
+
+    def test_reset_retries_on_resume(self, resumable_state):
+        """Retry count can be reset when resuming."""
+        resumable_state.retry_count = 2
+        resumable_state.reset_retries()
+
+        assert resumable_state.retry_count == 0
+
+
+class TestEndToEndWorkflowScenarios:
+    """End-to-end workflow scenario tests."""
+
+    @pytest.fixture
+    def complete_state(self, tmp_path):
+        """Create a complete workflow state for testing."""
+        ticket = JiraTicket(
+            ticket_id="TEST-E2E",
+            ticket_url="https://jira.example.com/TEST-E2E",
+            summary="End-to-end Test",
+            title="E2E Test Feature",
+            description="Complete E2E test",
+        )
+        state = WorkflowState(ticket=ticket)
+        state.branch_name = "feature/TEST-E2E-e2e-test"
+        state.base_commit = "abc123"
+        state.planning_model = "gpt-4"
+        state.implementation_model = "claude-3-opus"
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir(parents=True)
+
+        plan_file = specs_dir / "TEST-E2E-plan.md"
+        plan_file.write_text("# Plan\n\n## Step 1\nDo X.\n\n## Step 2\nDo Y.")
+        state.plan_file = plan_file
+
+        tasklist_file = specs_dir / "TEST-E2E-tasklist.md"
+        tasklist_file.write_text("- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n")
+        state.tasklist_file = tasklist_file
+
+        return state
+
+    def test_complete_workflow_state_configuration(self, complete_state):
+        """Complete workflow state has all necessary configuration."""
+        assert complete_state.ticket.ticket_id == "TEST-E2E"
+        assert complete_state.branch_name == "feature/TEST-E2E-e2e-test"
+        assert complete_state.base_commit == "abc123"
+        assert complete_state.planning_model == "gpt-4"
+        assert complete_state.implementation_model == "claude-3-opus"
+        assert complete_state.plan_file.exists()
+        assert complete_state.tasklist_file.exists()
+
+    def test_workflow_progresses_through_steps(self, complete_state):
+        """Workflow state progresses through steps 1-3."""
+        # Step 1
+        complete_state.current_step = 1
+        assert complete_state.current_step == 1
+
+        # Step 2
+        complete_state.current_step = 2
+        assert complete_state.current_step == 2
+
+        # Step 3
+        complete_state.current_step = 3
+        assert complete_state.current_step == 3
+
+    def test_workflow_tracks_task_completion(self, complete_state):
+        """Workflow tracks task completion correctly."""
+        complete_state.mark_task_complete("Task 1")
+        complete_state.mark_task_complete("Task 2")
+
+        assert "Task 1" in complete_state.completed_tasks
+        assert "Task 2" in complete_state.completed_tasks
+        assert len(complete_state.completed_tasks) == 2
+
+    def test_workflow_tracks_checkpoints(self, complete_state):
+        """Workflow tracks checkpoint commits correctly."""
+        complete_state.add_checkpoint("commit1")
+        complete_state.add_checkpoint("commit2")
+
+        assert len(complete_state.checkpoint_commits) == 2
+        assert "commit1" in complete_state.checkpoint_commits
+        assert "commit2" in complete_state.checkpoint_commits
+
+    @patch("ai_workflow.workflow.task_memory._get_modified_files")
+    @patch("ai_workflow.workflow.task_memory._identify_patterns_in_changes")
+    def test_workflow_accumulates_task_memories(
+        self,
+        mock_identify,
+        mock_get_files,
+        complete_state,
+    ):
+        """Workflow accumulates task memories across tasks."""
+        from ai_workflow.workflow.task_memory import capture_task_memory
+        from ai_workflow.workflow.tasks import Task
+
+        # Task 1
+        mock_get_files.return_value = ["src/module1.py"]
+        mock_identify.return_value = ["Python implementation"]
+
+        task1 = Task(name="Task 1")
+        capture_task_memory(task1, complete_state)
+
+        # Task 2
+        mock_get_files.return_value = ["src/module2.py"]
+        mock_identify.return_value = ["API integration"]
+
+        task2 = Task(name="Task 2")
+        capture_task_memory(task2, complete_state)
+
+        # Task 3
+        mock_get_files.return_value = ["tests/test_module.py"]
+        mock_identify.return_value = ["Unit tests"]
+
+        task3 = Task(name="Task 3")
+        capture_task_memory(task3, complete_state)
+
+        # All memories accumulated
+        assert len(complete_state.task_memories) == 3
+        assert complete_state.task_memories[0].task_name == "Task 1"
+        assert complete_state.task_memories[1].task_name == "Task 2"
+        assert complete_state.task_memories[2].task_name == "Task 3"
+

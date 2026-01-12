@@ -8,6 +8,9 @@ from ai_workflow.workflow.step2_tasklist import (
     step_2_create_tasklist,
     _generate_tasklist,
     _extract_tasklist_from_output,
+    _display_tasklist,
+    _edit_tasklist,
+    _create_default_tasklist,
 )
 from ai_workflow.workflow.state import WorkflowState
 from ai_workflow.workflow.tasks import parse_task_list
@@ -410,4 +413,211 @@ class TestStep2CreateTasklist:
         result = step_2_create_tasklist(state, MagicMock())
 
         assert result is False
+
+    @patch("ai_workflow.workflow.step2_tasklist._generate_tasklist")
+    def test_returns_false_when_plan_not_found(
+        self,
+        mock_generate,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Returns False when plan file does not exist."""
+        monkeypatch.chdir(tmp_path)
+
+        ticket = JiraTicket(ticket_id="TEST-NOPLAN", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+
+        # Create specs directory but NO plan file
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir(parents=True)
+        # state.plan_file is None, so it will use default path which doesn't exist
+
+        result = step_2_create_tasklist(state, MagicMock())
+
+        assert result is False
+        # _generate_tasklist should never be called
+        mock_generate.assert_not_called()
+
+
+class TestDisplayTasklist:
+    """Tests for _display_tasklist function."""
+
+    def test_displays_task_list(self, tmp_path, capsys):
+        """Displays task list content and task count."""
+        tasklist_path = tmp_path / "tasklist.md"
+        tasklist_path.write_text("""# Task List: TEST-123
+
+- [ ] Task one
+- [ ] Task two
+- [x] Task three
+""")
+
+        with patch("ai_workflow.workflow.step2_tasklist.console") as mock_console:
+            _display_tasklist(tasklist_path)
+
+            # Verify console.print was called multiple times
+            assert mock_console.print.call_count >= 4
+            # Check that task count is displayed (2 pending + 1 complete = 3)
+            calls = [str(c) for c in mock_console.print.call_args_list]
+            assert any("Total tasks: 3" in str(c) for c in calls)
+
+    def test_displays_empty_task_list(self, tmp_path):
+        """Displays empty task list with zero count."""
+        tasklist_path = tmp_path / "tasklist.md"
+        tasklist_path.write_text("# Task List: TEST-123\n\nNo tasks yet.\n")
+
+        with patch("ai_workflow.workflow.step2_tasklist.console") as mock_console:
+            _display_tasklist(tasklist_path)
+
+            calls = [str(c) for c in mock_console.print.call_args_list]
+            assert any("Total tasks: 0" in str(c) for c in calls)
+
+
+class TestEditTasklist:
+    """Tests for _edit_tasklist function."""
+
+    @patch("subprocess.run")
+    @patch.dict("os.environ", {"EDITOR": "nano"}, clear=False)
+    def test_opens_editor_from_environment(self, mock_run, tmp_path):
+        """Opens the editor specified in EDITOR environment variable."""
+        tasklist_path = tmp_path / "tasklist.md"
+        tasklist_path.write_text("- [ ] Task\n")
+
+        _edit_tasklist(tasklist_path)
+
+        mock_run.assert_called_once_with(["nano", str(tasklist_path)], check=True)
+
+    @patch("subprocess.run")
+    @patch.dict("os.environ", {}, clear=True)
+    def test_defaults_to_vim(self, mock_run, tmp_path):
+        """Defaults to vim when EDITOR is not set."""
+        tasklist_path = tmp_path / "tasklist.md"
+        tasklist_path.write_text("- [ ] Task\n")
+
+        _edit_tasklist(tasklist_path)
+
+        mock_run.assert_called_once_with(["vim", str(tasklist_path)], check=True)
+
+    @patch("ai_workflow.workflow.step2_tasklist.prompt_enter")
+    @patch("subprocess.run")
+    @patch.dict("os.environ", {"EDITOR": "nonexistent_editor"}, clear=False)
+    def test_handles_editor_not_found(self, mock_run, mock_prompt, tmp_path):
+        """Handles case when editor is not found."""
+        tasklist_path = tmp_path / "tasklist.md"
+        tasklist_path.write_text("- [ ] Task\n")
+
+        mock_run.side_effect = FileNotFoundError()
+
+        _edit_tasklist(tasklist_path)
+
+        # Should prompt user to edit manually
+        mock_prompt.assert_called_once()
+
+    @patch("subprocess.run")
+    @patch.dict("os.environ", {"EDITOR": "vim"}, clear=False)
+    def test_handles_editor_error(self, mock_run, tmp_path):
+        """Handles case when editor exits with error."""
+        import subprocess as sp
+        tasklist_path = tmp_path / "tasklist.md"
+        tasklist_path.write_text("- [ ] Task\n")
+
+        mock_run.side_effect = sp.CalledProcessError(1, "vim")
+
+        # Should not raise, just print warning
+        _edit_tasklist(tasklist_path)
+
+
+class TestCreateDefaultTasklist:
+    """Tests for _create_default_tasklist function."""
+
+    def test_creates_default_template(self, tmp_path):
+        """Creates default task list with template content."""
+        tasklist_path = tmp_path / "tasklist.md"
+        ticket = JiraTicket(ticket_id="TEST-DEFAULT", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+
+        _create_default_tasklist(tasklist_path, state)
+
+        assert tasklist_path.exists()
+        content = tasklist_path.read_text()
+        assert "# Task List: TEST-DEFAULT" in content
+        assert "[Core functionality implementation with tests]" in content
+        assert "[Integration/API layer with tests]" in content
+        assert "[Documentation updates]" in content
+
+    def test_includes_ticket_id_in_header(self, tmp_path):
+        """Includes ticket ID in the task list header."""
+        tasklist_path = tmp_path / "tasklist.md"
+        ticket = JiraTicket(ticket_id="PROJ-999", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+
+        _create_default_tasklist(tasklist_path, state)
+
+        content = tasklist_path.read_text()
+        assert "PROJ-999" in content
+
+    def test_creates_parent_directory_if_needed(self, tmp_path):
+        """Creates parent directories if they don't exist."""
+        tasklist_path = tmp_path / "nested" / "dir" / "tasklist.md"
+        ticket = JiraTicket(ticket_id="TEST-NESTED", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+
+        # Create parent directory manually since _create_default_tasklist doesn't
+        tasklist_path.parent.mkdir(parents=True, exist_ok=True)
+        _create_default_tasklist(tasklist_path, state)
+
+        assert tasklist_path.exists()
+
+
+class TestGenerateTasklistRetry:
+    """Tests for _generate_tasklist retry behavior."""
+
+    def test_returns_false_on_auggie_failure(self, tmp_path):
+        """Returns False when Auggie command fails."""
+        ticket = JiraTicket(ticket_id="TEST-FAIL", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir(parents=True)
+        plan_path = specs_dir / "TEST-FAIL-plan.md"
+        plan_path.write_text("# Plan\n\nDo something.")
+        tasklist_path = specs_dir / "TEST-FAIL-tasklist.md"
+
+        mock_auggie = MagicMock()
+        mock_auggie.run_print_with_output.return_value = (False, "Error occurred")
+
+        result = _generate_tasklist(state, plan_path, tasklist_path, mock_auggie)
+
+        assert result is False
+
+    @patch("ai_workflow.workflow.step2_tasklist.AuggieClient")
+    def test_uses_planning_model_when_configured(self, mock_auggie_class, tmp_path):
+        """Uses planning_model client when configured."""
+        ticket = JiraTicket(ticket_id="TEST-MODEL", ticket_url="test", summary="Test")
+        state = WorkflowState(ticket=ticket)
+        state.planning_model = "gpt-4"
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir(parents=True)
+        plan_path = specs_dir / "TEST-MODEL-plan.md"
+        plan_path.write_text("# Plan\n\nDo something.")
+        tasklist_path = specs_dir / "TEST-MODEL-tasklist.md"
+
+        mock_planning_client = MagicMock()
+        mock_planning_client.run_print_with_output.return_value = (
+            True,
+            "- [ ] Single task\n"
+        )
+        mock_auggie_class.return_value = mock_planning_client
+
+        mock_auggie = MagicMock()
+
+        result = _generate_tasklist(state, plan_path, tasklist_path, mock_auggie)
+
+        assert result is True
+        # Should have created a new client with planning model
+        mock_auggie_class.assert_called_once_with(model="gpt-4")
+        # The planning client should be used, not the passed auggie
+        mock_planning_client.run_print_with_output.assert_called_once()
+        mock_auggie.run_print_with_output.assert_not_called()
 

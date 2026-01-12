@@ -104,3 +104,64 @@ class TestWorkflowState:
         state.user_context = "Additional details"
         assert state.user_context == "Additional details"
 
+    def test_fail_fast_default_false(self, state):
+        """fail_fast defaults to False."""
+        assert state.fail_fast is False
+
+    def test_fail_fast_can_be_set(self, state):
+        """fail_fast can be set to True."""
+        state.fail_fast = True
+        assert state.fail_fast is True
+
+    def test_planning_model_default_empty(self, state):
+        """planning_model defaults to empty string."""
+        assert state.planning_model == ""
+
+    def test_implementation_model_default_empty(self, state):
+        """implementation_model defaults to empty string."""
+        assert state.implementation_model == ""
+
+    def test_planning_model_can_be_set(self, state):
+        """planning_model can be set."""
+        state.planning_model = "gpt-4"
+        assert state.planning_model == "gpt-4"
+
+    def test_implementation_model_can_be_set(self, state):
+        """implementation_model can be set."""
+        state.implementation_model = "claude-3-opus"
+        assert state.implementation_model == "claude-3-opus"
+
+    def test_task_memories_default_empty_list(self, state):
+        """task_memories defaults to empty list."""
+        assert state.task_memories == []
+        assert isinstance(state.task_memories, list)
+
+    def test_task_memories_can_be_appended(self, state):
+        """task_memories can have items appended."""
+        from ai_workflow.workflow.task_memory import TaskMemory
+
+        memory = TaskMemory(
+            task_name="Test Task",
+            files_modified=["src/test.py"],
+            patterns_used=["Python implementation"],
+        )
+        state.task_memories.append(memory)
+
+        assert len(state.task_memories) == 1
+        assert state.task_memories[0].task_name == "Test Task"
+
+    def test_get_tasklist_path_with_override(self, state):
+        """get_tasklist_path uses override if set."""
+        state.tasklist_file = Path("/custom/tasklist.md")
+        assert state.get_tasklist_path() == Path("/custom/tasklist.md")
+
+    def test_completed_tasks_default_empty(self, state):
+        """completed_tasks defaults to empty list."""
+        assert state.completed_tasks == []
+        assert isinstance(state.completed_tasks, list)
+
+    def test_checkpoint_commits_default_empty(self, state):
+        """checkpoint_commits defaults to empty list."""
+        assert state.checkpoint_commits == []
+        assert isinstance(state.checkpoint_commits, list)
+

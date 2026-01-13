@@ -359,6 +359,36 @@ def _configure_settings(config: ConfigManager) -> None:
         if project:
             config.save("DEFAULT_JIRA_PROJECT", project.upper())
 
+    # Parallel execution settings
+    if prompt_confirm("Configure parallel execution settings?", default=False):
+        # Enable/disable parallel execution
+        parallel_enabled = prompt_confirm(
+            "Enable parallel execution of independent tasks?",
+            default=config.settings.parallel_execution_enabled,
+        )
+        config.save("PARALLEL_EXECUTION_ENABLED", str(parallel_enabled).lower())
+
+        # Max parallel tasks
+        max_parallel_str = prompt_input(
+            "Maximum parallel tasks (1-5)",
+            default=str(config.settings.max_parallel_tasks),
+        )
+        try:
+            max_parallel = int(max_parallel_str)
+            if 1 <= max_parallel <= 5:
+                config.save("MAX_PARALLEL_TASKS", str(max_parallel))
+            else:
+                print_error("Invalid value. Must be between 1 and 5. Keeping current value.")
+        except ValueError:
+            print_error("Invalid number. Keeping current value.")
+
+        # Fail fast
+        fail_fast = prompt_confirm(
+            "Stop on first task failure (fail-fast)?",
+            default=config.settings.fail_fast,
+        )
+        config.save("FAIL_FAST", str(fail_fast).lower())
+
     print_info("Configuration saved!")
 
 

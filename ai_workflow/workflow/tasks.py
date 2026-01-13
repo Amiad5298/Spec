@@ -262,17 +262,26 @@ def get_fundamental_tasks(tasks: list[Task]) -> list[Task]:
     """Get fundamental tasks sorted by dependency order with stable ordering.
 
     Sorting is done by:
-    1. dependency_order (explicit order from metadata)
-    2. line_number (for stability when dependency_order is equal)
+    1. Explicit order flag: tasks with order > 0 come before order = 0 tasks
+    2. dependency_order (explicit order from metadata)
+    3. line_number (for stability when dependency_order is equal)
+
+    This ensures tasks with explicit ordering (order > 0) are always executed
+    before tasks with no explicit order (order = 0).
 
     Args:
         tasks: List of all tasks
 
     Returns:
-        List of fundamental tasks sorted by (dependency_order, line_number)
+        List of fundamental tasks sorted by (explicit_order_flag, dependency_order, line_number)
     """
     fundamental = [t for t in tasks if t.category == TaskCategory.FUNDAMENTAL]
-    return sorted(fundamental, key=lambda t: (t.dependency_order, t.line_number))
+    # Sort key: (0 if explicit order else 1, dependency_order, line_number)
+    # This puts explicit order (>0) tasks first, then order=0 tasks
+    return sorted(
+        fundamental,
+        key=lambda t: (0 if t.dependency_order > 0 else 1, t.dependency_order, t.line_number),
+    )
 
 
 def get_independent_tasks(tasks: list[Task]) -> list[Task]:

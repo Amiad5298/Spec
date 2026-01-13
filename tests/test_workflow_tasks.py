@@ -701,3 +701,57 @@ class TestFundamentalTaskOrdering:
         assert result[0].name == "First"
         assert result[1].name == "Second"
         assert result[2].name == "Third"
+
+    def test_explicit_order_comes_before_order_zero(self):
+        """Tasks with explicit order (>0) come before tasks with order=0."""
+        from ai_workflow.workflow.tasks import (
+            Task, TaskCategory, get_fundamental_tasks
+        )
+
+        tasks = [
+            Task(name="NoOrder1", category=TaskCategory.FUNDAMENTAL, dependency_order=0, line_number=10),
+            Task(name="Order2", category=TaskCategory.FUNDAMENTAL, dependency_order=2, line_number=20),
+            Task(name="NoOrder2", category=TaskCategory.FUNDAMENTAL, dependency_order=0, line_number=30),
+            Task(name="Order1", category=TaskCategory.FUNDAMENTAL, dependency_order=1, line_number=40),
+        ]
+
+        result = get_fundamental_tasks(tasks)
+
+        # Explicit orders (>0) should come first, sorted by order
+        # Then order=0 tasks, sorted by line_number
+        assert result[0].name == "Order1"  # order=1 comes first (explicit order)
+        assert result[1].name == "Order2"  # order=2 comes second (explicit order)
+        assert result[2].name == "NoOrder1"  # order=0, line=10 (implicit order)
+        assert result[3].name == "NoOrder2"  # order=0, line=30 (implicit order)
+
+    def test_mixed_explicit_and_implicit_ordering(self):
+        """Mixed explicit and implicit orders produce correct sequence."""
+        from ai_workflow.workflow.tasks import (
+            Task, TaskCategory, get_fundamental_tasks
+        )
+
+        tasks = [
+            # Implicit order tasks (order=0), sorted by line_number
+            Task(name="Implicit1", category=TaskCategory.FUNDAMENTAL, dependency_order=0, line_number=5),
+            Task(name="Implicit2", category=TaskCategory.FUNDAMENTAL, dependency_order=0, line_number=15),
+            # Explicit order tasks (order>0), sorted by order, then line_number
+            Task(name="Explicit3A", category=TaskCategory.FUNDAMENTAL, dependency_order=3, line_number=100),
+            Task(name="Explicit3B", category=TaskCategory.FUNDAMENTAL, dependency_order=3, line_number=50),
+            Task(name="Explicit1", category=TaskCategory.FUNDAMENTAL, dependency_order=1, line_number=200),
+        ]
+
+        result = get_fundamental_tasks(tasks)
+
+        # Expected order:
+        # 1. Explicit order=1 (line=200)
+        # 2. Explicit order=3 (line=50) - same order, lower line_number first
+        # 3. Explicit order=3 (line=100)
+        # 4. Implicit order=0 (line=5)
+        # 5. Implicit order=0 (line=15)
+        assert [t.name for t in result] == [
+            "Explicit1",  # order=1
+            "Explicit3B",  # order=3, line=50
+            "Explicit3A",  # order=3, line=100
+            "Implicit1",  # order=0, line=5
+            "Implicit2",  # order=0, line=15
+        ]

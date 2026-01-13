@@ -20,7 +20,13 @@ Supports two display modes:
 import os
 import threading
 import time
-from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    CancelledError,
+    FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -365,8 +371,9 @@ def _execute_with_tui(
                     user_quit = True
                     # Emit task finished event first
                     duration = record.elapsed_time
+                    status = "success" if success else "failed"
                     finish_event = create_task_finished_event(
-                        i, task.name, success, duration,
+                        i, task.name, status, duration,
                         error=None if success else "Task returned failure",
                     )
                     tui.handle_event(finish_event)
@@ -383,8 +390,9 @@ def _execute_with_tui(
 
             # Emit task finished event
             duration = record.elapsed_time
+            status = "success" if success else "failed"
             finish_event = create_task_finished_event(
-                i, task.name, success, duration,
+                i, task.name, status, duration,
                 error=None if success else "Task returned failure",
             )
             tui.handle_event(finish_event)
@@ -584,9 +592,10 @@ def _execute_parallel_with_tui(
 ) -> list[str]:
     """Execute independent tasks in parallel with TUI display and rate limit handling.
 
-    Shows multiple tasks running concurrently in the TUI.
-    Rate limit errors trigger exponential backoff retry.
-    Implements fail_fast semantics with stop_flag for early termination.
+    Thread-safe design per PARALLEL-EXECUTION-REMEDIATION-SPEC:
+    - Worker threads ONLY call tui.post_event() for TASK_STARTED and TASK_OUTPUT
+    - Main thread pumps with wait(timeout=0.1) and calls tui.refresh() each loop
+    - TASK_FINISHED events are emitted from main thread after future completes
 
     Args:
         state: Current workflow state
@@ -620,86 +629,107 @@ def _execute_parallel_with_tui(
         if record:
             record.log_buffer = TaskLogBuffer(log_path)
 
-    def execute_single_task_tui(task_info: tuple[int, Task]) -> tuple[int, Task, str]:
-        """Execute a single task with TUI callbacks and retry handling.
+    def execute_single_task_worker(task_info: tuple[int, Task]) -> tuple[int, Task, bool]:
+        """Worker thread: execute task, post TASK_STARTED/TASK_OUTPUT via post_event.
 
         Returns:
-            Tuple of (idx, task, status) where status is 'success'|'failed'|'skipped'.
+            Tuple of (idx, task, success) - TASK_FINISHED is emitted by main thread.
         """
         idx, task = task_info
-        record = tui.get_record(idx)
 
         # Early exit if stop flag set (fail-fast triggered by another task)
         if stop_flag.is_set():
-            return idx, task, "skipped"
+            # Return special marker for skipped (success=None would be ideal but
+            # we use a sentinel: raise a specific exception or return a tuple)
+            # We'll handle this case in the main loop
+            return idx, task, None  # type: ignore[return-value]
 
-        # Emit task started
+        # Post TASK_STARTED event to queue (thread-safe)
         start_event = create_task_started_event(idx, task.name)
-        tui.handle_event(start_event)
+        tui.post_event(start_event)
 
         try:
-            # Execute with streaming callback and retry handling (is_parallel=True)
+            # Execute with streaming callback via post_event (thread-safe)
             success = _execute_task_with_retry(
                 state,
                 task,
                 plan_path,
-                callback=lambda line, i=idx, n=task.name: tui.handle_event(
+                callback=lambda line, i=idx, n=task.name: tui.post_event(
                     create_task_output_event(i, n, line)
                 ),
                 is_parallel=True,
             )
-            status = "success" if success else "failed"
+            return idx, task, success
         except Exception as e:
-            # Unexpected crash - treat as failure
-            tui.handle_event(create_task_output_event(idx, task.name, f"[ERROR] {e}"))
-            status = "failed"
-
-        # Emit task finished
-        duration = record.elapsed_time if record else 0.0
-        finish_event = create_task_finished_event(
-            idx,
-            task.name,
-            status == "success",
-            duration,
-            error=None if status == "success" else "Task returned failure",
-        )
-        tui.handle_event(finish_event)
-
-        return idx, task, status
+            # Unexpected crash - post error output and return failure
+            tui.post_event(create_task_output_event(idx, task.name, f"[ERROR] {e}"))
+            return idx, task, False
 
     with tui:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
             futures = {
-                executor.submit(execute_single_task_tui, (i, task)): (i, task)
+                executor.submit(execute_single_task_worker, (i, task)): (i, task)
                 for i, task in enumerate(tasks)
             }
+            pending = set(futures.keys())
 
-            for future in as_completed(futures):
-                try:
-                    idx, task, status = future.result()
-                except CancelledError:
+            # Main thread: pump events while waiting for futures
+            while pending:
+                # Wait with timeout so we can refresh TUI periodically
+                done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+
+                # Drain event queue and refresh TUI display
+                tui.refresh()
+
+                # Process completed futures
+                for future in done:
                     idx, task = futures[future]
-                    status = "skipped"
-                    # Emit skipped event for cancelled tasks
+                    record = tui.get_record(idx)
+                    duration = record.elapsed_time if record else 0.0
+
+                    try:
+                        result_idx, result_task, success = future.result()
+
+                        # Handle skipped tasks (stop_flag was set before execution)
+                        if success is None:
+                            status = "skipped"
+                            error = None
+                        elif success:
+                            status = "success"
+                            error = None
+                        else:
+                            status = "failed"
+                            error = "Task returned failure"
+
+                    except CancelledError:
+                        status = "skipped"
+                        error = None
+
+                    # Emit TASK_FINISHED from main thread (thread-safe log buffer close)
                     finish_event = create_task_finished_event(
-                        idx, task.name, False, 0.0, error=None
+                        idx, task.name, status, duration, error=error
                     )
                     tui.handle_event(finish_event)
 
-                if status == "success":
-                    mark_task_complete(tasklist_path, task.name)
-                    state.mark_task_complete(task.name)
-                    # Memory capture disabled for parallel tasks (contamination risk)
-                elif status == "skipped":
-                    skipped_tasks.append(task.name)
-                else:  # failed
-                    failed_tasks.append(task.name)
-                    # Trigger fail-fast if enabled
-                    if state.fail_fast:
-                        stop_flag.set()
-                        # Cancel pending futures
-                        for f in futures:
-                            f.cancel()
+                    # Update state based on status
+                    if status == "success":
+                        mark_task_complete(tasklist_path, task.name)
+                        state.mark_task_complete(task.name)
+                        # Memory capture disabled for parallel tasks (contamination risk)
+                    elif status == "skipped":
+                        skipped_tasks.append(task.name)
+                    else:  # failed
+                        failed_tasks.append(task.name)
+                        # Trigger fail-fast if enabled
+                        if state.fail_fast:
+                            stop_flag.set()
+                            # Cancel pending futures
+                            for f in pending:
+                                f.cancel()
+
+            # Final refresh to ensure all events are processed
+            tui.refresh()
 
     tui.print_summary()
     return failed_tasks

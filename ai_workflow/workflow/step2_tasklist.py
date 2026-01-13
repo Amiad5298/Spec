@@ -102,7 +102,8 @@ def step_2_create_tasklist(state: WorkflowState, auggie: AuggieClient) -> bool:
 def _extract_tasklist_from_output(output: str, ticket_id: str) -> Optional[str]:
     """Extract markdown checkbox task list from AI output.
 
-    Finds all lines matching checkbox format and returns them as a task list.
+    Finds all lines matching checkbox format, preserving category metadata comments
+    and section headers for parallel execution support.
 
     Args:
         output: AI output text that may contain task list
@@ -112,25 +113,56 @@ def _extract_tasklist_from_output(output: str, ticket_id: str) -> Optional[str]:
         Formatted task list content, or None if no tasks found
     """
     # Pattern for task items: optional indent, optional bullet, checkbox, task name
-    pattern = re.compile(r"^(\s*)[-*]?\s*\[([xX ])\]\s*(.+)$", re.MULTILINE)
+    task_pattern = re.compile(r"^(\s*)[-*]?\s*\[([xX ])\]\s*(.+)$")
+    # Pattern for category metadata comments
+    metadata_pattern = re.compile(r"^\s*<!--\s*category:\s*.+-->\s*$")
+    # Pattern for section headers (## Fundamental Tasks, ## Independent Tasks, etc.)
+    section_pattern = re.compile(r"^##\s+(Fundamental|Independent)\s+Tasks.*$", re.IGNORECASE)
 
-    matches = pattern.findall(output)
-    if not matches:
+    output_lines = output.splitlines()
+    result_lines = [f"# Task List: {ticket_id}", ""]
+
+    task_count = 0
+    pending_metadata: list[str] = []  # Buffer for metadata before a task
+
+    for line in output_lines:
+        # Check for section headers
+        if section_pattern.match(line):
+            # Add blank line before section (if we have content)
+            if len(result_lines) > 2:
+                result_lines.append("")
+            result_lines.append(line)
+            pending_metadata = []  # Reset metadata buffer
+            continue
+
+        # Check for category metadata comments
+        if metadata_pattern.match(line):
+            pending_metadata.append(line.strip())
+            continue
+
+        # Check for task items
+        task_match = task_pattern.match(line)
+        if task_match:
+            indent, checkbox, task_name = task_match.groups()
+
+            # Add any pending metadata before this task
+            for meta in pending_metadata:
+                result_lines.append(meta)
+            pending_metadata = []
+
+            # Normalize indentation (2 spaces per level)
+            indent_level = len(indent) // 2
+            normalized_indent = "  " * indent_level
+            checkbox_char = checkbox.lower()  # Normalize to lowercase
+            result_lines.append(f"{normalized_indent}- [{checkbox_char}] {task_name.strip()}")
+            task_count += 1
+
+    if task_count == 0:
         log_message("No checkbox tasks found in AI output")
         return None
 
-    # Build the task list content
-    lines = [f"# Task List: {ticket_id}", "", "## Implementation Tasks", ""]
-
-    for indent, checkbox, task_name in matches:
-        # Preserve indentation (normalize to 2 spaces per level)
-        indent_level = len(indent) // 2
-        normalized_indent = "  " * indent_level
-        checkbox_char = checkbox.lower()  # Normalize to lowercase
-        lines.append(f"{normalized_indent}- [{checkbox_char}] {task_name.strip()}")
-
-    log_message(f"Extracted {len(matches)} tasks from AI output")
-    return "\n".join(lines) + "\n"
+    log_message(f"Extracted {task_count} tasks from AI output")
+    return "\n".join(result_lines) + "\n"
 
 
 def _generate_tasklist(

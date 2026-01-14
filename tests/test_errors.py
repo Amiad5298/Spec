@@ -1,9 +1,9 @@
-"""Tests for ai_workflow.utils.errors module."""
+"""Tests for spec.utils.errors module."""
 
 import pytest
 
-from ai_workflow.utils.errors import (
-    AIWorkflowError,
+from spec.utils.errors import (
+    SpecError,
     AuggieNotInstalledError,
     ExitCode,
     GitOperationError,
@@ -30,22 +30,22 @@ class TestExitCode:
         assert int(ExitCode.GENERAL_ERROR) == 1
 
 
-class TestAIWorkflowError:
-    """Tests for base AIWorkflowError exception."""
+class TestSpecError:
+    """Tests for base SpecError exception."""
 
     def test_default_exit_code(self):
         """Base exception has GENERAL_ERROR exit code."""
-        error = AIWorkflowError("Test error")
+        error = SpecError("Test error")
         assert error.exit_code == ExitCode.GENERAL_ERROR
 
     def test_custom_exit_code(self):
         """Can override exit code in constructor."""
-        error = AIWorkflowError("Test error", exit_code=ExitCode.GIT_ERROR)
+        error = SpecError("Test error", exit_code=ExitCode.GIT_ERROR)
         assert error.exit_code == ExitCode.GIT_ERROR
 
     def test_message(self):
         """Exception message is accessible."""
-        error = AIWorkflowError("Test error message")
+        error = SpecError("Test error message")
         assert str(error) == "Test error message"
 
 
@@ -58,9 +58,9 @@ class TestAuggieNotInstalledError:
         assert error.exit_code == ExitCode.AUGGIE_NOT_INSTALLED
 
     def test_inheritance(self):
-        """Inherits from AIWorkflowError."""
+        """Inherits from SpecError."""
         error = AuggieNotInstalledError("Test")
-        assert isinstance(error, AIWorkflowError)
+        assert isinstance(error, SpecError)
 
 
 class TestJiraNotConfiguredError:
@@ -72,9 +72,9 @@ class TestJiraNotConfiguredError:
         assert error.exit_code == ExitCode.JIRA_NOT_CONFIGURED
 
     def test_inheritance(self):
-        """Inherits from AIWorkflowError."""
+        """Inherits from SpecError."""
         error = JiraNotConfiguredError("Test")
-        assert isinstance(error, AIWorkflowError)
+        assert isinstance(error, SpecError)
 
 
 class TestUserCancelledError:
@@ -86,9 +86,9 @@ class TestUserCancelledError:
         assert error.exit_code == ExitCode.USER_CANCELLED
 
     def test_inheritance(self):
-        """Inherits from AIWorkflowError."""
+        """Inherits from SpecError."""
         error = UserCancelledError("Test")
-        assert isinstance(error, AIWorkflowError)
+        assert isinstance(error, SpecError)
 
 
 class TestGitOperationError:
@@ -100,7 +100,7 @@ class TestGitOperationError:
         assert error.exit_code == ExitCode.GIT_ERROR
 
     def test_inheritance(self):
-        """Inherits from AIWorkflowError."""
+        """Inherits from SpecError."""
         error = GitOperationError("Test")
-        assert isinstance(error, AIWorkflowError)
+        assert isinstance(error, SpecError)
 

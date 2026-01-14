@@ -95,14 +95,14 @@ def mock_auggie_client():
 def mock_console(monkeypatch):
     """Mock console output for testing."""
     mock = MagicMock()
-    monkeypatch.setattr("ai_workflow.utils.console.console", mock)
+    monkeypatch.setattr("spec.utils.console.console", mock)
     return mock
 
 
 @pytest.fixture
 def sample_tasks_with_categories():
     """Create sample tasks with category metadata for parallel execution tests."""
-    from ai_workflow.workflow.tasks import Task, TaskStatus, TaskCategory
+    from spec.workflow.tasks import Task, TaskStatus, TaskCategory
 
     return [
         Task(
@@ -146,7 +146,7 @@ def sample_tasks_with_categories():
 @pytest.fixture
 def rate_limit_config():
     """Create a RateLimitConfig for testing."""
-    from ai_workflow.workflow.state import RateLimitConfig
+    from spec.workflow.state import RateLimitConfig
 
     return RateLimitConfig(
         max_retries=3,

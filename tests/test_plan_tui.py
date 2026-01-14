@@ -1,4 +1,4 @@
-"""Tests for ai_workflow.ui.plan_tui module."""
+"""Tests for spec.ui.plan_tui module."""
 
 import threading
 import time
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ai_workflow.ui.plan_tui import (
+from spec.ui.plan_tui import (
     DEFAULT_VERBOSE_LINES,
     MAX_LIVENESS_WIDTH,
     PlanGeneratorUI,
@@ -187,7 +187,7 @@ class TestPlanGeneratorUIQuitRequest:
 class TestPlanGeneratorUIContextManager:
     """Tests for context manager protocol."""
 
-    @patch("ai_workflow.ui.plan_tui.Live")
+    @patch("spec.ui.plan_tui.Live")
     @patch.object(PlanGeneratorUI, "_input_loop")
     def test_context_manager_starts_and_stops(self, mock_input_loop, mock_live_class, tmp_path: Path):
         """Context manager starts and stops TUI."""
@@ -204,7 +204,7 @@ class TestPlanGeneratorUIContextManager:
         # Live should have been stopped
         mock_live.stop.assert_called_once()
 
-    @patch("ai_workflow.ui.plan_tui.Live")
+    @patch("spec.ui.plan_tui.Live")
     @patch.object(PlanGeneratorUI, "_input_loop")
     def test_context_manager_closes_log_buffer(self, mock_input_loop, mock_live_class, tmp_path: Path):
         """Context manager closes log buffer on exit."""
@@ -221,7 +221,7 @@ class TestPlanGeneratorUIContextManager:
         # After context, buffer should be closed
         assert ui._log_buffer._file_handle is None
 
-    @patch("ai_workflow.ui.plan_tui.Live")
+    @patch("spec.ui.plan_tui.Live")
     @patch.object(PlanGeneratorUI, "_input_loop")
     def test_context_manager_returns_self(self, mock_input_loop, mock_live_class):
         """Context manager returns self on entry."""
@@ -322,7 +322,7 @@ class TestPlanGeneratorUIKeyboardHandling:
 
     def test_handle_key_v_toggles_verbose(self):
         """Pressing 'v' toggles verbose mode."""
-        from ai_workflow.ui.keyboard import Key
+        from spec.ui.keyboard import Key
 
         ui = PlanGeneratorUI()
         assert ui.verbose_mode is False
@@ -332,7 +332,7 @@ class TestPlanGeneratorUIKeyboardHandling:
 
     def test_handle_key_q_sets_quit(self):
         """Pressing 'q' sets quit_requested."""
-        from ai_workflow.ui.keyboard import Key
+        from spec.ui.keyboard import Key
 
         ui = PlanGeneratorUI()
         assert ui.quit_requested is False
@@ -368,8 +368,8 @@ class TestStep1TUIIntegration:
     @pytest.fixture
     def workflow_state(self, tmp_path: Path):
         """Create a workflow state for testing."""
-        from ai_workflow.integrations.jira import JiraTicket
-        from ai_workflow.workflow.state import WorkflowState
+        from spec.integrations.jira import JiraTicket
+        from spec.workflow.state import WorkflowState
 
         ticket = JiraTicket(
             ticket_id="TEST-456",
@@ -387,8 +387,8 @@ class TestStep1TUIIntegration:
 
         return state
 
-    @patch("ai_workflow.ui.plan_tui.PlanGeneratorUI")
-    @patch("ai_workflow.workflow.step1_plan.AuggieClient")
+    @patch("spec.ui.plan_tui.PlanGeneratorUI")
+    @patch("spec.workflow.step1_plan.AuggieClient")
     def test_uses_tui_when_enabled(
         self,
         mock_auggie_class,
@@ -397,7 +397,7 @@ class TestStep1TUIIntegration:
         tmp_path: Path,
     ):
         """Step 1 uses TUI when _should_use_tui returns True."""
-        from ai_workflow.workflow.step1_plan import _generate_plan_with_tui
+        from spec.workflow.step1_plan import _generate_plan_with_tui
 
         # Setup
         mock_ui = MagicMock()
@@ -420,14 +420,14 @@ class TestStep1TUIIntegration:
         mock_ui_class.assert_called_once()
         mock_client.run_with_callback.assert_called_once()
 
-    @patch("ai_workflow.workflow.step1_plan.AuggieClient")
+    @patch("spec.workflow.step1_plan.AuggieClient")
     def test_uses_fallback_in_non_tty(
         self,
         mock_auggie_class,
         workflow_state,
     ):
         """Step 1 uses fallback when not in TTY."""
-        from ai_workflow.workflow.step1_plan import _generate_plan_fallback
+        from spec.workflow.step1_plan import _generate_plan_fallback
 
         # Setup
         mock_client = MagicMock()
@@ -442,8 +442,8 @@ class TestStep1TUIIntegration:
         assert result is True
         mock_client.run_print.assert_called_once()
 
-    @patch("ai_workflow.ui.plan_tui.PlanGeneratorUI")
-    @patch("ai_workflow.workflow.step1_plan.AuggieClient")
+    @patch("spec.ui.plan_tui.PlanGeneratorUI")
+    @patch("spec.workflow.step1_plan.AuggieClient")
     def test_tui_quit_returns_false(
         self,
         mock_auggie_class,
@@ -452,7 +452,7 @@ class TestStep1TUIIntegration:
         tmp_path: Path,
     ):
         """TUI returns False when user requests quit."""
-        from ai_workflow.workflow.step1_plan import _generate_plan_with_tui
+        from spec.workflow.step1_plan import _generate_plan_with_tui
 
         # Setup
         mock_ui = MagicMock()
@@ -475,10 +475,10 @@ class TestStep1TUIIntegration:
 
     def test_creates_log_directory(self, tmp_path: Path, monkeypatch):
         """Log directory is created for plan generation."""
-        from ai_workflow.workflow.step1_plan import _create_plan_log_dir
+        from spec.workflow.step1_plan import _create_plan_log_dir
 
         # Set log base dir to tmp_path
-        monkeypatch.setenv("AI_WORKFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("SPEC_LOG_DIR", str(tmp_path))
 
         # Act
         log_dir = _create_plan_log_dir("TEST-789")
@@ -489,21 +489,21 @@ class TestStep1TUIIntegration:
         assert "plan_generation" in str(log_dir)
 
     def test_get_log_base_dir_uses_env_var(self, tmp_path: Path, monkeypatch):
-        """Log base dir uses AI_WORKFLOW_LOG_DIR env var."""
-        from ai_workflow.workflow.step1_plan import _get_log_base_dir
+        """Log base dir uses SPEC_LOG_DIR env var."""
+        from spec.workflow.step1_plan import _get_log_base_dir
 
         custom_dir = tmp_path / "custom_logs"
-        monkeypatch.setenv("AI_WORKFLOW_LOG_DIR", str(custom_dir))
+        monkeypatch.setenv("SPEC_LOG_DIR", str(custom_dir))
 
         result = _get_log_base_dir()
         assert result == custom_dir
 
     def test_get_log_base_dir_default(self, monkeypatch):
-        """Log base dir defaults to .ai_workflow/runs."""
-        from ai_workflow.workflow.step1_plan import _get_log_base_dir
+        """Log base dir defaults to .spec/runs."""
+        from spec.workflow.step1_plan import _get_log_base_dir
 
-        monkeypatch.delenv("AI_WORKFLOW_LOG_DIR", raising=False)
+        monkeypatch.delenv("SPEC_LOG_DIR", raising=False)
 
         result = _get_log_base_dir()
-        assert result == Path(".ai_workflow/runs")
+        assert result == Path(".spec/runs")
 

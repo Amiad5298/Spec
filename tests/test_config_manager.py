@@ -1,12 +1,12 @@
-"""Tests for ai_workflow.config.manager module."""
+"""Tests for spec.config.manager module."""
 
 import os
 import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from ai_workflow.config.manager import ConfigManager
-from ai_workflow.config.settings import Settings
+from spec.config.manager import ConfigManager
+from spec.config.settings import Settings
 
 
 class TestConfigManagerLoad:
@@ -245,9 +245,9 @@ class TestConfigManagerGet:
 class TestConfigManagerShow:
     """Tests for ConfigManager.show method."""
 
-    @patch("ai_workflow.utils.console.print_header")
-    @patch("ai_workflow.utils.console.print_info")
-    @patch("ai_workflow.utils.console.console")
+    @patch("spec.utils.console.print_header")
+    @patch("spec.utils.console.print_info")
+    @patch("spec.utils.console.console")
     def test_show_missing_file(self, mock_console, mock_info, mock_header, tmp_path):
         """Shows message when config file doesn't exist."""
         config_path = tmp_path / "missing"
@@ -258,9 +258,9 @@ class TestConfigManagerShow:
         mock_header.assert_called_once()
         assert mock_info.call_count >= 1
 
-    @patch("ai_workflow.utils.console.print_header")
-    @patch("ai_workflow.utils.console.print_info")
-    @patch("ai_workflow.utils.console.console")
+    @patch("spec.utils.console.print_header")
+    @patch("spec.utils.console.print_info")
+    @patch("spec.utils.console.console")
     def test_show_displays_settings(self, mock_console, mock_info, mock_header, temp_config_file):
         """Shows all settings from config file."""
         manager = ConfigManager(temp_config_file)

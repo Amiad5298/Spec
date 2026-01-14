@@ -1,9 +1,9 @@
-"""Tests for ai_workflow.ui.prompts module."""
+"""Tests for spec.ui.prompts module."""
 
 import pytest
 from unittest.mock import patch, MagicMock
 
-from ai_workflow.ui.prompts import (
+from spec.ui.prompts import (
     custom_style,
     prompt_confirm,
     prompt_input,
@@ -11,7 +11,7 @@ from ai_workflow.ui.prompts import (
     prompt_select,
     prompt_checkbox,
 )
-from ai_workflow.utils.errors import UserCancelledError
+from spec.utils.errors import UserCancelledError
 
 
 class TestCustomStyle:

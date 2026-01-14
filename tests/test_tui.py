@@ -1,18 +1,18 @@
-"""Tests for ai_workflow.ui.tui module - parallel execution support."""
+"""Tests for spec.ui.tui module - parallel execution support."""
 
 import threading
 import pytest
 from io import StringIO
 from rich.console import Console
 
-from ai_workflow.ui.tui import (
+from spec.ui.tui import (
     TaskRunnerUI,
     TaskRunRecord,
     TaskRunStatus,
     render_task_list,
     render_status_bar,
 )
-from ai_workflow.workflow.events import (
+from spec.workflow.events import (
     create_task_started_event,
     create_task_finished_event,
     create_task_output_event,

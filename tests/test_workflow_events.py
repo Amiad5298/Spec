@@ -1,9 +1,9 @@
-"""Tests for ai_workflow.workflow.events module."""
+"""Tests for spec.workflow.events module."""
 
 import time
 import pytest
 
-from ai_workflow.workflow.events import (
+from spec.workflow.events import (
     TaskEventType,
     TaskEvent,
     TaskRunStatus,

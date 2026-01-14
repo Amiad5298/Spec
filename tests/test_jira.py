@@ -1,9 +1,9 @@
-"""Tests for ai_workflow.integrations.jira module."""
+"""Tests for spec.integrations.jira module."""
 
 import pytest
 from unittest.mock import MagicMock, patch
 
-from ai_workflow.integrations.jira import (
+from spec.integrations.jira import (
     JiraTicket,
     parse_jira_ticket,
     check_jira_integration,
@@ -88,7 +88,7 @@ class TestCheckJiraIntegration:
         
         mock_auggie = MagicMock()
         
-        with patch("ai_workflow.integrations.jira.print_success"):
+        with patch("spec.integrations.jira.print_success"):
             result = check_jira_integration(mock_config, mock_auggie, force=False)
         
         assert result is True
@@ -107,9 +107,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "YES, Jira is available"
         
-        with patch("ai_workflow.integrations.jira.print_info"), \
-             patch("ai_workflow.integrations.jira.print_success"), \
-             patch("ai_workflow.integrations.jira.print_step"):
+        with patch("spec.integrations.jira.print_info"), \
+             patch("spec.integrations.jira.print_success"), \
+             patch("spec.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie, force=True)
         
         mock_auggie.run_print_quiet.assert_called_once()
@@ -122,9 +122,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "YES, Jira is available"
         
-        with patch("ai_workflow.integrations.jira.print_info"), \
-             patch("ai_workflow.integrations.jira.print_success"), \
-             patch("ai_workflow.integrations.jira.print_step"):
+        with patch("spec.integrations.jira.print_info"), \
+             patch("spec.integrations.jira.print_success"), \
+             patch("spec.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie)
         
         assert result is True
@@ -138,9 +138,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "Jira is not configured"
         
-        with patch("ai_workflow.integrations.jira.print_info"), \
-             patch("ai_workflow.integrations.jira.print_warning"), \
-             patch("ai_workflow.integrations.jira.print_step"):
+        with patch("spec.integrations.jira.print_info"), \
+             patch("spec.integrations.jira.print_warning"), \
+             patch("spec.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie)
         
         assert result is False

@@ -1,10 +1,10 @@
-"""Tests for ai_workflow.integrations.auggie module."""
+"""Tests for spec.integrations.auggie module."""
 
 import pytest
 from unittest.mock import MagicMock, patch
 import subprocess
 
-from ai_workflow.integrations.auggie import (
+from spec.integrations.auggie import (
     AuggieModel,
     AuggieClient,
     AuggieRateLimitError,
@@ -109,10 +109,10 @@ class TestGetNodeVersion:
 class TestCheckAuggieInstalled:
     """Tests for check_auggie_installed function."""
 
-    @patch("ai_workflow.integrations.auggie.get_auggie_version")
-    @patch("ai_workflow.integrations.auggie.print_step")
-    @patch("ai_workflow.integrations.auggie.print_info")
-    @patch("ai_workflow.integrations.auggie.print_success")
+    @patch("spec.integrations.auggie.get_auggie_version")
+    @patch("spec.integrations.auggie.print_step")
+    @patch("spec.integrations.auggie.print_info")
+    @patch("spec.integrations.auggie.print_success")
     def test_returns_true_when_valid(self, mock_success, mock_info, mock_step, mock_version):
         """Returns True when version meets requirements."""
         mock_version.return_value = "0.12.0"
@@ -122,8 +122,8 @@ class TestCheckAuggieInstalled:
         assert is_valid is True
         assert message == ""
 
-    @patch("ai_workflow.integrations.auggie.get_auggie_version")
-    @patch("ai_workflow.integrations.auggie.print_step")
+    @patch("spec.integrations.auggie.get_auggie_version")
+    @patch("spec.integrations.auggie.print_step")
     def test_returns_false_when_not_installed(self, mock_step, mock_version):
         """Returns False when not installed."""
         mock_version.return_value = None
@@ -133,9 +133,9 @@ class TestCheckAuggieInstalled:
         assert is_valid is False
         assert "not installed" in message
 
-    @patch("ai_workflow.integrations.auggie.get_auggie_version")
-    @patch("ai_workflow.integrations.auggie.print_step")
-    @patch("ai_workflow.integrations.auggie.print_info")
+    @patch("spec.integrations.auggie.get_auggie_version")
+    @patch("spec.integrations.auggie.print_step")
+    @patch("spec.integrations.auggie.print_info")
     def test_returns_false_when_old_version(self, mock_info, mock_step, mock_version):
         """Returns False when version is too old."""
         mock_version.return_value = "0.10.0"

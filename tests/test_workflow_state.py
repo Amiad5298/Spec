@@ -1,10 +1,10 @@
-"""Tests for ai_workflow.workflow.state module."""
+"""Tests for spec.workflow.state module."""
 
 import pytest
 from pathlib import Path
 
-from ai_workflow.workflow.state import WorkflowState, RateLimitConfig
-from ai_workflow.integrations.jira import JiraTicket
+from spec.workflow.state import WorkflowState, RateLimitConfig
+from spec.integrations.jira import JiraTicket
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ class TestWorkflowState:
 
     def test_task_memories_can_be_appended(self, state):
         """task_memories can have items appended."""
-        from ai_workflow.workflow.task_memory import TaskMemory
+        from spec.workflow.task_memory import TaskMemory
 
         memory = TaskMemory(
             task_name="Test Task",

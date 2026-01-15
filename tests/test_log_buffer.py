@@ -1,9 +1,9 @@
-"""Tests for ai_workflow.ui.log_buffer module."""
+"""Tests for spec.ui.log_buffer module."""
 
 import pytest
 from pathlib import Path
 
-from ai_workflow.ui.log_buffer import TaskLogBuffer
+from spec.ui.log_buffer import TaskLogBuffer
 
 
 class TestTaskLogBufferCreation:

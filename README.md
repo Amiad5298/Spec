@@ -1,10 +1,10 @@
-# AI Workflow
+# SPEC
 
-AI-Assisted Development Workflow using Auggie CLI.
+Spec-driven Development Workflow using Auggie CLI.
 
 ## Overview
 
-AI Workflow is a Python CLI application that provides a structured, spec-driven development workflow using the Auggie AI assistant. It converts the original AI-World.sh Bash script to a modern Python implementation.
+SPEC is a Python CLI application that provides a structured, spec-driven development workflow using the Auggie AI assistant. It converts the original spec.sh Bash script to a modern Python implementation.
 
 ## Features
 
@@ -17,7 +17,7 @@ AI Workflow is a Python CLI application that provides a structured, spec-driven 
 ## Installation
 
 ```bash
-pip install ai-workflow
+pip install spec
 ```
 
 Or install from source:
@@ -32,19 +32,19 @@ pip install -e ".[dev]"
 
 ```bash
 # Start workflow with a Jira ticket
-ai-workflow PROJECT-123
+spec PROJECT-123
 
 # Show main menu
-ai-workflow
+spec
 
 # Show configuration
-ai-workflow --config
+spec --config
 ```
 
 ### Options
 
 ```bash
-ai-workflow [OPTIONS] [TICKET]
+spec [OPTIONS] [TICKET]
 
 Options:
   --model, -m MODEL         Override default AI model
@@ -82,7 +82,7 @@ Options:
 
 ## Configuration
 
-Configuration is stored in `~/.ai-workflow/config.env`:
+Configuration is stored in `~/.spec-config`:
 
 ```bash
 DEFAULT_MODEL=claude-3-opus
@@ -120,14 +120,14 @@ pytest tests/ -v
 
 ```bash
 # Format code
-black ai_workflow tests
-isort ai_workflow tests
+black spec tests
+isort spec tests
 
 # Type checking
-mypy ai_workflow
+mypy spec
 
 # Linting
-ruff check ai_workflow tests
+ruff check spec tests
 ```
 
 ## Requirements

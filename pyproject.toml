@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ai-workflow"
+name = "spec"
 version = "2.0.0"
-description = "AI-Assisted Development Workflow using Auggie CLI"
+description = "SPEC - Spec-driven development workflow using Auggie CLI"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
     { name = "Development Team" }
 ]
-keywords = ["ai", "workflow", "auggie", "cli", "development"]
+keywords = ["spec", "workflow", "auggie", "cli", "development"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -41,15 +41,15 @@ dev = [
 ]
 
 [project.scripts]
-ai-workflow = "ai_workflow.cli:app"
+spec = "spec.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/example/ai-workflow"
-Documentation = "https://github.com/example/ai-workflow#readme"
-Repository = "https://github.com/example/ai-workflow"
+Homepage = "https://github.com/Amiad5298/Spec"
+Documentation = "https://github.com/Amiad5298/Spec#readme"
+Repository = "https://github.com/Amiad5298/Spec"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ai_workflow"]
+packages = ["spec"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -57,14 +57,14 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = [
     "-v",
-    "--cov=ai_workflow",
+    "--cov=spec",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=80",
 ]
 
 [tool.coverage.run]
-source = ["ai_workflow"]
+source = ["spec"]
 branch = true
 
 [tool.coverage.report]
@@ -104,5 +104,5 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ai_workflow"]
+known-first-party = ["spec"]
 

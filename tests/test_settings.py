@@ -1,9 +1,9 @@
-"""Tests for ai_workflow.config.settings module."""
+"""Tests for spec.config.settings module."""
 
 import pytest
 from pathlib import Path
 
-from ai_workflow.config.settings import Settings, CONFIG_FILE
+from spec.config.settings import Settings, CONFIG_FILE
 
 
 class TestSettings:
@@ -106,5 +106,5 @@ class TestConfigFile:
 
     def test_config_file_name(self):
         """CONFIG_FILE has correct name."""
-        assert CONFIG_FILE.name == ".ai-workflow-config"
+        assert CONFIG_FILE.name == ".spec-config"
 

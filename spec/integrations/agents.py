@@ -2,32 +2,215 @@
 
 This module provides utilities for managing SPEC subagent definition files
 in the `.augment/agents/` directory.
+
+Supports versioned agent files with automatic update detection:
+- Adds spec_version and spec_content_hash to frontmatter
+- Detects when internal templates are newer than on-disk files
+- Respects user customizations (won't overwrite modified files)
 """
 
+import hashlib
 from pathlib import Path
-from typing import Optional
 
-from spec.utils.console import print_info, print_step, print_success, print_warning
-from spec.utils.logging import log_message
-
-# Import subagent constants as single source of truth
+from spec import __version__
 from spec.integrations.auggie import (
     SPEC_AGENT_IMPLEMENTER,
     SPEC_AGENT_PLANNER,
     SPEC_AGENT_REVIEWER,
     SPEC_AGENT_TASKLIST,
+    version_gte,
 )
+from spec.utils.console import print_info, print_step, print_success, print_warning
+from spec.utils.logging import log_message
 
 
-# Default agent definitions - keyed by constants for consistency
-AGENT_DEFINITIONS = {
-    SPEC_AGENT_PLANNER: '''---
-name: spec-planner
-description: SPEC workflow planner - creates implementation plans from requirements
-model: claude-sonnet-4-5
-color: blue
----
+# --- Frontmatter and Hash Utilities ---
 
+
+def normalize_content(content: str) -> str:
+    """Normalize content for consistent hashing across platforms.
+
+    Handles:
+    - CRLF vs LF line endings (Windows vs Unix)
+    - Trailing whitespace on lines
+    - Trailing newlines at end of file
+
+    Args:
+        content: Raw content string
+
+    Returns:
+        Normalized content with LF line endings and trimmed whitespace
+    """
+    # Normalize line endings to LF
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    # Strip trailing whitespace from each line
+    lines = [line.rstrip() for line in normalized.split("\n")]
+    # Join and strip trailing newlines, then add single trailing newline
+    return "\n".join(lines).rstrip("\n") + "\n"
+
+
+def compute_content_hash(content: str) -> str:
+    """Compute SHA-256 hash of normalized content.
+
+    Args:
+        content: Content to hash (will be normalized first)
+
+    Returns:
+        Hex-encoded SHA-256 hash (first 16 chars for brevity)
+    """
+    normalized = normalize_content(content)
+    full_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    # Use first 16 chars - sufficient for collision avoidance in this context
+    return full_hash[:16]
+
+
+def parse_agent_frontmatter(content: str) -> dict:
+    """Parse YAML frontmatter from agent file content.
+
+    Expects format:
+    ---
+    key: value
+    key2: value2
+    ---
+    body content...
+
+    Args:
+        content: Full file content
+
+    Returns:
+        Dictionary of frontmatter key-value pairs (empty if no frontmatter)
+    """
+    content = content.strip()
+    if not content.startswith("---"):
+        return {}
+
+    # Find closing ---
+    lines = content.split("\n")
+    end_idx = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            end_idx = i
+            break
+
+    if end_idx is None:
+        return {}
+
+    # Parse simple YAML (key: value pairs only)
+    frontmatter = {}
+    for line in lines[1:end_idx]:
+        if ":" in line:
+            key, _, value = line.partition(":")
+            frontmatter[key.strip()] = value.strip()
+
+    return frontmatter
+
+
+def extract_agent_body(content: str) -> str:
+    """Extract body content after frontmatter.
+
+    Args:
+        content: Full file content with frontmatter
+
+    Returns:
+        Body content (everything after closing ---)
+    """
+    content = content.strip()
+    if not content.startswith("---"):
+        return content
+
+    # Find closing ---
+    lines = content.split("\n")
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            # Return everything after the closing ---
+            body = "\n".join(lines[i + 1 :])
+            return body.strip()
+
+    # No closing --- found, return original
+    return content
+
+
+def build_agent_frontmatter(
+    name: str,
+    description: str,
+    model: str,
+    color: str,
+    body_hash: str,
+) -> str:
+    """Build YAML frontmatter string with version metadata.
+
+    Args:
+        name: Agent name
+        description: Agent description
+        model: Model identifier
+        color: Display color
+        body_hash: Hash of the body content
+
+    Returns:
+        Formatted frontmatter string including --- delimiters
+    """
+    return f"""---
+name: {name}
+description: {description}
+model: {model}
+color: {color}
+spec_version: {__version__}
+spec_content_hash: {body_hash}
+---"""
+
+
+def is_agent_customized(existing_content: str, expected_body: str) -> bool:
+    """Check if user has modified the agent body from the default.
+
+    Compares the normalized body content against the expected default.
+
+    Args:
+        existing_content: Full content of the existing agent file
+        expected_body: The default body content we expect
+
+    Returns:
+        True if user has customized the file, False if it matches default
+    """
+    existing_body = extract_agent_body(existing_content)
+    existing_hash = compute_content_hash(existing_body)
+    expected_hash = compute_content_hash(expected_body)
+    return existing_hash != expected_hash
+
+
+# --- Agent Metadata and Body Definitions ---
+# Separated to allow dynamic frontmatter generation with versioning
+
+# Agent metadata: name, description, model, color
+AGENT_METADATA = {
+    SPEC_AGENT_PLANNER: {
+        "name": "spec-planner",
+        "description": "SPEC workflow planner - creates implementation plans from requirements",
+        "model": "claude-sonnet-4-5",
+        "color": "blue",
+    },
+    SPEC_AGENT_TASKLIST: {
+        "name": "spec-tasklist",
+        "description": "SPEC workflow task generator - creates executable task lists",
+        "model": "claude-sonnet-4-5",
+        "color": "cyan",
+    },
+    SPEC_AGENT_IMPLEMENTER: {
+        "name": "spec-implementer",
+        "description": "SPEC workflow implementer - executes individual tasks",
+        "model": "claude-sonnet-4-5",
+        "color": "green",
+    },
+    SPEC_AGENT_REVIEWER: {
+        "name": "spec-reviewer",
+        "description": "SPEC workflow reviewer - validates completed tasks",
+        "model": "claude-sonnet-4-5",
+        "color": "purple",
+    },
+}
+
+# Agent body content (prompts) - without frontmatter
+AGENT_BODIES = {
+    SPEC_AGENT_PLANNER: '''
 You are an implementation planning AI assistant working within the SPEC workflow.
 Your role is to analyze requirements and create a comprehensive implementation plan.
 
@@ -75,13 +258,7 @@ What this implementation explicitly does NOT include.
 - Include estimated complexity/effort hints where helpful
 - Use codebase-retrieval to understand the current architecture before planning
 ''',
-    SPEC_AGENT_TASKLIST: '''---
-name: spec-tasklist
-description: SPEC workflow task generator - creates executable task lists
-model: claude-sonnet-4-5
-color: cyan
----
-
+    SPEC_AGENT_TASKLIST: '''
 You are a task list generation AI assistant working within the SPEC workflow.
 Your role is to convert implementation plans into executable task lists optimized for AI agent execution.
 
@@ -145,13 +322,7 @@ If multiple logical tasks need to edit the same shared file:
 - [ ] [Feature task B - can run in parallel]
 ```
 ''',
-    SPEC_AGENT_IMPLEMENTER: '''---
-name: spec-implementer
-description: SPEC workflow implementer - executes individual tasks
-model: claude-sonnet-4-5
-color: green
----
-
+    SPEC_AGENT_IMPLEMENTER: '''
 You are a task execution AI assistant working within the SPEC workflow.
 Your role is to complete ONE specific implementation task.
 
@@ -204,13 +375,7 @@ When complete, briefly summarize:
 
 Do not output the full file contents unless specifically helpful.
 ''',
-    SPEC_AGENT_REVIEWER: '''---
-name: spec-reviewer
-description: SPEC workflow reviewer - validates completed tasks
-model: claude-sonnet-4-5
-color: purple
----
-
+    SPEC_AGENT_REVIEWER: '''
 You are a task validation AI assistant working within the SPEC workflow.
 Your role is to quickly verify that a completed task meets requirements.
 
@@ -280,6 +445,82 @@ Keep reviews quick and focused - this is a sanity check, not a full code review.
 }
 
 
+def get_agent_body(agent_name: str) -> str:
+    """Get the body content for an agent (without frontmatter).
+
+    Args:
+        agent_name: Agent identifier (e.g., SPEC_AGENT_PLANNER)
+
+    Returns:
+        Body content string, stripped of leading/trailing whitespace
+    """
+    return AGENT_BODIES.get(agent_name, "").strip()
+
+
+def generate_agent_content(agent_name: str) -> str:
+    """Generate full agent file content with versioned frontmatter.
+
+    Combines metadata and body with spec_version and spec_content_hash
+    in the frontmatter for update detection.
+
+    Args:
+        agent_name: Agent identifier (e.g., SPEC_AGENT_PLANNER)
+
+    Returns:
+        Complete agent file content ready to write to disk
+    """
+    if agent_name not in AGENT_METADATA or agent_name not in AGENT_BODIES:
+        raise ValueError(f"Unknown agent: {agent_name}")
+
+    meta = AGENT_METADATA[agent_name]
+    body = get_agent_body(agent_name)
+    body_hash = compute_content_hash(body)
+
+    frontmatter = build_agent_frontmatter(
+        name=meta["name"],
+        description=meta["description"],
+        model=meta["model"],
+        color=meta["color"],
+        body_hash=body_hash,
+    )
+
+    return f"{frontmatter}\n\n{body}\n"
+
+
+def get_all_agent_names() -> list[str]:
+    """Get list of all agent identifiers.
+
+    Returns:
+        List of agent name constants
+    """
+    return list(AGENT_METADATA.keys())
+
+
+# Compatibility alias - generates content dynamically with versioning
+# This allows existing code using AGENT_DEFINITIONS to continue working
+class _AgentDefinitionsProxy:
+    """Proxy that generates versioned agent content on access."""
+
+    def __iter__(self):
+        return iter(AGENT_METADATA.keys())
+
+    def __getitem__(self, key: str) -> str:
+        return generate_agent_content(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key in AGENT_METADATA
+
+    def keys(self):
+        return AGENT_METADATA.keys()
+
+    def items(self):
+        for key in AGENT_METADATA:
+            yield key, generate_agent_content(key)
+
+
+AGENT_DEFINITIONS = _AgentDefinitionsProxy()
+
+
 def get_agents_dir() -> Path:
     """Get the path to the .augment/agents directory.
 
@@ -289,56 +530,170 @@ def get_agents_dir() -> Path:
     return Path(".augment/agents")
 
 
-def ensure_agents_installed(quiet: bool = False) -> bool:
-    """Ensure SPEC subagent files exist in the workspace.
+def _check_agent_needs_update(agent_path: Path, agent_name: str) -> tuple[bool, bool]:
+    """Check if an existing agent file needs to be updated.
 
-    Creates .augment/agents/ directory and copies default agent definitions
-    if they don't exist.
+    Args:
+        agent_path: Path to existing agent file
+        agent_name: Agent identifier
+
+    Returns:
+        Tuple of (needs_update, is_customized)
+        - needs_update: True if our version is newer than the file's version
+        - is_customized: True if user has modified the file body
+    """
+    try:
+        existing_content = agent_path.read_text()
+    except Exception:
+        return True, False  # Can't read, treat as needs update
+
+    existing_meta = parse_agent_frontmatter(existing_content)
+    existing_version = existing_meta.get("spec_version", "0.0.0")
+
+    # Check if current SPEC version is newer
+    needs_update = not version_gte(existing_version, __version__)
+
+    if not needs_update:
+        return False, False
+
+    # Check if user customized the file
+    expected_body = get_agent_body(agent_name)
+    is_customized = is_agent_customized(existing_content, expected_body)
+
+    return needs_update, is_customized
+
+
+def _create_agent_file(agent_path: Path, agent_name: str, quiet: bool = False) -> bool:
+    """Create a new agent file with versioned content.
+
+    Args:
+        agent_path: Path to create
+        agent_name: Agent identifier
+        quiet: Suppress output
+
+    Returns:
+        True if successful
+    """
+    try:
+        agent_content = generate_agent_content(agent_name)
+        agent_path.write_text(agent_content)
+        if not quiet:
+            print_info(f"Created agent file: {agent_path}")
+        log_message(f"Created agent file: {agent_path}")
+        return True
+    except Exception as e:
+        print_warning(f"Failed to create agent file {agent_path}: {e}")
+        log_message(f"Failed to create agent file {agent_path}: {e}")
+        return False
+
+
+def _update_agent_file(agent_path: Path, agent_name: str, quiet: bool = False) -> bool:
+    """Update an existing agent file with new versioned content.
+
+    Args:
+        agent_path: Path to update
+        agent_name: Agent identifier
+        quiet: Suppress output
+
+    Returns:
+        True if successful
+    """
+    try:
+        agent_content = generate_agent_content(agent_name)
+        agent_path.write_text(agent_content)
+        if not quiet:
+            print_info(f"Updated agent file: {agent_path}")
+        log_message(f"Updated agent file to version {__version__}: {agent_path}")
+        return True
+    except Exception as e:
+        print_warning(f"Failed to update agent file {agent_path}: {e}")
+        log_message(f"Failed to update agent file {agent_path}: {e}")
+        return False
+
+
+def ensure_agents_installed(quiet: bool = False) -> bool:
+    """Ensure SPEC subagent files exist and are up-to-date.
+
+    Creates .augment/agents/ directory and manages agent files:
+    - Creates missing agent files with versioned frontmatter
+    - Updates outdated files if they haven't been customized by the user
+    - Preserves user customizations (creates .md.new file for review)
 
     Args:
         quiet: If True, suppress informational messages
 
     Returns:
-        True if all agents are available (created or already existed)
+        True if all agents are available (created, updated, or already current)
     """
     agents_dir = get_agents_dir()
 
-    # Track what we need to do
-    missing_agents = []
+    # Track actions taken
+    created_agents = []
+    updated_agents = []
+    customized_agents = []  # Agents with user changes that need manual review
 
-    for agent_name in AGENT_DEFINITIONS:
-        agent_path = agents_dir / f"{agent_name}.md"
-        if not agent_path.exists():
-            missing_agents.append(agent_name)
-
-    # If all agents exist, we're done
-    if not missing_agents:
-        log_message("All SPEC subagent files already exist")
-        return True
-
-    # Create directory if needed
+    # Ensure directory exists
     if not agents_dir.exists():
         if not quiet:
             print_step("Creating .augment/agents/ directory...")
         agents_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create missing agent files
-    for agent_name in missing_agents:
-        agent_path = agents_dir / f"{agent_name}.md"
-        agent_content = AGENT_DEFINITIONS[agent_name]
+    # Process each agent
+    for agent_name in get_all_agent_names():
+        meta = AGENT_METADATA[agent_name]
+        agent_filename = f"{meta['name']}.md"
+        agent_path = agents_dir / agent_filename
 
-        try:
-            agent_path.write_text(agent_content)
-            if not quiet:
-                print_info(f"Created agent file: {agent_path}")
-            log_message(f"Created agent file: {agent_path}")
-        except Exception as e:
-            print_warning(f"Failed to create agent file {agent_path}: {e}")
-            log_message(f"Failed to create agent file {agent_path}: {e}")
-            return False
+        if not agent_path.exists():
+            # Case 1: New installation
+            if _create_agent_file(agent_path, agent_name, quiet):
+                created_agents.append(meta["name"])
+            else:
+                return False
+        else:
+            # Case 2: File exists - check if update needed
+            needs_update, is_customized = _check_agent_needs_update(agent_path, agent_name)
 
+            if not needs_update:
+                log_message(f"Agent {meta['name']} is up-to-date")
+                continue
+
+            if is_customized:
+                # User has modified the file - don't overwrite
+                # Create a .new file for them to review
+                new_path = agent_path.with_suffix(".md.new")
+                if _create_agent_file(new_path, agent_name, quiet=True):
+                    customized_agents.append(meta["name"])
+                    if not quiet:
+                        print_warning(
+                            f"Agent '{meta['name']}' has local customizations. "
+                            f"New version saved to {new_path}"
+                        )
+                    log_message(
+                        f"Agent {meta['name']} has customizations, "
+                        f"created {new_path} for review"
+                    )
+            else:
+                # Safe to update - file matches old default
+                if _update_agent_file(agent_path, agent_name, quiet):
+                    updated_agents.append(meta["name"])
+                else:
+                    return False
+
+    # Report results
     if not quiet:
-        print_success(f"SPEC subagent files installed ({len(missing_agents)} created)")
+        if created_agents:
+            print_success(f"Created {len(created_agents)} agent(s): {', '.join(created_agents)}")
+        if updated_agents:
+            print_success(f"Updated {len(updated_agents)} agent(s): {', '.join(updated_agents)}")
+        if customized_agents:
+            print_info(
+                f"{len(customized_agents)} agent(s) have customizations - "
+                "review .md.new files to merge updates"
+            )
+
+    if not created_agents and not updated_agents and not customized_agents:
+        log_message("All SPEC subagent files are up-to-date")
 
     return True
 
@@ -361,9 +716,22 @@ def verify_agents_available() -> tuple[bool, list[str]]:
 
 
 __all__ = [
+    # Main functions
     "ensure_agents_installed",
     "verify_agents_available",
     "get_agents_dir",
+    # Agent definitions (compatibility + new APIs)
     "AGENT_DEFINITIONS",
+    "AGENT_METADATA",
+    "AGENT_BODIES",
+    "generate_agent_content",
+    "get_agent_body",
+    "get_all_agent_names",
+    # Frontmatter utilities
+    "parse_agent_frontmatter",
+    "extract_agent_body",
+    "compute_content_hash",
+    "normalize_content",
+    "is_agent_customized",
 ]
 

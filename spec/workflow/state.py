@@ -10,6 +10,14 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from spec.integrations.jira import JiraTicket
 
+# Import subagent constants as single source of truth
+from spec.integrations.auggie import (
+    SPEC_AGENT_IMPLEMENTER,
+    SPEC_AGENT_PLANNER,
+    SPEC_AGENT_REVIEWER,
+    SPEC_AGENT_TASKLIST,
+)
+
 if TYPE_CHECKING:
     from spec.workflow.task_memory import TaskMemory
 
@@ -70,6 +78,7 @@ class WorkflowState:
         current_step: Current workflow step (1, 2, or 3)
         retry_count: Number of retries for current task
         max_retries: Maximum retries before asking user
+        subagent_names: Dictionary mapping role names to agent names
     """
 
     # Ticket information
@@ -117,6 +126,15 @@ class WorkflowState:
     # Parallel execution tracking
     parallel_tasks_completed: list[str] = field(default_factory=list)
     parallel_tasks_failed: list[str] = field(default_factory=list)
+
+    # Subagent configuration (names loaded from settings)
+    # Defaults from auggie.py constants - the single source of truth
+    subagent_names: dict[str, str] = field(default_factory=lambda: {
+        "planner": SPEC_AGENT_PLANNER,
+        "tasklist": SPEC_AGENT_TASKLIST,
+        "implementer": SPEC_AGENT_IMPLEMENTER,
+        "reviewer": SPEC_AGENT_REVIEWER,
+    })
 
     @property
     def specs_dir(self) -> Path:

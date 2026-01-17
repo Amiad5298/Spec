@@ -7,6 +7,14 @@ values, matching the original Bash script's configuration options.
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Import subagent constants as single source of truth
+from spec.integrations.auggie import (
+    SPEC_AGENT_IMPLEMENTER,
+    SPEC_AGENT_PLANNER,
+    SPEC_AGENT_REVIEWER,
+    SPEC_AGENT_TASKLIST,
+)
+
 
 @dataclass
 class Settings:
@@ -29,6 +37,10 @@ class Settings:
         parallel_execution_enabled: Enable parallel execution of independent tasks
         max_parallel_tasks: Maximum number of parallel tasks (1-5)
         fail_fast: Stop on first task failure
+        subagent_planner: Agent name for planning step
+        subagent_tasklist: Agent name for task list generation
+        subagent_implementer: Agent name for task execution
+        subagent_reviewer: Agent name for task validation
     """
 
     # Model settings
@@ -54,6 +66,13 @@ class Settings:
     max_parallel_tasks: int = 3
     fail_fast: bool = False
 
+    # Subagent settings (customizable agent names)
+    # Defaults from auggie.py constants - the single source of truth
+    subagent_planner: str = SPEC_AGENT_PLANNER
+    subagent_tasklist: str = SPEC_AGENT_TASKLIST
+    subagent_implementer: str = SPEC_AGENT_IMPLEMENTER
+    subagent_reviewer: str = SPEC_AGENT_REVIEWER
+
     # Config key to attribute mapping
     _key_mapping: dict[str, str] = field(
         default_factory=lambda: {
@@ -70,6 +89,10 @@ class Settings:
             "PARALLEL_EXECUTION_ENABLED": "parallel_execution_enabled",
             "MAX_PARALLEL_TASKS": "max_parallel_tasks",
             "FAIL_FAST": "fail_fast",
+            "SUBAGENT_PLANNER": "subagent_planner",
+            "SUBAGENT_TASKLIST": "subagent_tasklist",
+            "SUBAGENT_IMPLEMENTER": "subagent_implementer",
+            "SUBAGENT_REVIEWER": "subagent_reviewer",
         },
         repr=False,
     )

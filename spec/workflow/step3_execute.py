@@ -735,42 +735,46 @@ def _execute_parallel_with_tui(
     return failed_tasks
 
 
-def _build_task_prompt(task: Task, plan_path: Path, is_parallel: bool = False) -> str:
-    """Build the prompt for task execution.
+def _build_task_prompt(task: Task, plan_path: Path, *, is_parallel: bool = False) -> str:
+    """Build a minimal prompt for task execution.
+
+    Passes a plan path reference rather than the full plan content to:
+    - Reduce token usage and context window pressure
+    - Let the agent retrieve only relevant sections via codebase-retrieval
+    - Avoid prompt bloat in parallel execution scenarios
 
     Args:
         task: Task to execute
-        plan_path: Path to the plan file
+        plan_path: Path to the implementation plan file
         is_parallel: Whether this task runs in parallel with others
 
     Returns:
-        Prompt string for the AI
+        Minimal prompt string with task context
     """
+    parallel_mode = "YES" if is_parallel else "NO"
+
+    # Base prompt with task name and parallel mode
+    prompt = f"""Execute task: {task.name}
+
+Parallel mode: {parallel_mode}"""
+
+    # Add plan reference if file exists
     if plan_path.exists():
-        base_prompt = f"""Execute this task.
+        prompt += f"""
 
-Task: {task.name}
-
-The implementation plan is at: {plan_path}
-Use codebase-retrieval to read the plan and focus on the section relevant to this task.
-Use codebase-retrieval to find existing patterns in the codebase."""
+Implementation plan: {plan_path}
+Use codebase-retrieval to read relevant sections of the plan as needed."""
     else:
-        base_prompt = f"""Execute this task.
+        prompt += """
 
-Task: {task.name}
+Use codebase-retrieval to understand existing patterns before making changes."""
 
-Use codebase-retrieval to find existing patterns in the codebase."""
+    # Add critical constraints reminder
+    prompt += """
 
-    if is_parallel:
-        base_prompt += """
+Do NOT commit, git add, or push any changes."""
 
-IMPORTANT: This task runs in parallel with other tasks.
-- Do NOT run `git add`, `git commit`, or `git push`
-- Do NOT stage any changes
-- Only make file modifications; staging/committing will be done after all tasks complete"""
-
-    base_prompt += "\n\nDo NOT commit or push any changes."
-    return base_prompt
+    return prompt
 
 
 def _execute_task(
@@ -778,29 +782,33 @@ def _execute_task(
     task: Task,
     plan_path: Path,
 ) -> bool:
-    """Execute a single task in clean context (legacy mode).
+    """Execute a single task using the spec-implementer agent.
 
     Optimistic execution model:
     - Trust AI exit codes
     - No file verification
     - No retry loops
-    - Minimal prompt with instructions to retrieve context
+    - Minimal prompt - agent has full instructions
 
     Args:
         state: Current workflow state
         task: Task to execute
-        plan_path: Path to the plan file (AI will retrieve content as needed)
+        plan_path: Path to the plan file
 
     Returns:
         True if AI reported success
     """
-    prompt = _build_task_prompt(task, plan_path)
-    auggie_client = AuggieClient(model=state.implementation_model)
+    auggie_client = AuggieClient()  # Model comes from agent definition file
+
+    # Build minimal prompt - pass plan path reference, not full content
+    # The agent uses codebase-retrieval to read relevant sections
+    prompt = _build_task_prompt(task, plan_path, is_parallel=False)
 
     try:
         success, _ = auggie_client.run_print_with_output(
             prompt,
-            dont_save_session=True
+            agent=state.subagent_names["implementer"],
+            dont_save_session=True,
         )
         if success:
             print_success(f"Task completed: {task.name}")
@@ -820,7 +828,7 @@ def _execute_task_with_callback(
     callback: Callable[[str], None],
     is_parallel: bool = False,
 ) -> bool:
-    """Execute a single task with streaming output callback.
+    """Execute a single task with streaming output callback using spec-implementer agent.
 
     Uses AuggieClient.run_with_callback() for streaming output.
     Each output line is passed to the callback function.
@@ -838,12 +846,16 @@ def _execute_task_with_callback(
     Raises:
         AuggieRateLimitError: If the output indicates a rate limit error
     """
+    auggie_client = AuggieClient()  # Model comes from agent definition file
+
+    # Build minimal prompt - pass plan path reference, not full content
+    # The agent uses codebase-retrieval to read relevant sections
     prompt = _build_task_prompt(task, plan_path, is_parallel=is_parallel)
-    auggie_client = AuggieClient(model=state.implementation_model)
 
     try:
         success, output = auggie_client.run_with_callback(
             prompt,
+            agent=state.subagent_names["implementer"],
             output_callback=callback,
             dont_save_session=True,
         )
@@ -1005,12 +1017,14 @@ If you cannot reliably map changed source files to specific tests AND cannot run
 
 If NO production files were changed AND NO test files were changed, report "No code changes detected that require testing" and STOP."""
 
-    auggie_client = AuggieClient(model=state.implementation_model)
+    # Use spec-implementer subagent for running tests
+    auggie_client = AuggieClient()
 
     try:
         success, _ = auggie_client.run_print_with_output(
             prompt,
-            dont_save_session=True
+            agent=state.subagent_names["implementer"],
+            dont_save_session=True,
         )
         console.print()
         if success:

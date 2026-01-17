@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from typing import Generator, Optional
 
 from spec.config.manager import ConfigManager
+from spec.integrations.agents import ensure_agents_installed
 from spec.integrations.auggie import AuggieClient
 from spec.integrations.git import (
     DirtyStateAction,
@@ -78,7 +79,12 @@ def run_spec_driven_workflow(
     """
     print_header(f"Starting Workflow: {ticket.ticket_id}")
 
-    # Initialize state
+    # Ensure SPEC subagent files are installed
+    if not ensure_agents_installed():
+        print_error("Failed to install SPEC subagent files")
+        return False
+
+    # Initialize state with subagent names from config
     state = WorkflowState(
         ticket=ticket,
         planning_model=planning_model or config.settings.default_model,
@@ -89,6 +95,12 @@ def run_spec_driven_workflow(
         max_parallel_tasks=max_parallel_tasks,
         fail_fast=fail_fast,
         rate_limit_config=rate_limit_config or RateLimitConfig(),
+        subagent_names={
+            "planner": config.settings.subagent_planner,
+            "tasklist": config.settings.subagent_tasklist,
+            "implementer": config.settings.subagent_implementer,
+            "reviewer": config.settings.subagent_reviewer,
+        },
     )
 
     # Initialize Auggie client

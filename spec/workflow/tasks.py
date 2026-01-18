@@ -5,7 +5,7 @@ tracking task completion, and managing task state.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -42,6 +42,7 @@ class Task:
         category: Task execution category (fundamental or independent)
         dependency_order: Order for fundamental tasks (sequential execution)
         group_id: Group identifier for parallel tasks
+        target_files: List of files this task should modify (predictive context)
     """
 
     name: str
@@ -53,30 +54,41 @@ class Task:
     category: TaskCategory = TaskCategory.FUNDAMENTAL
     dependency_order: int = 0  # For fundamental tasks ordering
     group_id: Optional[str] = None  # For grouping parallel tasks
+    # Predictive context - explicit file targeting
+    target_files: list[str] = field(default_factory=list)
 
 
 def _parse_task_metadata(
     lines: list[str], task_line_num: int
-) -> tuple[TaskCategory, int, Optional[str]]:
-    """Parse task metadata from comment line above task.
+) -> tuple[TaskCategory, int, Optional[str], list[str]]:
+    """Parse task metadata from comment lines above task.
 
     Searches backwards from the task line, skipping empty lines,
-    to find the metadata comment. This handles cases where LLMs
+    to find metadata comments. This handles cases where LLMs
     insert blank lines between the comment and task for readability.
+
+    Supports metadata formats:
+    - <!-- category: fundamental, order: 1 -->
+    - <!-- category: independent, group: ui -->
+    - <!-- files: path/to/file1.py, path/to/file2.py -->
 
     Args:
         lines: All lines from task list
         task_line_num: Line number of the task (0-indexed)
 
     Returns:
-        Tuple of (category, order, group_id)
+        Tuple of (category, order, group_id, target_files)
     """
     # Default values
     category = TaskCategory.FUNDAMENTAL
     order = 0
     group_id = None
+    target_files: list[str] = []
 
-    # Look backwards from task line, skipping empty lines
+    # Collect all metadata content from comments above the task
+    metadata_lines: list[str] = []
+
+    # Look backwards from task line, collecting metadata comments
     search_line = task_line_num - 1
     while search_line >= 0:
         line_content = lines[search_line].strip()
@@ -86,25 +98,42 @@ def _parse_task_metadata(
             search_line -= 1
             continue
 
-        # Found non-empty line - check if it's metadata
-        if line_content.startswith("<!-- category:"):
-            # Parse: <!-- category: fundamental, order: 1 -->
-            # or: <!-- category: independent, group: ui -->
-            if "fundamental" in line_content.lower():
+        # Check if it's a metadata comment
+        if line_content.startswith("<!--") and "-->" in line_content:
+            metadata_lines.append(line_content)
+            search_line -= 1
+            continue
+
+        # Stop searching when we hit a non-empty, non-metadata line
+        break
+
+    # Parse all collected metadata
+    for metadata_content in metadata_lines:
+        # Parse category metadata
+        if "category:" in metadata_content.lower():
+            if "fundamental" in metadata_content.lower():
                 category = TaskCategory.FUNDAMENTAL
-                order_match = re.search(r'order:\s*(\d+)', line_content)
+                order_match = re.search(r'order:\s*(\d+)', metadata_content)
                 if order_match:
                     order = int(order_match.group(1))
-            elif "independent" in line_content.lower():
+            elif "independent" in metadata_content.lower():
                 category = TaskCategory.INDEPENDENT
-                group_match = re.search(r'group:\s*(\w+)', line_content)
+                group_match = re.search(r'group:\s*(\w+)', metadata_content)
                 if group_match:
                     group_id = group_match.group(1)
 
-        # Stop searching after first non-empty line (whether metadata or not)
-        break
+        # Parse files metadata
+        # <!-- files: path/to/file1.py, path/to/file2.py -->
+        files_match = re.search(r'files:\s*([^>]+)', metadata_content)
+        if files_match:
+            files_str = files_match.group(1).strip()
+            # Handle trailing --> if present
+            files_str = files_str.rstrip(' ->')
+            # Split by comma and clean up each file path
+            parsed_files = [f.strip() for f in files_str.split(',') if f.strip()]
+            target_files.extend(parsed_files)
 
-    return category, order, group_id
+    return category, order, group_id, target_files
 
 
 def parse_task_list(content: str) -> list[Task]:
@@ -120,6 +149,7 @@ def parse_task_list(content: str) -> list[Task]:
     Also parses category metadata comments above tasks:
     - <!-- category: fundamental, order: N -->
     - <!-- category: independent, group: GROUP_NAME -->
+    - <!-- files: path/to/file1.py, path/to/file2.py -->
 
     Args:
         content: Markdown content with task list
@@ -145,8 +175,8 @@ def parse_task_list(content: str) -> list[Task]:
 
             status = TaskStatus.COMPLETE if checkbox.lower() == "x" else TaskStatus.PENDING
 
-            # Parse metadata from previous line
-            category, order, group_id = _parse_task_metadata(lines, line_num)
+            # Parse metadata from previous lines (category, order, group_id, target_files)
+            category, order, group_id, target_files = _parse_task_metadata(lines, line_num)
 
             task = Task(
                 name=name.strip(),
@@ -156,6 +186,7 @@ def parse_task_list(content: str) -> list[Task]:
                 category=category,
                 dependency_order=order,
                 group_id=group_id,
+                target_files=target_files,
             )
 
             # Set parent for nested tasks

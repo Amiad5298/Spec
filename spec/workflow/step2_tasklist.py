@@ -22,7 +22,41 @@ from spec.utils.console import (
 )
 from spec.utils.logging import log_message
 from spec.workflow.state import WorkflowState
-from spec.workflow.tasks import parse_task_list, format_task_list
+from spec.workflow.tasks import parse_task_list, format_task_list, Task, TaskCategory
+
+
+def _validate_file_disjointness(tasks: list[Task]) -> list[str]:
+    """Validate that independent tasks have disjoint file sets.
+
+    Independent tasks running in parallel must not target the same files
+    to prevent race conditions and data loss.
+
+    Args:
+        tasks: List of all tasks
+
+    Returns:
+        List of warning messages for overlapping files
+    """
+    independent = [t for t in tasks if t.category == TaskCategory.INDEPENDENT]
+    warnings: list[str] = []
+
+    # Build file -> tasks mapping
+    file_to_tasks: dict[str, list[str]] = {}
+    for task in independent:
+        for file_path in task.target_files:
+            if file_path not in file_to_tasks:
+                file_to_tasks[file_path] = []
+            file_to_tasks[file_path].append(task.name)
+
+    # Check for conflicts
+    for file_path, task_names in file_to_tasks.items():
+        if len(task_names) > 1:
+            warnings.append(
+                f"File collision detected: '{file_path}' is targeted by multiple "
+                f"independent tasks: {', '.join(task_names)}"
+            )
+
+    return warnings
 
 
 def step_2_create_tasklist(state: WorkflowState, auggie: AuggieClient) -> bool:
@@ -102,8 +136,8 @@ def step_2_create_tasklist(state: WorkflowState, auggie: AuggieClient) -> bool:
 def _extract_tasklist_from_output(output: str, ticket_id: str) -> Optional[str]:
     """Extract markdown checkbox task list from AI output.
 
-    Finds all lines matching checkbox format, preserving category metadata comments
-    and section headers for parallel execution support.
+    Finds all lines matching checkbox format, preserving category metadata comments,
+    files metadata comments, and section headers for parallel execution support.
 
     Args:
         output: AI output text that may contain task list
@@ -115,7 +149,9 @@ def _extract_tasklist_from_output(output: str, ticket_id: str) -> Optional[str]:
     # Pattern for task items: optional indent, optional bullet, checkbox, task name
     task_pattern = re.compile(r"^(\s*)[-*]?\s*\[([xX ])\]\s*(.+)$")
     # Pattern for category metadata comments
-    metadata_pattern = re.compile(r"^\s*<!--\s*category:\s*.+-->\s*$")
+    category_pattern = re.compile(r"^\s*<!--\s*category:\s*.+-->\s*$")
+    # Pattern for files metadata comments (predictive context)
+    files_pattern = re.compile(r"^\s*<!--\s*files:\s*.+-->\s*$")
     # Pattern for section headers (## Fundamental Tasks, ## Independent Tasks, etc.)
     section_pattern = re.compile(r"^##\s+(Fundamental|Independent)\s+Tasks.*$", re.IGNORECASE)
 
@@ -136,7 +172,12 @@ def _extract_tasklist_from_output(output: str, ticket_id: str) -> Optional[str]:
             continue
 
         # Check for category metadata comments
-        if metadata_pattern.match(line):
+        if category_pattern.match(line):
+            pending_metadata.append(line.strip())
+            continue
+
+        # Check for files metadata comments (predictive context)
+        if files_pattern.match(line):
             pending_metadata.append(line.strip())
             continue
 
@@ -221,6 +262,16 @@ Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
         if not tasks:
             log_message("Warning: Written task list has no parseable tasks")
             _create_default_tasklist(tasklist_path, state)
+        else:
+            # Validate file disjointness for independent tasks
+            warnings = _validate_file_disjointness(tasks)
+            for warning in warnings:
+                print_warning(warning)
+            if warnings:
+                print_warning(
+                    "File collisions detected! Consider extracting shared files to a "
+                    "FUNDAMENTAL setup task or merging the conflicting tasks."
+                )
     else:
         # No tasks extracted from output, check if AI wrote the file
         if tasklist_path.exists():
@@ -230,6 +281,16 @@ Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
             if not tasks:
                 log_message("AI-created file has no parseable tasks, using default")
                 _create_default_tasklist(tasklist_path, state)
+            else:
+                # Validate file disjointness for independent tasks
+                warnings = _validate_file_disjointness(tasks)
+                for warning in warnings:
+                    print_warning(warning)
+                if warnings:
+                    print_warning(
+                        "File collisions detected! Consider extracting shared files to a "
+                        "FUNDAMENTAL setup task or merging the conflicting tasks."
+                    )
         else:
             # Fall back to default template
             log_message("No tasks extracted and no file created, using default")
@@ -308,5 +369,6 @@ __all__ = [
     "step_2_create_tasklist",
     "_generate_tasklist",
     "_extract_tasklist_from_output",
+    "_validate_file_disjointness",
 ]
 

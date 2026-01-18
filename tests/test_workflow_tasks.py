@@ -408,11 +408,12 @@ class TestParseTaskMetadata:
             "<!-- category: fundamental, order: 1 -->",
             "- [ ] Setup database",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert category == TaskCategory.FUNDAMENTAL
         assert order == 1
         assert group_id is None
+        assert target_files == []
 
     def test_parses_independent_category(self):
         """Parses 'category: independent' correctly."""
@@ -422,10 +423,11 @@ class TestParseTaskMetadata:
             "<!-- category: independent, group: ui -->",
             "- [ ] Create UI component",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert category == TaskCategory.INDEPENDENT
         assert group_id == "ui"
+        assert target_files == []
 
     def test_parses_order_field(self):
         """Parses 'order: N' correctly."""
@@ -435,7 +437,7 @@ class TestParseTaskMetadata:
             "<!-- category: fundamental, order: 5 -->",
             "- [ ] Task with order 5",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert order == 5
 
@@ -447,7 +449,7 @@ class TestParseTaskMetadata:
             "<!-- category: independent, group: backend -->",
             "- [ ] API endpoint",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert group_id == "backend"
 
@@ -459,11 +461,12 @@ class TestParseTaskMetadata:
             "## Tasks",
             "- [ ] Task without metadata",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert category == TaskCategory.FUNDAMENTAL  # Default
         assert order == 0
         assert group_id is None
+        assert target_files == []
 
     def test_handles_partial_metadata(self):
         """Handles metadata with only some fields."""
@@ -473,7 +476,7 @@ class TestParseTaskMetadata:
             "<!-- category: fundamental -->",
             "- [ ] Task without order",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert category == TaskCategory.FUNDAMENTAL
         assert order == 0  # Default when not specified
@@ -486,10 +489,180 @@ class TestParseTaskMetadata:
             "<!-- category: FUNDAMENTAL, order: 2 -->",
             "- [ ] Task with uppercase",
         ]
-        category, order, group_id = _parse_task_metadata(lines, 1)
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
 
         assert category == TaskCategory.FUNDAMENTAL
         assert order == 2
+
+
+# =============================================================================
+# Tests for target_files metadata parsing (Predictive Context)
+# =============================================================================
+
+
+class TestTargetFilesMetadataParsing:
+    """Tests for parsing <!-- files: ... --> metadata comments."""
+
+    def test_parses_single_file(self):
+        """Parses single file in files metadata."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- files: src/models/user.py -->",
+            "- [ ] Create user model",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
+
+        assert target_files == ["src/models/user.py"]
+
+    def test_parses_multiple_comma_separated_files(self):
+        """Parses multiple comma-separated files."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- files: src/models/user.py, src/db/migrations/001.py, tests/test_user.py -->",
+            "- [ ] Create user model with migration and tests",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
+
+        assert target_files == [
+            "src/models/user.py",
+            "src/db/migrations/001.py",
+            "tests/test_user.py",
+        ]
+
+    def test_parses_files_on_separate_line_from_category(self):
+        """Parses files metadata on separate line from category."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- category: fundamental, order: 1 -->",
+            "<!-- files: src/auth/service.py, src/utils/password.py -->",
+            "- [ ] Implement authentication service",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 2)
+
+        assert category == TaskCategory.FUNDAMENTAL
+        assert order == 1
+        assert target_files == ["src/auth/service.py", "src/utils/password.py"]
+
+    def test_parses_files_above_category(self):
+        """Parses files metadata above category line."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- files: src/api/login.py -->",
+            "<!-- category: independent, group: api -->",
+            "- [ ] Create login endpoint",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 2)
+
+        assert category == TaskCategory.INDEPENDENT
+        assert group_id == "api"
+        assert target_files == ["src/api/login.py"]
+
+    def test_handles_empty_files_list(self):
+        """Handles empty files metadata gracefully."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- files: -->",
+            "- [ ] Task with empty files",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
+
+        assert target_files == []
+
+    def test_handles_missing_files_metadata(self):
+        """Returns empty list when no files metadata present."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- category: fundamental, order: 1 -->",
+            "- [ ] Task without files",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
+
+        assert target_files == []
+
+    def test_handles_whitespace_in_file_paths(self):
+        """Handles extra whitespace around file paths."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- files:   src/file1.py  ,  src/file2.py  -->",
+            "- [ ] Task with whitespace",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 1)
+
+        assert target_files == ["src/file1.py", "src/file2.py"]
+
+    def test_parses_files_with_blank_lines_above_task(self):
+        """Parses files metadata with blank lines between metadata and task."""
+        from spec.workflow.tasks import _parse_task_metadata, TaskCategory
+
+        lines = [
+            "<!-- category: independent, group: utils -->",
+            "<!-- files: src/utils/helpers.py -->",
+            "",
+            "- [ ] Create helper utilities",
+        ]
+        category, order, group_id, target_files = _parse_task_metadata(lines, 3)
+
+        assert category == TaskCategory.INDEPENDENT
+        assert target_files == ["src/utils/helpers.py"]
+
+
+class TestTaskWithTargetFiles:
+    """Tests for Task dataclass with target_files field."""
+
+    def test_default_target_files_is_empty_list(self):
+        """Default target_files is an empty list."""
+        task = Task(name="Test task")
+        assert task.target_files == []
+
+    def test_target_files_can_be_set(self):
+        """target_files can be set on construction."""
+        task = Task(
+            name="Test task",
+            target_files=["src/file1.py", "src/file2.py"],
+        )
+        assert task.target_files == ["src/file1.py", "src/file2.py"]
+
+    def test_parse_task_list_populates_target_files(self):
+        """parse_task_list populates target_files from metadata."""
+        content = """## Tasks
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/models/user.py, tests/test_user.py -->
+- [ ] Create user model with tests
+"""
+        tasks = parse_task_list(content)
+
+        assert len(tasks) == 1
+        assert tasks[0].target_files == ["src/models/user.py", "tests/test_user.py"]
+
+    def test_parse_task_list_handles_multiple_tasks_with_files(self):
+        """parse_task_list handles multiple tasks with different target files."""
+        content = """## Fundamental Tasks
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/db/schema.py -->
+- [ ] Create database schema
+
+## Independent Tasks
+<!-- category: independent, group: api -->
+<!-- files: src/api/login.py, tests/api/test_login.py -->
+- [ ] Create login endpoint
+
+<!-- category: independent, group: api -->
+<!-- files: src/api/register.py, tests/api/test_register.py -->
+- [ ] Create registration endpoint
+"""
+        tasks = parse_task_list(content)
+
+        assert len(tasks) == 3
+        assert tasks[0].target_files == ["src/db/schema.py"]
+        assert tasks[1].target_files == ["src/api/login.py", "tests/api/test_login.py"]
+        assert tasks[2].target_files == ["src/api/register.py", "tests/api/test_register.py"]
 
 
 # =============================================================================

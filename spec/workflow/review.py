@@ -11,6 +11,7 @@ introduced by the current workflow, not pre-existing dirty changes.
 from __future__ import annotations
 
 import re
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,7 +29,14 @@ if TYPE_CHECKING:
     from spec.workflow.state import WorkflowState
 
 
-def parse_review_status(output: str) -> str:
+class ReviewStatus(Enum):
+    """Status codes returned by the review parser."""
+
+    PASS = "PASS"
+    NEEDS_ATTENTION = "NEEDS_ATTENTION"
+
+
+def parse_review_status(output: str) -> ReviewStatus:
     """Parse review status from agent output.
 
     Extracts the final status marker from review output. The canonical format is:
@@ -47,23 +55,22 @@ def parse_review_status(output: str) -> str:
         output: Review agent output text
 
     Returns:
-        "PASS" if review passed, "NEEDS_ATTENTION" if issues found,
-        or "NEEDS_ATTENTION" if status cannot be determined (fail-safe)
+        ReviewStatus.PASS if review passed, ReviewStatus.NEEDS_ATTENTION if
+        issues found, or ReviewStatus.NEEDS_ATTENTION if status cannot be
+        determined (fail-safe)
 
     Examples:
         >>> parse_review_status("**Status**: PASS\\n\\nLooks good!")
-        'PASS'
+        <ReviewStatus.PASS: 'PASS'>
         >>> parse_review_status("Status: NEEDS_ATTENTION\\n\\nIssues found")
-        'NEEDS_ATTENTION'
-        >>> parse_review_status("Some text with PASS in it\\n**Status**: NEEDS_ATTENTION")
-        'NEEDS_ATTENTION'
+        <ReviewStatus.NEEDS_ATTENTION: 'NEEDS_ATTENTION'>
         >>> parse_review_status("- **PASS** - Changes look good")
-        'PASS'
+        <ReviewStatus.PASS: 'PASS'>
         >>> parse_review_status("Ambiguous output")
-        'NEEDS_ATTENTION'
+        <ReviewStatus.NEEDS_ATTENTION: 'NEEDS_ATTENTION'>
     """
     if not output or not output.strip():
-        return "NEEDS_ATTENTION"
+        return ReviewStatus.NEEDS_ATTENTION
 
     # All status patterns we recognize, ordered by specificity
     # Each pattern captures the status keyword (PASS or NEEDS_ATTENTION)
@@ -87,7 +94,7 @@ def parse_review_status(output: str) -> str:
     if all_matches:
         # Sort by position, use last match as final verdict
         all_matches.sort(key=lambda x: x[0])
-        return all_matches[-1][1]
+        return ReviewStatus(all_matches[-1][1])
 
     # No explicit status marker found - check for standalone markers as fallback
     # Only in the last 500 chars to avoid false positives from prose
@@ -96,12 +103,12 @@ def parse_review_status(output: str) -> str:
     # Fallback patterns for standalone markers (near end only)
     fallback_patterns = [
         # NEEDS_ATTENTION on its own line (more specific, check first)
-        (r'(?:^|\n)\s*\*?\*?NEEDS_ATTENTION\*?\*?\s*(?:\n|$)', "NEEDS_ATTENTION"),
+        (r'(?:^|\n)\s*\*?\*?NEEDS_ATTENTION\*?\*?\s*(?:\n|$)', ReviewStatus.NEEDS_ATTENTION),
         # **PASS** on its own line
-        (r'(?:^|\n)\s*\*\*PASS\*\*\s*(?:\n|$)', "PASS"),
+        (r'(?:^|\n)\s*\*\*PASS\*\*\s*(?:\n|$)', ReviewStatus.PASS),
         # PASS on its own line (but NOT "will PASS" or "PASS all tests")
         # Must be at line start or after sentence-ending punctuation
-        (r'(?:^|\n)\s*PASS\s*(?:\n|$)', "PASS"),
+        (r'(?:^|\n)\s*PASS\s*(?:\n|$)', ReviewStatus.PASS),
     ]
 
     for pattern, status in fallback_patterns:
@@ -109,7 +116,7 @@ def parse_review_status(output: str) -> str:
             return status
 
     # No clear marker found - default to NEEDS_ATTENTION (fail-safe)
-    return "NEEDS_ATTENTION"
+    return ReviewStatus.NEEDS_ATTENTION
 
 
 def build_review_prompt(
@@ -197,6 +204,74 @@ def _get_diff_for_review(state: WorkflowState) -> tuple[str, bool, bool]:
         return get_smart_diff()
 
 
+def _run_rereview_after_fix(
+    state: WorkflowState,
+    log_dir: Path,
+    phase: str,
+    auggie_client: AuggieClient,
+) -> bool | None:
+    """Re-run review after auto-fix attempt.
+
+    Offers the user the option to re-run the review after auto-fix
+    has been applied. This helper centralizes the re-review logic
+    to keep run_phase_review() simpler.
+
+    Args:
+        state: Current workflow state
+        log_dir: Directory for log files
+        phase: Phase identifier ("fundamental" or "final")
+        auggie_client: AuggieClient instance to reuse
+
+    Returns:
+        True if re-review passed (workflow should continue),
+        False if user wants to stop,
+        None if re-review failed or user skipped (caller should fall through)
+    """
+    if not prompt_confirm("Run review again after auto-fix?", default=True):
+        return None  # User skipped re-review, fall through to continue prompt
+
+    print_step(f"Re-running {phase} phase review after auto-fix...")
+
+    # Get updated diff using baseline if available
+    diff_output, is_truncated, git_error = _get_diff_for_review(state)
+
+    if git_error:
+        print_warning("Could not retrieve git diff for re-review")
+        return None  # Fall through to continue prompt
+
+    if not diff_output.strip():
+        print_info("No changes to review after auto-fix")
+        return True  # No changes = pass
+
+    # Build new prompt and run review
+    prompt = build_review_prompt(state, phase, diff_output, is_truncated)
+
+    try:
+        success, output = auggie_client.run_print_with_output(
+            prompt,
+            agent=state.subagent_names["reviewer"],
+            dont_save_session=True,
+        )
+
+        if not success:
+            print_warning("Re-review execution returned failure")
+            return None  # Fall through to continue prompt
+
+        status = parse_review_status(output)
+
+        if status == ReviewStatus.PASS:
+            print_success(f"{phase.capitalize()} review after auto-fix: PASS")
+            return True
+
+        print_warning(f"{phase.capitalize()} review after auto-fix: NEEDS_ATTENTION")
+        print_info("Issues remain after auto-fix. Please review manually.")
+        return None  # Fall through to continue prompt
+
+    except Exception as e:
+        print_warning(f"Re-review execution failed: {e}")
+        return None  # Fall through to continue prompt
+
+
 def run_phase_review(
     state: WorkflowState,
     log_dir: Path,
@@ -270,7 +345,7 @@ def run_phase_review(
     # Parse review result using robust parser (only when execution succeeded)
     status = parse_review_status(output)
 
-    if status == "PASS":
+    if status == ReviewStatus.PASS:
         print_success(f"{phase.capitalize()} review: PASS")
         return True
 
@@ -283,56 +358,12 @@ def run_phase_review(
 
         if fix_success:
             # Offer to re-run review after auto-fix
-            if prompt_confirm("Run review again after auto-fix?", default=True):
-                print_step(f"Re-running {phase} phase review after auto-fix...")
-
-                # Get updated diff using baseline if available
-                diff_output_retry, is_truncated_retry, git_error_retry = _get_diff_for_review(state)
-
-                if git_error_retry:
-                    print_warning("Could not retrieve git diff for re-review")
-                    # Fall through to continue prompt
-                elif not diff_output_retry.strip():
-                    print_info("No changes to review after auto-fix")
-                    return True
-                else:
-                    # Build new prompt
-                    prompt_retry = build_review_prompt(
-                        state, phase, diff_output_retry, is_truncated_retry
-                    )
-
-                    # Re-run review
-                    try:
-                        success_retry, output_retry = auggie_client.run_print_with_output(
-                            prompt_retry,
-                            agent=state.subagent_names["reviewer"],
-                            dont_save_session=True,
-                        )
-
-                        # Check execution success before parsing
-                        if not success_retry:
-                            print_warning("Re-review execution returned failure")
-                            # Fall through to continue prompt
-                        else:
-                            status_retry = parse_review_status(output_retry)
-
-                            if status_retry == "PASS":
-                                print_success(
-                                    f"{phase.capitalize()} review after auto-fix: PASS"
-                                )
-                                return True
-                            else:
-                                print_warning(
-                                    f"{phase.capitalize()} review after auto-fix: NEEDS_ATTENTION"
-                                )
-                                print_info(
-                                    "Issues remain after auto-fix. Please review manually."
-                                )
-                                # Fall through to continue prompt below
-
-                    except Exception as e:
-                        print_warning(f"Re-review execution failed: {e}")
-                        # Fall through to continue prompt below
+            re_review_result = _run_rereview_after_fix(
+                state, log_dir, phase, auggie_client
+            )
+            if re_review_result is not None:
+                return re_review_result
+            # re_review_result is None means fall through to continue prompt
         else:
             print_warning("Auto-fix reported issues")
 
@@ -351,6 +382,7 @@ _run_phase_review = run_phase_review
 
 
 __all__ = [
+    "ReviewStatus",
     "parse_review_status",
     "build_review_prompt",
     "run_phase_review",

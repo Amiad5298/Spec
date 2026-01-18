@@ -10,7 +10,7 @@ Tests cover:
 
 import pytest
 
-from spec.workflow.review import parse_review_status
+from spec.workflow.review import parse_review_status, ReviewStatus
 
 
 class TestParseReviewStatusCanonical:
@@ -24,7 +24,7 @@ class TestParseReviewStatusCanonical:
 
 **Summary**: Everything looks good!
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_parse_pass_without_bold_markers(self):
         """Parses PASS without bold markers."""
@@ -34,7 +34,7 @@ Status: PASS
 
 Summary: Everything looks good!
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_parse_needs_attention_with_bold_markers(self):
         """Parses NEEDS_ATTENTION with bold markers."""
@@ -46,7 +46,7 @@ Summary: Everything looks good!
 - Missing error handling
 - Incomplete tests
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_parse_needs_attention_without_bold_markers(self):
         """Parses NEEDS_ATTENTION without bold markers."""
@@ -57,19 +57,19 @@ Status: NEEDS_ATTENTION
 Issues:
 - Missing error handling
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_case_insensitive_matching(self):
         """Handles case variations."""
-        assert parse_review_status("**Status**: pass\n\nLooks good!") == "PASS"
-        assert parse_review_status("**Status**: Pass\n") == "PASS"
-        assert parse_review_status("Status: needs_attention\n") == "NEEDS_ATTENTION"
+        assert parse_review_status("**Status**: pass\n\nLooks good!") == ReviewStatus.PASS
+        assert parse_review_status("**Status**: Pass\n") == ReviewStatus.PASS
+        assert parse_review_status("Status: needs_attention\n") == ReviewStatus.NEEDS_ATTENTION
 
     def test_whitespace_variations(self):
         """Handles whitespace variations around colon."""
-        assert parse_review_status("**Status**:    PASS   \n") == "PASS"
-        assert parse_review_status("Status :PASS\n") == "PASS"
-        assert parse_review_status("**Status** : NEEDS_ATTENTION") == "NEEDS_ATTENTION"
+        assert parse_review_status("**Status**:    PASS   \n") == ReviewStatus.PASS
+        assert parse_review_status("Status :PASS\n") == ReviewStatus.PASS
+        assert parse_review_status("**Status** : NEEDS_ATTENTION") == ReviewStatus.NEEDS_ATTENTION
 
 
 class TestParseReviewStatusBulletFormat:
@@ -81,7 +81,7 @@ class TestParseReviewStatusBulletFormat:
 
 - **PASS** - Changes look good, ready to proceed
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_bullet_needs_attention_with_description(self):
         """Parses bullet format - **NEEDS_ATTENTION** - description."""
@@ -92,7 +92,7 @@ class TestParseReviewStatusBulletFormat:
 **Issues**:
 1. Missing test coverage
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_bullet_without_trailing_dash(self):
         """Parses bullet format without trailing dash."""
@@ -100,7 +100,7 @@ class TestParseReviewStatusBulletFormat:
 
 - **PASS**
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_bullet_needs_attention_without_trailing_dash(self):
         """Parses bullet NEEDS_ATTENTION without trailing dash."""
@@ -108,7 +108,7 @@ class TestParseReviewStatusBulletFormat:
 
 - **NEEDS_ATTENTION**
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
 
 class TestParseReviewStatusStandalone:
@@ -122,7 +122,7 @@ Everything looks good.
 
 **PASS**
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_standalone_pass_at_end(self):
         """Detects standalone PASS on its own line at end."""
@@ -132,7 +132,7 @@ Everything looks good.
 
 PASS
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_standalone_needs_attention_at_end(self):
         """Detects standalone NEEDS_ATTENTION marker at end."""
@@ -142,7 +142,7 @@ Found some issues.
 
 NEEDS_ATTENTION
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_standalone_bold_needs_attention_at_end(self):
         """Detects standalone **NEEDS_ATTENTION** at end."""
@@ -152,7 +152,7 @@ Found issues.
 
 **NEEDS_ATTENTION**
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
 
 class TestParseReviewStatusMultipleMarkers:
@@ -172,7 +172,7 @@ Issues found.
 
 All issues resolved!
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_both_markers_present_uses_last(self):
         """When both markers present, uses the last one."""
@@ -182,7 +182,7 @@ Wait, actually found an issue.
 
 **Status**: NEEDS_ATTENTION
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_mixed_bold_and_plain_markers(self):
         """Handles mixed bold and plain markers."""
@@ -192,7 +192,7 @@ After review:
 
 **Status**: PASS
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
     def test_canonical_overrides_bullet_if_later(self):
         """Canonical format overrides bullet if it appears later."""
@@ -202,7 +202,7 @@ After fixes:
 
 **Status**: PASS
 """
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
 
 class TestParseReviewStatusFalsePositives:
@@ -219,7 +219,7 @@ The implementation will PASS all tests once complete.
 **Issues**:
 - Tests not yet written
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_ignores_pass_in_sentence(self):
         """Ignores PASS in middle of sentence."""
@@ -227,7 +227,7 @@ The implementation will PASS all tests once complete.
 
 **Status**: NEEDS_ATTENTION
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_ignores_pass_without_status_marker(self):
         """PASS in prose without Status marker returns NEEDS_ATTENTION."""
@@ -236,7 +236,7 @@ The implementation will PASS all tests once complete.
 The tests will PASS once you add the missing import.
 Please fix the import and try again.
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_pass_in_code_block_ignored(self):
         """PASS in code context is ignored without explicit marker."""
@@ -248,7 +248,7 @@ assert result == "PASS"
 
 No status marker here.
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
 
 class TestParseReviewStatusEdgeCases:
@@ -256,9 +256,9 @@ class TestParseReviewStatusEdgeCases:
 
     def test_empty_output_returns_needs_attention(self):
         """Empty output returns NEEDS_ATTENTION (fail-safe)."""
-        assert parse_review_status("") == "NEEDS_ATTENTION"
-        assert parse_review_status("   ") == "NEEDS_ATTENTION"
-        assert parse_review_status("\n\n") == "NEEDS_ATTENTION"
+        assert parse_review_status("") == ReviewStatus.NEEDS_ATTENTION
+        assert parse_review_status("   ") == ReviewStatus.NEEDS_ATTENTION
+        assert parse_review_status("\n\n") == ReviewStatus.NEEDS_ATTENTION
 
     def test_no_status_marker_returns_needs_attention(self):
         """No status marker returns NEEDS_ATTENTION (fail-safe)."""
@@ -266,11 +266,11 @@ class TestParseReviewStatusEdgeCases:
 
 Some review text without a clear status marker.
 """
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_none_input_handled(self):
         """None-like empty string handled gracefully."""
-        assert parse_review_status("") == "NEEDS_ATTENTION"
+        assert parse_review_status("") == ReviewStatus.NEEDS_ATTENTION
 
     def test_very_long_output_uses_last_500_chars_for_fallback(self):
         """Long output uses last 500 chars for standalone marker fallback."""
@@ -278,13 +278,13 @@ Some review text without a clear status marker.
         preamble = "x" * 1000
         output = f"{preamble}\n\nPASS\n\n{'y' * 600}"
         # PASS is in the middle, not in last 500 chars, so should be NEEDS_ATTENTION
-        assert parse_review_status(output) == "NEEDS_ATTENTION"
+        assert parse_review_status(output) == ReviewStatus.NEEDS_ATTENTION
 
     def test_long_output_with_pass_at_end(self):
         """Long output with PASS in last 500 chars is detected."""
         preamble = "x" * 1000
         output = f"{preamble}\n\n**Status**: PASS\n"
-        assert parse_review_status(output) == "PASS"
+        assert parse_review_status(output) == ReviewStatus.PASS
 
 
 # Backwards compatibility test - ensure the re-exported alias works
@@ -294,6 +294,6 @@ class TestBackwardsCompatibility:
     def test_underscore_alias_works(self):
         """The _parse_review_status alias works for backwards compat."""
         from spec.workflow.step3_execute import _parse_review_status
-        assert _parse_review_status("**Status**: PASS\n") == "PASS"
-        assert _parse_review_status("Status: NEEDS_ATTENTION") == "NEEDS_ATTENTION"
+        assert _parse_review_status("**Status**: PASS\n") == ReviewStatus.PASS
+        assert _parse_review_status("Status: NEEDS_ATTENTION") == ReviewStatus.NEEDS_ATTENTION
 

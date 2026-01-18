@@ -52,6 +52,7 @@ def run_spec_driven_workflow(
     max_parallel_tasks: int = 3,
     fail_fast: bool = False,
     rate_limit_config: RateLimitConfig | None = None,
+    enable_phase_review: bool = False,
 ) -> bool:
     """Run the complete spec-driven development workflow.
 
@@ -73,6 +74,7 @@ def run_spec_driven_workflow(
         max_parallel_tasks: Maximum number of parallel tasks (1-5).
         fail_fast: Stop on first task failure.
         rate_limit_config: Rate limit retry configuration.
+        enable_phase_review: Enable phase reviews after task execution.
 
     Returns:
         True if workflow completed successfully
@@ -95,6 +97,7 @@ def run_spec_driven_workflow(
         max_parallel_tasks=max_parallel_tasks,
         fail_fast=fail_fast,
         rate_limit_config=rate_limit_config or RateLimitConfig(),
+        enable_phase_review=enable_phase_review,
         subagent_names={
             "planner": config.settings.subagent_planner,
             "tasklist": config.settings.subagent_tasklist,

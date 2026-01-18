@@ -18,6 +18,8 @@ Supports two display modes:
 """
 
 import os
+import re
+import subprocess
 import threading
 import time
 from concurrent.futures import (
@@ -140,6 +142,289 @@ def _cleanup_old_runs(ticket_id: str, keep_count: int = DEFAULT_LOG_RETENTION) -
             pass  # Ignore cleanup errors
 
 
+# =============================================================================
+# Review Helper Functions
+# =============================================================================
+
+
+def _parse_stat_total_lines(stat_output: str) -> int:
+    """Parse total changed lines from git diff --stat output.
+
+    The stat output ends with a summary line like:
+    "10 files changed, 500 insertions(+), 100 deletions(-)"
+
+    Args:
+        stat_output: Output from git diff --stat
+
+    Returns:
+        Total lines changed (insertions + deletions)
+    """
+    # Match the summary line at the end of stat output
+    # Pattern: "X file(s) changed, Y insertion(s)(+), Z deletion(s)(-)"
+    match = re.search(
+        r"(\d+)\s+insertions?\(\+\).*?(\d+)\s+deletions?\(-\)",
+        stat_output,
+    )
+    if match:
+        return int(match.group(1)) + int(match.group(2))
+
+    # Try matching insertions only
+    match = re.search(r"(\d+)\s+insertions?\(\+\)", stat_output)
+    if match:
+        return int(match.group(1))
+
+    # Try matching deletions only
+    match = re.search(r"(\d+)\s+deletions?\(-\)", stat_output)
+    if match:
+        return int(match.group(1))
+
+    return 0
+
+
+def _parse_stat_file_count(stat_output: str) -> int:
+    """Parse number of changed files from git diff --stat output.
+
+    Args:
+        stat_output: Output from git diff --stat
+
+    Returns:
+        Number of files changed
+    """
+    match = re.search(r"(\d+)\s+files?\s+changed", stat_output)
+    if match:
+        return int(match.group(1))
+    return 0
+
+
+def _get_smart_diff(max_lines: int = 2000, max_files: int = 20) -> tuple[str, bool]:
+    """Get diff output, using --stat only for large changes.
+
+    Implements smart diff strategy to handle large diffs that could
+    exceed AI context window limits. For large changes, returns only
+    the stat summary and instructs the reviewer to inspect specific
+    files as needed.
+
+    Args:
+        max_lines: Maximum lines before falling back to stat-only (default: 2000)
+        max_files: Maximum files before falling back to stat-only (default: 20)
+
+    Returns:
+        Tuple of (diff_output, is_truncated) where is_truncated is True
+        if only stat output was returned due to large changeset
+    """
+    # First get stat output to assess change size
+    stat_result = subprocess.run(
+        ["git", "diff", "--stat"],
+        capture_output=True,
+        text=True,
+    )
+    stat_output = stat_result.stdout
+
+    if not stat_output.strip():
+        # No changes - return empty
+        return "", False
+
+    # Parse stat to get counts
+    lines_changed = _parse_stat_total_lines(stat_output)
+    files_changed = _parse_stat_file_count(stat_output)
+
+    # Check if diff is too large
+    if lines_changed > max_lines or files_changed > max_files:
+        # Return stat-only with instructions
+        truncated_output = f"""## Git Diff Summary (Large Changeset)
+
+{stat_output}
+
+**Note**: This changeset is large ({files_changed} files, {lines_changed} lines changed).
+To review specific files in detail, use: `git diff -- <file_path>`
+Focus on files most critical to the implementation plan."""
+        return truncated_output, True
+
+    # Small enough for full diff
+    full_result = subprocess.run(
+        ["git", "diff"],
+        capture_output=True,
+        text=True,
+    )
+    return full_result.stdout, False
+
+
+def _run_auto_fix(
+    state: WorkflowState,
+    review_feedback: str,
+    log_dir: Path,
+) -> bool:
+    """Attempt to fix issues identified in review.
+
+    Spins up an implementer agent to address the issues found during
+    code review. The agent receives the review feedback and attempts
+    to fix the identified problems.
+
+    Args:
+        state: Current workflow state
+        review_feedback: The review output containing identified issues
+        log_dir: Directory for log files
+
+    Returns:
+        True if fix was attempted successfully (agent completed),
+        False if agent crashed or was cancelled
+    """
+    print_step("Attempting auto-fix based on review feedback...")
+
+    prompt = f"""Fix the following issues identified during code review:
+
+{review_feedback}
+
+Implementation plan for context: {state.get_plan_path()}
+
+Instructions:
+1. Address each issue listed above
+2. Do NOT introduce new features or refactor unrelated code
+3. Focus only on fixing the identified problems
+4. If a test is missing, create a minimal test that covers the gap
+5. If error handling is missing, add appropriate handling
+
+Do NOT commit any changes."""
+
+    auggie_client = AuggieClient()
+
+    try:
+        success, _ = auggie_client.run_print_with_output(
+            prompt,
+            agent=state.subagent_names["implementer"],
+            dont_save_session=True,
+        )
+        if success:
+            print_success("Auto-fix completed")
+        else:
+            print_warning("Auto-fix reported issues")
+        return success
+    except Exception as e:
+        print_error(f"Auto-fix failed: {e}")
+        return False
+
+
+def _build_review_prompt(
+    state: WorkflowState,
+    phase: str,
+    diff_output: str,
+    is_truncated: bool,
+) -> str:
+    """Build the prompt for the reviewer agent.
+
+    Args:
+        state: Current workflow state
+        phase: Phase being reviewed ("fundamental" or "final")
+        diff_output: Git diff output (full or stat-only)
+        is_truncated: Whether diff was truncated due to size
+
+    Returns:
+        Formatted prompt string for the reviewer
+    """
+    plan_path = state.get_plan_path()
+
+    prompt = f"""Review the code changes from the {phase} phase of implementation.
+
+## Implementation Plan
+File: {plan_path}
+(Use codebase-retrieval to read relevant sections as needed)
+
+## Code Changes
+{diff_output}
+"""
+
+    if is_truncated:
+        prompt += """
+## Large Changeset Instructions
+This is a large changeset. The diff above shows only the file summary.
+Use `git diff -- <file_path>` to inspect specific files that need detailed review.
+Focus on files most critical to the implementation plan.
+"""
+
+    prompt += """
+## Review Instructions
+1. Check that changes align with the implementation plan
+2. Identify any issues, bugs, or missing functionality
+3. Look for missing tests, error handling, or edge cases
+
+## Output Format
+End your review with one of:
+- **PASS** - Changes look good, ready to proceed
+- **NEEDS_ATTENTION** - Issues found that should be addressed
+
+If NEEDS_ATTENTION, list specific issues in this format:
+**Issues**:
+1. [ISSUE_TYPE] Description of the issue
+2. [ISSUE_TYPE] Description of the issue
+...
+"""
+
+    return prompt
+
+
+def _run_phase_review(
+    state: WorkflowState,
+    log_dir: Path,
+    phase: str,
+) -> bool:
+    """Run review checkpoint and optionally auto-fix.
+
+    Executes the spec-reviewer agent to validate completed work.
+    If issues are found, offers the user the option to attempt
+    automatic fixes using the implementer agent.
+
+    Args:
+        state: Current workflow state
+        log_dir: Directory for log files
+        phase: Phase identifier ("fundamental" or "final")
+
+    Returns:
+        True if review passed or user chose to continue,
+        False if user declined to continue after failed review
+    """
+    print_step(f"Running {phase} phase review...")
+
+    # Get smart diff
+    diff_output, is_truncated = _get_smart_diff()
+
+    if not diff_output.strip():
+        print_info("No changes to review")
+        return True
+
+    # Build prompt
+    prompt = _build_review_prompt(state, phase, diff_output, is_truncated)
+
+    # Run review
+    auggie_client = AuggieClient()
+    try:
+        success, output = auggie_client.run_print_with_output(
+            prompt,
+            agent=state.subagent_names["reviewer"],
+            dont_save_session=True,
+        )
+    except Exception as e:
+        print_error(f"Review failed to execute: {e}")
+        return True  # Continue workflow on review failure
+
+    # Parse review result
+    # Check for explicit PASS or NEEDS_ATTENTION markers
+    passed = "PASS" in output and "NEEDS_ATTENTION" not in output
+
+    if passed:
+        print_success(f"{phase.capitalize()} review: PASS")
+        return True
+
+    print_warning(f"{phase.capitalize()} review: NEEDS_ATTENTION")
+
+    # Offer auto-fix
+    if prompt_confirm("Would you like to attempt auto-fix?", default=False):
+        _run_auto_fix(state, output, log_dir)
+        print_info("Auto-fix complete. Please review changes manually.")
+        return True  # Continue workflow after fix attempt
+
+    return True  # Continue workflow even if user declined fix
+
+
 def step_3_execute(
     state: WorkflowState,
     *,
@@ -232,6 +517,15 @@ def step_3_execute(
             print_error("Phase 1 failures with fail_fast enabled. Stopping.")
             return False
 
+    # PHASE 1 REVIEW CHECKPOINT
+    # Run after TUI context manager has exited to avoid display corruption
+    if pending_fundamental and state.enable_phase_review and not failed_tasks:
+        review_passed = _run_phase_review(state, log_dir, phase="fundamental")
+        if not review_passed:
+            if not prompt_confirm("Review found issues. Continue to Phase 2?", default=True):
+                print_info("Stopping after Phase 1 review.")
+                return False
+
     # PHASE 2: Execute independent tasks in parallel
     if pending_independent and state.parallel_execution_enabled:
         print_header("Phase 2: Independent Tasks (Parallel)")
@@ -282,6 +576,14 @@ def step_3_execute(
     # Post-execution steps
     _show_summary(state, failed_tasks)
     _run_post_implementation_tests(state)
+
+    # FINAL REVIEW CHECKPOINT
+    # Run after tests but before commit instructions
+    if state.enable_phase_review:
+        review_passed = _run_phase_review(state, log_dir, phase="final")
+        if not review_passed:
+            print_warning("Review found issues. Please address them before committing.")
+
     _offer_commit_instructions(state)
     print_info(f"Task logs saved to: {log_dir}")
 

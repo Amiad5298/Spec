@@ -123,6 +123,9 @@ class WorkflowState:
     # Rate limit configuration
     rate_limit_config: RateLimitConfig = field(default_factory=RateLimitConfig)
 
+    # Review configuration
+    enable_phase_review: bool = False  # Enable phase reviews after task execution
+
     # Parallel execution tracking
     parallel_tasks_completed: list[str] = field(default_factory=list)
     parallel_tasks_failed: list[str] = field(default_factory=list)

@@ -66,6 +66,7 @@ def show_help() -> None:
     print_info("  --fail-fast/--no-fail-fast  Stop on first task failure (default: from config)")
     print_info("  --max-retries N           Max retries on rate limit (0 to disable)")
     print_info("  --retry-base-delay SECS   Base delay for retry backoff (seconds)")
+    print_info("  --enable-review           Enable phase reviews after task execution")
     print_info("  --config                  Show current configuration")
     print_info("  --version, -v             Show version information")
     print_info("  --help, -h                Show this help message")
@@ -172,6 +173,13 @@ def main(
             help="Base delay for retry backoff (seconds)",
         ),
     ] = 2.0,
+    enable_review: Annotated[
+        bool,
+        typer.Option(
+            "--enable-review",
+            help="Enable phase reviews after task execution",
+        ),
+    ] = False,
     show_config: Annotated[
         bool,
         typer.Option(
@@ -236,6 +244,7 @@ def main(
                 fail_fast=fail_fast,
                 max_retries=max_retries,
                 retry_base_delay=retry_base_delay,
+                enable_review=enable_review,
             )
         else:
             # Show main menu
@@ -407,6 +416,7 @@ def _run_workflow(
     fail_fast: Optional[bool] = None,
     max_retries: int = 5,
     retry_base_delay: float = 2.0,
+    enable_review: bool = False,
 ) -> None:
     """Run the AI-assisted workflow.
 
@@ -425,6 +435,7 @@ def _run_workflow(
         fail_fast: Stop on first task failure. None = use config.
         max_retries: Max retries on rate limit (0 to disable).
         retry_base_delay: Base delay for retry backoff (seconds).
+        enable_review: Enable phase reviews after task execution.
     """
     from spec.integrations.jira import parse_jira_ticket
     from spec.workflow.runner import run_spec_driven_workflow
@@ -474,6 +485,7 @@ def _run_workflow(
         max_parallel_tasks=effective_max_parallel,
         fail_fast=effective_fail_fast,
         rate_limit_config=rate_limit_config,
+        enable_phase_review=enable_review,
     )
 
 

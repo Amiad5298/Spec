@@ -118,17 +118,28 @@ def _capture_baseline_for_diffs(state: WorkflowState) -> bool:
     operations, ensuring diffs are scoped to changes introduced by this
     workflow run.
 
+    The dirty tree policy is read from state.dirty_tree_policy:
+    - FAIL_FAST: Abort if working tree is dirty (default, recommended)
+    - WARN_AND_CONTINUE: Warn but continue (diffs may include unrelated changes)
+
     Args:
         state: Current workflow state (will be updated with baseline ref)
 
     Returns:
         True if baseline was captured successfully, False if there was
-        a dirty working tree that prevents safe operation.
+        a dirty working tree that prevents safe operation (only with FAIL_FAST).
     """
     # Check for dirty working tree before capturing baseline
     try:
-        check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        is_clean = check_dirty_working_tree(policy=state.dirty_tree_policy)
+        if not is_clean:
+            # WARN_AND_CONTINUE policy - tree is dirty but we continue
+            print_warning(
+                "Continuing with dirty working tree. "
+                "Review diffs may include pre-existing changes."
+            )
     except DirtyWorkingTreeError as e:
+        # FAIL_FAST policy - abort on dirty tree
         print_error(str(e))
         return False
 

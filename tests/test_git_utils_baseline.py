@@ -372,3 +372,141 @@ class TestStatParsing:
         stat_output = " 1 file changed, 10 insertions(+)"
         assert parse_stat_file_count(stat_output) == 1
 
+
+class TestUntrackedFiles:
+    """Tests for untracked file handling in diffs."""
+
+    def test_get_untracked_files_returns_list(self, temp_git_repo):
+        """Returns list of untracked files."""
+        from spec.workflow.git_utils import get_untracked_files
+
+        # Create untracked files
+        temp_git_repo.create_file("untracked1.txt", "content1")
+        temp_git_repo.create_file("untracked2.py", "print('hello')")
+
+        untracked = get_untracked_files()
+
+        assert "untracked1.txt" in untracked
+        assert "untracked2.py" in untracked
+        assert len(untracked) == 2
+
+    def test_get_untracked_files_empty_when_all_tracked(self, temp_git_repo):
+        """Returns empty list when no untracked files."""
+        from spec.workflow.git_utils import get_untracked_files
+
+        # All files are tracked (initial commit has README.md)
+        untracked = get_untracked_files()
+        assert untracked == []
+
+    def test_get_untracked_files_excludes_gitignored(self, temp_git_repo):
+        """Excludes files matching .gitignore patterns."""
+        from spec.workflow.git_utils import get_untracked_files
+
+        # Create .gitignore
+        temp_git_repo.create_file(".gitignore", "*.log\n__pycache__/\n")
+        subprocess.run(["git", "add", ".gitignore"], check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Add gitignore"], check=True, capture_output=True)
+
+        # Create ignored and non-ignored files
+        temp_git_repo.create_file("debug.log", "log content")
+        temp_git_repo.create_file("visible.txt", "visible content")
+
+        untracked = get_untracked_files()
+
+        assert "visible.txt" in untracked
+        assert "debug.log" not in untracked
+
+    def test_untracked_files_diff_generates_unified_format(self, temp_git_repo):
+        """Generates unified diff format for untracked files."""
+        from spec.workflow.git_utils import get_untracked_files_diff
+
+        temp_git_repo.create_file("new_file.py", "def hello():\n    pass\n")
+
+        diff = get_untracked_files_diff()
+
+        assert "diff --git a/new_file.py b/new_file.py" in diff
+        assert "new file mode" in diff
+        assert "+def hello():" in diff
+        assert "+    pass" in diff
+
+    def test_untracked_files_diff_stat_only(self, temp_git_repo):
+        """Generates stat-like output for untracked files."""
+        from spec.workflow.git_utils import get_untracked_files_diff
+
+        temp_git_repo.create_file("file1.txt", "content")
+        temp_git_repo.create_file("file2.txt", "content")
+
+        diff = get_untracked_files_diff(stat_only=True)
+
+        assert "file1.txt" in diff
+        assert "file2.txt" in diff
+        assert "[NEW FILE]" in diff
+        assert "2 untracked file(s)" in diff
+
+    def test_untracked_binary_file_marked(self, temp_git_repo):
+        """Binary untracked files are marked with placeholder."""
+        from spec.workflow.git_utils import get_untracked_files_diff
+
+        # Create a binary file (contains null bytes)
+        binary_path = temp_git_repo.path / "image.bin"
+        binary_path.write_bytes(b"\x00\x01\x02\x03\xff\xfe")
+
+        diff = get_untracked_files_diff()
+
+        assert "[BINARY FILE ADDED: image.bin]" in diff
+
+    def test_working_tree_diff_includes_untracked(self, temp_git_repo):
+        """Working tree diff includes untracked files by default."""
+        baseline = capture_baseline()
+
+        # Create an untracked file
+        temp_git_repo.create_file("new_untracked.py", "x = 1\n")
+
+        diff_output, git_error = get_working_tree_diff_from_baseline(baseline)
+
+        assert not git_error
+        assert "new_untracked.py" in diff_output
+        assert "+x = 1" in diff_output
+
+    def test_working_tree_diff_excludes_untracked_when_disabled(self, temp_git_repo):
+        """Working tree diff excludes untracked files when disabled."""
+        baseline = capture_baseline()
+
+        # Create an untracked file
+        temp_git_repo.create_file("new_untracked.py", "x = 1\n")
+
+        diff_output, git_error = get_working_tree_diff_from_baseline(
+            baseline, include_untracked=False
+        )
+
+        assert not git_error
+        assert "new_untracked.py" not in diff_output
+
+    def test_smart_diff_includes_untracked(self, temp_git_repo):
+        """Smart diff includes untracked files by default."""
+        baseline = capture_baseline()
+
+        # Create an untracked file
+        temp_git_repo.create_file("smart_untracked.txt", "smart content\n")
+
+        diff_output, is_truncated, git_error = get_smart_diff_from_baseline(baseline)
+
+        assert not git_error
+        assert not is_truncated
+        assert "smart_untracked.txt" in diff_output
+        assert "+smart content" in diff_output
+
+    def test_smart_diff_excludes_untracked_when_disabled(self, temp_git_repo):
+        """Smart diff excludes untracked files when disabled."""
+        baseline = capture_baseline()
+
+        # Create an untracked file
+        temp_git_repo.create_file("smart_untracked.txt", "smart content\n")
+
+        diff_output, is_truncated, git_error = get_smart_diff_from_baseline(
+            baseline, include_untracked=False
+        )
+
+        assert not git_error
+        assert "smart_untracked.txt" not in diff_output
+

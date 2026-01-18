@@ -31,15 +31,17 @@ if TYPE_CHECKING:
 def parse_review_status(output: str) -> str:
     """Parse review status from agent output.
 
-    Extracts the final status marker from review output, looking for
-    **Status**: PASS or **Status**: NEEDS_ATTENTION in the last occurrence.
+    Extracts the final status marker from review output. The canonical format is:
+        **Status**: PASS
+        **Status**: NEEDS_ATTENTION
 
-    This parser is robust to:
-    - Bold markers (**Status** or Status)
-    - Whitespace variations
+    This parser is robust to multiple formats:
+    - Canonical: **Status**: PASS or Status: PASS
+    - Bullet form: - **PASS** - description or - **NEEDS_ATTENTION** - description
+    - Standalone: **PASS** or NEEDS_ATTENTION on its own line near the end
     - Case variations (PASS, Pass, pass)
     - Multiple occurrences (uses last one as final verdict)
-    - PASS appearing in normal text (only counts if after Status: marker)
+    - PASS in normal prose is NOT matched (avoids false positives)
 
     Args:
         output: Review agent output text
@@ -55,43 +57,59 @@ def parse_review_status(output: str) -> str:
         'NEEDS_ATTENTION'
         >>> parse_review_status("Some text with PASS in it\\n**Status**: NEEDS_ATTENTION")
         'NEEDS_ATTENTION'
+        >>> parse_review_status("- **PASS** - Changes look good")
+        'PASS'
         >>> parse_review_status("Ambiguous output")
         'NEEDS_ATTENTION'
     """
     if not output or not output.strip():
         return "NEEDS_ATTENTION"
 
-    # Unified pattern to match status line with optional bold markers
-    # Matches:
-    #   **Status**: PASS, **Status**: NEEDS_ATTENTION
-    #   Status: PASS, Status: NEEDS_ATTENTION
-    #   With whitespace variations around the colon
-    # Case-insensitive for the status keywords
-    pattern = r'(?:\*\*)?Status(?:\*\*)?\s*:\s*(PASS|NEEDS_ATTENTION)'
+    # All status patterns we recognize, ordered by specificity
+    # Each pattern captures the status keyword (PASS or NEEDS_ATTENTION)
+    patterns = [
+        # 1. Canonical format: **Status**: PASS or Status: PASS
+        r'(?:\*\*)?Status(?:\*\*)?\s*:\s*(PASS|NEEDS_ATTENTION)',
+        # 2. Bullet format: - **PASS** - ... or - **NEEDS_ATTENTION** - ...
+        r'^-\s*\*\*(PASS|NEEDS_ATTENTION)\*\*\s*-',
+        # 3. Bullet format without trailing dash: - **PASS** or - **NEEDS_ATTENTION**
+        r'^-\s*\*\*(PASS|NEEDS_ATTENTION)\*\*\s*$',
+    ]
 
-    matches = list(re.finditer(pattern, output, re.IGNORECASE))
+    # Collect all matches with their positions
+    all_matches: list[tuple[int, str]] = []
 
-    if not matches:
-        # No explicit status marker found - check for standalone markers as fallback
-        # Only if they appear near the end (last 500 chars) to avoid false positives
-        tail = output[-500:] if len(output) > 500 else output
+    for pattern in patterns:
+        for match in re.finditer(pattern, output, re.IGNORECASE | re.MULTILINE):
+            # Store (position, status)
+            all_matches.append((match.end(), match.group(1).upper()))
 
-        # Look for NEEDS_ATTENTION first (more specific)
-        if re.search(r'\bNEEDS_ATTENTION\b', tail, re.IGNORECASE):
-            return "NEEDS_ATTENTION"
+    if all_matches:
+        # Sort by position, use last match as final verdict
+        all_matches.sort(key=lambda x: x[0])
+        return all_matches[-1][1]
 
-        # Then look for PASS (but be more strict - must be on its own line or after punctuation)
-        if re.search(r'(?:^|\n|[.!?]\s+)\*\*PASS\*\*|(?:^|\n|[.!?]\s+)PASS\s*(?:\n|$)', tail, re.IGNORECASE):
-            return "PASS"
+    # No explicit status marker found - check for standalone markers as fallback
+    # Only in the last 500 chars to avoid false positives from prose
+    tail = output[-500:] if len(output) > 500 else output
 
-        # No clear marker found - default to NEEDS_ATTENTION (fail-safe)
-        return "NEEDS_ATTENTION"
+    # Fallback patterns for standalone markers (near end only)
+    fallback_patterns = [
+        # NEEDS_ATTENTION on its own line (more specific, check first)
+        (r'(?:^|\n)\s*\*?\*?NEEDS_ATTENTION\*?\*?\s*(?:\n|$)', "NEEDS_ATTENTION"),
+        # **PASS** on its own line
+        (r'(?:^|\n)\s*\*\*PASS\*\*\s*(?:\n|$)', "PASS"),
+        # PASS on its own line (but NOT "will PASS" or "PASS all tests")
+        # Must be at line start or after sentence-ending punctuation
+        (r'(?:^|\n)\s*PASS\s*(?:\n|$)', "PASS"),
+    ]
 
-    # Use the last match as the final verdict
-    last_match = matches[-1]
-    status = last_match.group(1)
+    for pattern, status in fallback_patterns:
+        if re.search(pattern, tail, re.IGNORECASE):
+            return status
 
-    return status.upper()
+    # No clear marker found - default to NEEDS_ATTENTION (fail-safe)
+    return "NEEDS_ATTENTION"
 
 
 def build_review_prompt(
@@ -138,11 +156,15 @@ Focus on files most critical to the implementation plan.
 3. Look for missing tests, error handling, or edge cases
 
 ## Output Format
-End your review with one of:
-- **PASS** - Changes look good, ready to proceed
-- **NEEDS_ATTENTION** - Issues found that should be addressed
+End your review with one of these EXACT status lines:
 
-If NEEDS_ATTENTION, list specific issues in this format:
+**Status**: PASS
+
+OR
+
+**Status**: NEEDS_ATTENTION
+
+If NEEDS_ATTENTION, list specific issues:
 **Issues**:
 1. [ISSUE_TYPE] Description of the issue
 2. [ISSUE_TYPE] Description of the issue

@@ -14,7 +14,6 @@ Key features:
 
 import re
 import subprocess
-from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
@@ -26,21 +25,6 @@ class DirtyTreePolicy(Enum):
 
     FAIL_FAST = "fail_fast"  # Fail immediately with clear error
     WARN_AND_CONTINUE = "warn_and_continue"  # Warn but continue (not recommended)
-
-
-@dataclass
-class DiffContext:
-    """Context for generating baseline-anchored diffs.
-
-    Attributes:
-        baseline_ref: The git ref (commit SHA) captured at workflow start.
-        has_initial_dirty_state: Whether the tree was dirty at baseline capture.
-        policy: Policy for handling dirty working tree.
-    """
-
-    baseline_ref: str
-    has_initial_dirty_state: bool = False
-    policy: DirtyTreePolicy = DirtyTreePolicy.FAIL_FAST
 
 
 class DirtyWorkingTreeError(Exception):
@@ -202,17 +186,20 @@ def get_working_tree_diff_from_baseline(
     stat_only: bool = False,
     no_color: bool = True,
     no_ext_diff: bool = True,
+    include_untracked: bool = True,
 ) -> tuple[str, bool]:
     """Get diff including uncommitted working tree changes from baseline.
 
     This variant includes all changes - both committed since baseline AND
-    uncommitted working tree modifications.
+    uncommitted working tree modifications. Optionally includes untracked
+    files (new files not yet added to git).
 
     Args:
         baseline_ref: The baseline commit SHA to diff from.
         stat_only: If True, return only stat summary.
         no_color: If True, disable color codes.
         no_ext_diff: If True, disable external diff tools.
+        include_untracked: If True, include untracked files in diff output.
 
     Returns:
         Tuple of (diff_output, git_error).
@@ -240,7 +227,157 @@ def get_working_tree_diff_from_baseline(
         print_warning(f"Git diff from baseline failed: {stderr}")
         return "", True
 
-    return result.stdout, False
+    diff_output = result.stdout
+
+    # Include untracked files if requested
+    if include_untracked:
+        untracked_diff = get_untracked_files_diff(stat_only=stat_only)
+        if untracked_diff:
+            diff_output = diff_output + untracked_diff
+
+    return diff_output, False
+
+
+def get_untracked_files() -> list[str]:
+    """Get list of untracked files (excluding ignored files).
+
+    Returns:
+        List of untracked file paths relative to repo root.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        return []
+
+    files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+    return [f for f in files if f]  # Filter empty strings
+
+
+def get_untracked_files_diff(
+    *,
+    stat_only: bool = False,
+    max_file_size: int = 100_000,  # 100KB limit per file
+) -> str:
+    """Generate diff-like output for untracked files.
+
+    Creates a unified diff format for new untracked files, making them
+    visible in review diffs. Binary files are marked with a placeholder.
+
+    Args:
+        stat_only: If True, return only stat-like summary.
+        max_file_size: Maximum file size in bytes to include content.
+            Larger files get a placeholder.
+
+    Returns:
+        Diff-like output for untracked files, or empty string if none.
+    """
+    untracked = get_untracked_files()
+    if not untracked:
+        return ""
+
+    if stat_only:
+        # Generate stat-like output for untracked files
+        lines = []
+        for path in untracked:
+            lines.append(f" {path} | [NEW FILE]")
+        if lines:
+            lines.append(f" {len(untracked)} untracked file(s)")
+        return "\n" + "\n".join(lines) + "\n"
+
+    # Generate full diff-like output for each untracked file
+    diff_parts = []
+
+    for path in untracked:
+        file_diff = _generate_untracked_file_diff(path, max_file_size)
+        if file_diff:
+            diff_parts.append(file_diff)
+
+    return "\n".join(diff_parts)
+
+
+def _generate_untracked_file_diff(path: str, max_file_size: int) -> str:
+    """Generate diff output for a single untracked file.
+
+    Args:
+        path: Path to the untracked file.
+        max_file_size: Maximum file size to include content.
+
+    Returns:
+        Diff-like output for the file.
+    """
+    import os
+
+    try:
+        # Check file size
+        file_size = os.path.getsize(path)
+
+        if file_size > max_file_size:
+            return (
+                f"diff --git a/{path} b/{path}\n"
+                f"new file mode 100644\n"
+                f"[LARGE FILE: {path} ({file_size} bytes) - content omitted]\n"
+            )
+
+        # Check if binary
+        if _is_binary_file(path):
+            return (
+                f"diff --git a/{path} b/{path}\n"
+                f"new file mode 100644\n"
+                f"[BINARY FILE ADDED: {path}]\n"
+            )
+
+        # Read file content
+        with open(path, encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        # Generate unified diff format
+        lines = content.splitlines(keepends=True)
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+
+        diff_lines = [
+            f"diff --git a/{path} b/{path}\n",
+            "new file mode 100644\n",
+            "--- /dev/null\n",
+            f"+++ b/{path}\n",
+            f"@@ -0,0 +1,{len(lines)} @@\n",
+        ]
+        for line in lines:
+            diff_lines.append(f"+{line}")
+
+        return "".join(diff_lines)
+
+    except (OSError, IOError) as e:
+        return (
+            f"diff --git a/{path} b/{path}\n"
+            f"new file mode 100644\n"
+            f"[ERROR READING FILE: {path} - {e}]\n"
+        )
+
+
+def _is_binary_file(path: str, sample_size: int = 8192) -> bool:
+    """Check if a file appears to be binary.
+
+    Uses a heuristic: if the first sample_size bytes contain null bytes,
+    the file is likely binary.
+
+    Args:
+        path: Path to the file.
+        sample_size: Number of bytes to sample.
+
+    Returns:
+        True if file appears to be binary.
+    """
+    try:
+        with open(path, "rb") as f:
+            sample = f.read(sample_size)
+        return b"\x00" in sample
+    except (OSError, IOError):
+        return False
 
 
 def filter_binary_files_from_diff(diff_output: str) -> str:
@@ -396,6 +533,7 @@ def get_smart_diff_from_baseline(
     max_lines: int = 2000,
     max_files: int = 20,
     include_working_tree: bool = True,
+    include_untracked: bool = True,
 ) -> tuple[str, bool, bool]:
     """Get baseline-anchored diff output, using --stat only for large changes.
 
@@ -408,6 +546,8 @@ def get_smart_diff_from_baseline(
         max_files: Maximum files before falling back to stat-only (default: 20)
         include_working_tree: If True, include uncommitted changes in diff.
             If False, only show committed changes since baseline.
+        include_untracked: If True, include untracked files in diff output.
+            Only applies when include_working_tree is True.
 
     Returns:
         Tuple of (diff_output, is_truncated, git_error) where:
@@ -418,7 +558,7 @@ def get_smart_diff_from_baseline(
     # Choose diff function based on whether we include working tree
     if include_working_tree:
         stat_output, stat_error = get_working_tree_diff_from_baseline(
-            baseline_ref, stat_only=True
+            baseline_ref, stat_only=True, include_untracked=include_untracked
         )
     else:
         stat_output, stat_error = get_diff_from_baseline(
@@ -433,9 +573,14 @@ def get_smart_diff_from_baseline(
         # No changes - return empty (not an error, just empty diff)
         return "", False, False
 
-    # Parse stat to get counts
+    # Parse stat to get counts (note: untracked files add to file count)
     lines_changed = parse_stat_total_lines(stat_output)
     files_changed = parse_stat_file_count(stat_output)
+
+    # Add untracked file count if applicable
+    if include_working_tree and include_untracked:
+        untracked_count = len(get_untracked_files())
+        files_changed += untracked_count
 
     # Check if diff is too large
     if lines_changed > max_lines or files_changed > max_files:
@@ -451,7 +596,9 @@ Focus on files most critical to the implementation plan."""
 
     # Small enough for full diff
     if include_working_tree:
-        full_output, full_error = get_working_tree_diff_from_baseline(baseline_ref)
+        full_output, full_error = get_working_tree_diff_from_baseline(
+            baseline_ref, include_untracked=include_untracked
+        )
     else:
         full_output, full_error = get_diff_from_baseline(baseline_ref)
 
@@ -475,7 +622,6 @@ _get_smart_diff = get_smart_diff
 __all__ = [
     # Baseline-anchored diff functions
     "DirtyTreePolicy",
-    "DiffContext",
     "DirtyWorkingTreeError",
     "capture_baseline",
     "check_dirty_working_tree",
@@ -483,6 +629,9 @@ __all__ = [
     "get_working_tree_diff_from_baseline",
     "filter_binary_files_from_diff",
     "get_smart_diff_from_baseline",
+    # Untracked file functions
+    "get_untracked_files",
+    "get_untracked_files_diff",
     # Legacy functions (still usable for simple cases)
     "parse_stat_total_lines",
     "parse_stat_file_count",

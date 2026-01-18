@@ -33,6 +33,7 @@ from spec.utils.console import (
 )
 from spec.utils.errors import SpecError, UserCancelledError
 from spec.utils.logging import log_message
+from spec.workflow.git_utils import DirtyTreePolicy
 from spec.workflow.state import RateLimitConfig, WorkflowState
 from spec.workflow.step1_plan import step_1_create_plan
 from spec.workflow.step2_tasklist import step_2_create_tasklist
@@ -53,6 +54,7 @@ def run_spec_driven_workflow(
     fail_fast: bool = False,
     rate_limit_config: RateLimitConfig | None = None,
     enable_phase_review: bool = False,
+    dirty_tree_policy: DirtyTreePolicy = DirtyTreePolicy.FAIL_FAST,
 ) -> bool:
     """Run the complete spec-driven development workflow.
 
@@ -75,6 +77,7 @@ def run_spec_driven_workflow(
         fail_fast: Stop on first task failure.
         rate_limit_config: Rate limit retry configuration.
         enable_phase_review: Enable phase reviews after task execution.
+        dirty_tree_policy: Policy for handling dirty working tree at Step 3 start.
 
     Returns:
         True if workflow completed successfully
@@ -98,6 +101,7 @@ def run_spec_driven_workflow(
         fail_fast=fail_fast,
         rate_limit_config=rate_limit_config or RateLimitConfig(),
         enable_phase_review=enable_phase_review,
+        dirty_tree_policy=dirty_tree_policy,
         subagent_names={
             "planner": config.settings.subagent_planner,
             "tasklist": config.settings.subagent_tasklist,

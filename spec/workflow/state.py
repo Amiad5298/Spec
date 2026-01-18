@@ -87,6 +87,8 @@ class WorkflowState:
     # Git state
     branch_name: str = ""
     base_commit: str = ""
+    # Baseline ref for Step 3 diff operations (captured at execution start)
+    diff_baseline_ref: str = ""
 
     # Model configuration
     planning_model: str = ""

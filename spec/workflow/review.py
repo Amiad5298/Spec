@@ -3,6 +3,9 @@
 This module provides utilities for running code reviews during the
 execution phase, including parsing review output, building review
 prompts, and coordinating the review workflow with optional auto-fix.
+
+Supports baseline-anchored diffs to ensure reviews only inspect changes
+introduced by the current workflow, not pre-existing dirty changes.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from spec.utils.console import (
     print_success,
     print_warning,
 )
-from spec.workflow.git_utils import get_smart_diff
+from spec.workflow.git_utils import get_smart_diff, get_smart_diff_from_baseline
 
 if TYPE_CHECKING:
     from spec.workflow.state import WorkflowState
@@ -149,6 +152,29 @@ If NEEDS_ATTENTION, list specific issues in this format:
     return prompt
 
 
+def _get_diff_for_review(state: WorkflowState) -> tuple[str, bool, bool]:
+    """Get diff for review, using baseline if available.
+
+    Uses baseline-anchored diff when diff_baseline_ref is set in state,
+    otherwise falls back to legacy get_smart_diff() for backwards compatibility.
+
+    Args:
+        state: Current workflow state with optional diff_baseline_ref.
+
+    Returns:
+        Tuple of (diff_output, is_truncated, git_error).
+    """
+    if state.diff_baseline_ref:
+        # Use baseline-anchored diff (recommended)
+        return get_smart_diff_from_baseline(
+            state.diff_baseline_ref,
+            include_working_tree=True,  # Include uncommitted changes
+        )
+    else:
+        # Fallback to legacy behavior (no baseline)
+        return get_smart_diff()
+
+
 def run_phase_review(
     state: WorkflowState,
     log_dir: Path,
@@ -160,6 +186,10 @@ def run_phase_review(
     If issues are found, offers the user the option to attempt
     automatic fixes using the implementer agent, and optionally
     re-run the review after fixes.
+
+    Uses baseline-anchored diffs when available to ensure the review
+    only inspects changes introduced by the current workflow, not
+    pre-existing dirty changes.
 
     Args:
         state: Current workflow state
@@ -175,8 +205,8 @@ def run_phase_review(
 
     print_step(f"Running {phase} phase review...")
 
-    # Get smart diff (with git error handling)
-    diff_output, is_truncated, git_error = get_smart_diff()
+    # Get smart diff using baseline if available
+    diff_output, is_truncated, git_error = _get_diff_for_review(state)
 
     if git_error:
         # Git command failed - warn but continue (advisory behavior)
@@ -234,8 +264,8 @@ def run_phase_review(
             if prompt_confirm("Run review again after auto-fix?", default=True):
                 print_step(f"Re-running {phase} phase review after auto-fix...")
 
-                # Get updated diff
-                diff_output_retry, is_truncated_retry, git_error_retry = get_smart_diff()
+                # Get updated diff using baseline if available
+                diff_output_retry, is_truncated_retry, git_error_retry = _get_diff_for_review(state)
 
                 if git_error_retry:
                     print_warning("Could not retrieve git diff for re-review")

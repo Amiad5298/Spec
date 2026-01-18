@@ -96,6 +96,10 @@ if TYPE_CHECKING:
 
 from spec.workflow.autofix import run_auto_fix as _run_auto_fix
 from spec.workflow.git_utils import (
+    DirtyTreePolicy,
+    DirtyWorkingTreeError,
+    capture_baseline,
+    check_dirty_working_tree,
     get_smart_diff as _get_smart_diff,
     parse_stat_file_count as _parse_stat_file_count,
     parse_stat_total_lines as _parse_stat_total_lines,
@@ -104,6 +108,39 @@ from spec.workflow.review import (
     build_review_prompt as _build_review_prompt,
     parse_review_status as _parse_review_status,
 )
+
+
+def _capture_baseline_for_diffs(state: WorkflowState) -> bool:
+    """Capture baseline ref and check for dirty working tree.
+
+    This must be called at the start of Step 3 before any modifications.
+    It captures the current HEAD as the baseline for all subsequent diff
+    operations, ensuring diffs are scoped to changes introduced by this
+    workflow run.
+
+    Args:
+        state: Current workflow state (will be updated with baseline ref)
+
+    Returns:
+        True if baseline was captured successfully, False if there was
+        a dirty working tree that prevents safe operation.
+    """
+    # Check for dirty working tree before capturing baseline
+    try:
+        check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+    except DirtyWorkingTreeError as e:
+        print_error(str(e))
+        return False
+
+    # Capture baseline ref
+    try:
+        baseline_ref = capture_baseline()
+        state.diff_baseline_ref = baseline_ref
+        print_info(f"Captured baseline for diff operations: {baseline_ref[:8]}")
+        return True
+    except Exception as e:
+        print_error(f"Failed to capture git baseline: {e}")
+        return False
 
 
 def step_3_execute(
@@ -121,6 +158,10 @@ def step_3_execute(
     - TUI mode: Rich interactive display with task list and log panels
     - Fallback mode: Simple line-based output for CI/non-TTY environments
 
+    Before execution begins, captures a baseline git ref to ensure all
+    subsequent diff operations are scoped to changes introduced by this
+    workflow run. Fails fast if the working tree has uncommitted changes.
+
     Args:
         state: Current workflow state
         use_tui: Override for TUI mode. None = auto-detect.
@@ -130,6 +171,13 @@ def step_3_execute(
         True if all tasks completed successfully
     """
     print_header("Step 3: Execute Implementation")
+
+    # Capture baseline and check for dirty working tree
+    # This MUST happen before any modifications begin
+    if not _capture_baseline_for_diffs(state):
+        print_error("Cannot proceed with dirty working tree.")
+        print_info("Please commit or stash uncommitted changes first.")
+        return False
 
     # Verify task list exists
     tasklist_path = state.get_tasklist_path()

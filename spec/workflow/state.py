@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 from spec.integrations.jira import JiraTicket
+from spec.workflow.git_utils import DirtyTreePolicy
 
 # Import subagent constants as single source of truth
 from spec.integrations.auggie import (
@@ -87,6 +88,8 @@ class WorkflowState:
     # Git state
     branch_name: str = ""
     base_commit: str = ""
+    # Baseline ref for Step 3 diff operations (captured at execution start)
+    diff_baseline_ref: str = ""
 
     # Model configuration
     planning_model: str = ""
@@ -122,6 +125,12 @@ class WorkflowState:
 
     # Rate limit configuration
     rate_limit_config: RateLimitConfig = field(default_factory=RateLimitConfig)
+
+    # Review configuration
+    enable_phase_review: bool = False  # Enable phase reviews after task execution
+
+    # Dirty tree policy for baseline diff operations
+    dirty_tree_policy: DirtyTreePolicy = DirtyTreePolicy.FAIL_FAST
 
     # Parallel execution tracking
     parallel_tasks_completed: list[str] = field(default_factory=list)
@@ -215,6 +224,7 @@ class WorkflowState:
 
 
 __all__ = [
+    "DirtyTreePolicy",
     "RateLimitConfig",
     "WorkflowState",
 ]

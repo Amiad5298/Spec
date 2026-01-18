@@ -15,11 +15,16 @@ to maintain focus and avoid context pollution.
 Supports two display modes:
 - TUI mode: Rich interactive display with task list and log panels
 - Fallback mode: Simple line-based output for CI/non-TTY environments
+
+Helper modules:
+- git_utils: Git diff collection and parsing
+- review: Code review prompting and status parsing
+- autofix: Auto-fix logic for review feedback
+- log_management: Run log directory management
+- prompts: Task execution prompt templates
 """
 
-import os
 import threading
-import time
 from concurrent.futures import (
     CancelledError,
     FIRST_COMPLETED,
@@ -52,13 +57,22 @@ from spec.utils.retry import (
     with_rate_limit_retry,
 )
 from spec.workflow.events import (
-    TaskRunStatus,
     create_task_finished_event,
     create_task_output_event,
     create_task_started_event,
     format_log_filename,
-    format_run_directory,
 )
+from spec.workflow.log_management import (
+    DEFAULT_LOG_RETENTION,
+    cleanup_old_runs as _cleanup_old_runs,
+    create_run_log_dir as _create_run_log_dir,
+    get_log_base_dir as _get_log_base_dir,
+)
+from spec.workflow.prompts import (
+    POST_IMPLEMENTATION_TEST_PROMPT,
+    build_task_prompt as _build_task_prompt,
+)
+from spec.workflow.review import run_phase_review as _run_phase_review
 from spec.workflow.state import WorkflowState
 from spec.workflow.task_memory import capture_task_memory
 from spec.workflow.tasks import (
@@ -75,69 +89,69 @@ if TYPE_CHECKING:
 
 
 # =============================================================================
-# Log Directory Management
+# Backwards-compatible re-exports from extracted modules
 # =============================================================================
+# These functions have been moved to separate modules but are re-exported here
+# to maintain backwards compatibility with existing code and tests.
 
-# Default log retention count
-DEFAULT_LOG_RETENTION = 10
-
-
-def _get_log_base_dir() -> Path:
-    """Get the base directory for run logs.
-
-    Returns:
-        Path to the log base directory.
-    """
-    env_dir = os.environ.get("SPEC_LOG_DIR")
-    if env_dir:
-        return Path(env_dir)
-    return Path(".spec/runs")
-
-
-def _create_run_log_dir(ticket_id: str) -> Path:
-    """Create a timestamped log directory for this run.
-
-    Args:
-        ticket_id: Ticket identifier for directory naming.
-
-    Returns:
-        Path to the created log directory.
-    """
-    base_dir = _get_log_base_dir()
-    ticket_dir = base_dir / ticket_id
-    run_dir = ticket_dir / format_run_directory()
-
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
+from spec.workflow.autofix import run_auto_fix as _run_auto_fix
+from spec.workflow.git_utils import (
+    DirtyTreePolicy,
+    DirtyWorkingTreeError,
+    capture_baseline,
+    check_dirty_working_tree,
+    get_smart_diff as _get_smart_diff,
+    parse_stat_file_count as _parse_stat_file_count,
+    parse_stat_total_lines as _parse_stat_total_lines,
+)
+from spec.workflow.review import (
+    build_review_prompt as _build_review_prompt,
+    parse_review_status as _parse_review_status,
+)
 
 
-def _cleanup_old_runs(ticket_id: str, keep_count: int = DEFAULT_LOG_RETENTION) -> None:
-    """Remove old run directories beyond retention limit.
+def _capture_baseline_for_diffs(state: WorkflowState) -> bool:
+    """Capture baseline ref and check for dirty working tree.
+
+    This must be called at the start of Step 3 before any modifications.
+    It captures the current HEAD as the baseline for all subsequent diff
+    operations, ensuring diffs are scoped to changes introduced by this
+    workflow run.
+
+    The dirty tree policy is read from state.dirty_tree_policy:
+    - FAIL_FAST: Abort if working tree is dirty (default, recommended)
+    - WARN_AND_CONTINUE: Warn but continue (diffs may include unrelated changes)
 
     Args:
-        ticket_id: Ticket identifier.
-        keep_count: Number of runs to keep.
+        state: Current workflow state (will be updated with baseline ref)
+
+    Returns:
+        True if baseline was captured successfully, False if there was
+        a dirty working tree that prevents safe operation (only with FAIL_FAST).
     """
-    base_dir = _get_log_base_dir()
-    ticket_dir = base_dir / ticket_id
+    # Check for dirty working tree before capturing baseline
+    try:
+        is_clean = check_dirty_working_tree(policy=state.dirty_tree_policy)
+        if not is_clean:
+            # WARN_AND_CONTINUE policy - tree is dirty but we continue
+            print_warning(
+                "Continuing with dirty working tree. "
+                "Review diffs may include pre-existing changes."
+            )
+    except DirtyWorkingTreeError as e:
+        # FAIL_FAST policy - abort on dirty tree
+        print_error(str(e))
+        return False
 
-    if not ticket_dir.exists():
-        return
-
-    # Get all run directories sorted by name (timestamp order)
-    run_dirs = sorted(
-        [d for d in ticket_dir.iterdir() if d.is_dir()],
-        key=lambda d: d.name,
-        reverse=True,
-    )
-
-    # Remove directories beyond retention limit
-    for old_dir in run_dirs[keep_count:]:
-        try:
-            import shutil
-            shutil.rmtree(old_dir)
-        except Exception:
-            pass  # Ignore cleanup errors
+    # Capture baseline ref
+    try:
+        baseline_ref = capture_baseline()
+        state.diff_baseline_ref = baseline_ref
+        print_info(f"Captured baseline for diff operations: {baseline_ref[:8]}")
+        return True
+    except Exception as e:
+        print_error(f"Failed to capture git baseline: {e}")
+        return False
 
 
 def step_3_execute(
@@ -155,6 +169,10 @@ def step_3_execute(
     - TUI mode: Rich interactive display with task list and log panels
     - Fallback mode: Simple line-based output for CI/non-TTY environments
 
+    Before execution begins, captures a baseline git ref to ensure all
+    subsequent diff operations are scoped to changes introduced by this
+    workflow run. Fails fast if the working tree has uncommitted changes.
+
     Args:
         state: Current workflow state
         use_tui: Override for TUI mode. None = auto-detect.
@@ -164,6 +182,13 @@ def step_3_execute(
         True if all tasks completed successfully
     """
     print_header("Step 3: Execute Implementation")
+
+    # Capture baseline and check for dirty working tree
+    # This MUST happen before any modifications begin
+    if not _capture_baseline_for_diffs(state):
+        print_error("Cannot proceed with dirty working tree.")
+        print_info("Please commit or stash uncommitted changes first.")
+        return False
 
     # Verify task list exists
     tasklist_path = state.get_tasklist_path()
@@ -232,6 +257,15 @@ def step_3_execute(
             print_error("Phase 1 failures with fail_fast enabled. Stopping.")
             return False
 
+    # PHASE 1 REVIEW CHECKPOINT
+    # Run after TUI context manager has exited to avoid display corruption
+    if pending_fundamental and state.enable_phase_review and not failed_tasks:
+        review_passed = _run_phase_review(state, log_dir, phase="fundamental")
+        if not review_passed:
+            # User explicitly chose to stop
+            print_info("Stopping after Phase 1 review.")
+            return False
+
     # PHASE 2: Execute independent tasks in parallel
     if pending_independent and state.parallel_execution_enabled:
         print_header("Phase 2: Independent Tasks (Parallel)")
@@ -282,6 +316,16 @@ def step_3_execute(
     # Post-execution steps
     _show_summary(state, failed_tasks)
     _run_post_implementation_tests(state)
+
+    # FINAL REVIEW CHECKPOINT
+    # Run after tests but before commit instructions
+    if state.enable_phase_review:
+        review_passed = _run_phase_review(state, log_dir, phase="final")
+        if not review_passed:
+            # User explicitly chose to stop
+            print_warning("Workflow stopped after final review. Please address issues before committing.")
+            return False
+
     _offer_commit_instructions(state)
     print_info(f"Task logs saved to: {log_dir}")
 
@@ -735,48 +779,6 @@ def _execute_parallel_with_tui(
     return failed_tasks
 
 
-def _build_task_prompt(task: Task, plan_path: Path, *, is_parallel: bool = False) -> str:
-    """Build a minimal prompt for task execution.
-
-    Passes a plan path reference rather than the full plan content to:
-    - Reduce token usage and context window pressure
-    - Let the agent retrieve only relevant sections via codebase-retrieval
-    - Avoid prompt bloat in parallel execution scenarios
-
-    Args:
-        task: Task to execute
-        plan_path: Path to the implementation plan file
-        is_parallel: Whether this task runs in parallel with others
-
-    Returns:
-        Minimal prompt string with task context
-    """
-    parallel_mode = "YES" if is_parallel else "NO"
-
-    # Base prompt with task name and parallel mode
-    prompt = f"""Execute task: {task.name}
-
-Parallel mode: {parallel_mode}"""
-
-    # Add plan reference if file exists
-    if plan_path.exists():
-        prompt += f"""
-
-Implementation plan: {plan_path}
-Use codebase-retrieval to read relevant sections of the plan as needed."""
-    else:
-        prompt += """
-
-Use codebase-retrieval to understand existing patterns before making changes."""
-
-    # Add critical constraints reminder
-    prompt += """
-
-Do NOT commit, git add, or push any changes."""
-
-    return prompt
-
-
 def _execute_task(
     state: WorkflowState,
     task: Task,
@@ -977,52 +979,12 @@ def _run_post_implementation_tests(state: WorkflowState) -> None:
     console.print("[dim]AI will identify and run tests that cover the code changed in this run...[/dim]")
     console.print()
 
-    prompt = """Identify and run the tests that are relevant to the code changes made in this run.
-
-## Step 1: Identify Changed Production Code
-- Run `git diff --name-only` and `git status --porcelain` to list all files changed in this run.
-- Separate the changed files into two categories:
-  a) **Test files**: files in directories like `test/`, `tests/`, `__tests__/`, or matching patterns like `*.spec.*`, `*_test.*`, `test_*.*`
-  b) **Production/source files**: all other changed files (excluding test paths above)
-
-## Step 2: Determine Relevant Tests to Run
-Find the minimal, most targeted set of tests that cover the changes:
-- **If test files were modified/added**: include those tests.
-- **If production/source files were modified/added**: use codebase-retrieval and repository conventions to find tests that cover those files. Look for:
-  - Tests located in the same module/package area as the changed source files
-  - Tests named similarly to the changed files (e.g., `foo.py` → `test_foo.py`, `foo_test.py`, `foo.spec.ts`)
-  - Tests referenced by existing docs, scripts, or test configuration in the repo
-- Prefer the smallest targeted set. If the repo supports running tests by file, class, or package, use that to scope execution.
-
-## Step 3: Transparency Before Execution
-Before running any tests:
-- Print the exact command(s) you plan to run.
-- Briefly explain how these tests were selected (e.g., "These tests correspond to module X which was changed" or "These are the modified test files").
-
-## Step 4: Execute Tests
-Run the identified tests and clearly report success or failure.
-
-## Critical Constraints
-- Do NOT commit any changes
-- Do NOT push any changes
-- Do NOT run the entire project test suite by default
-- Only expand the test scope if a targeted run is not possible in this repo
-
-## Fallback Behavior
-If you cannot reliably map changed source files to specific tests AND cannot run targeted tests in this repo:
-1. Explain why targeted test selection is not possible.
-2. Propose 1-2 broader-but-still-reasonable commands (e.g., module-level tests, package-level tests).
-3. Ask the user for confirmation before running them.
-4. Do NOT silently fall back to "run everything".
-
-If NO production files were changed AND NO test files were changed, report "No code changes detected that require testing" and STOP."""
-
     # Use spec-implementer subagent for running tests
     auggie_client = AuggieClient()
 
     try:
         success, _ = auggie_client.run_print_with_output(
-            prompt,
+            POST_IMPLEMENTATION_TEST_PROMPT,
             agent=state.subagent_names["implementer"],
             dont_save_session=True,
         )

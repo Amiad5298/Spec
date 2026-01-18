@@ -959,10 +959,12 @@ class TestStep3Execute:
     @patch("spec.workflow.step3_execute._offer_commit_instructions")
     @patch("spec.workflow.step3_execute._run_post_implementation_tests")
     @patch("spec.workflow.step3_execute._show_summary")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_true_when_all_tasks_already_complete(
-        self, mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
+        self, mock_baseline, mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Returns True when all tasks already complete."""
+        mock_baseline.return_value = True
         # Create tasklist with all completed tasks
         tasklist = tmp_path / "specs" / "TEST-123-tasklist.md"
         tasklist.write_text("""# Task List
@@ -982,11 +984,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_execute_with_tui_when_tui_mode(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_tui,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_tui,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Calls _execute_with_tui when TUI mode."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = True
         mock_execute_tui.return_value = []
@@ -1002,11 +1006,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_execute_fallback_when_non_tui_mode(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Calls _execute_fallback when non-TUI mode."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = False
         mock_execute_fallback.return_value = []
@@ -1023,11 +1029,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_prompts_user_on_task_failures(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
         mock_confirm, mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Prompts user on task failures."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = False
         mock_execute.return_value = ["Failed Task"]
@@ -1044,11 +1052,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_true_when_all_tasks_succeed(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Returns True when all tasks succeed."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = False
         mock_execute.return_value = []  # No failed tasks
@@ -1086,11 +1096,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_show_summary(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Calls _show_summary."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = False
         mock_execute.return_value = []
@@ -1106,11 +1118,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_run_post_implementation_tests(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Calls _run_post_implementation_tests."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = False
         mock_execute.return_value = []
@@ -1126,11 +1140,13 @@ class TestStep3Execute:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_offer_commit_instructions(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Calls _offer_commit_instructions."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         mock_should_tui.return_value = False
         mock_execute.return_value = []
@@ -1196,11 +1212,13 @@ class TestTwoPhaseExecution:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_executes_fundamental_tasks_first(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
         mock_execute_parallel, mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Fundamental tasks run before independent tasks."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         (tmp_path / "logs").mkdir()
         mock_should_tui.return_value = False
@@ -1234,11 +1252,13 @@ class TestTwoPhaseExecution:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_fundamental_tasks_run_sequentially(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
         mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Fundamental tasks execute one at a time (not in parallel)."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         (tmp_path / "logs").mkdir()
         mock_should_tui.return_value = False
@@ -1271,11 +1291,13 @@ class TestTwoPhaseExecution:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_independent_tasks_run_in_parallel(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
         mock_execute_parallel, mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Independent tasks execute concurrently."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         (tmp_path / "logs").mkdir()
         mock_should_tui.return_value = False
@@ -1308,11 +1330,13 @@ class TestTwoPhaseExecution:
     @patch("spec.ui.tui._should_use_tui")
     @patch("spec.workflow.step3_execute._cleanup_old_runs")
     @patch("spec.workflow.step3_execute._create_run_log_dir")
+    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
     def test_skips_parallel_phase_when_disabled(
-        self, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
+        self, mock_baseline, mock_log_dir, mock_cleanup, mock_should_tui, mock_execute_fallback,
         mock_execute_parallel, mock_summary, mock_tests, mock_commit, workflow_state, tmp_path
     ):
         """Respects parallel_execution_enabled=False."""
+        mock_baseline.return_value = True
         mock_log_dir.return_value = tmp_path / "logs"
         (tmp_path / "logs").mkdir()
         mock_should_tui.return_value = False

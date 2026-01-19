@@ -17,10 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    pass
+from typing import Any, Optional
 
 
 class Platform(Enum):
@@ -118,7 +115,7 @@ class GenericTicket:
     full_info: str = ""
 
     # Platform-specific raw data
-    platform_metadata: dict = field(default_factory=dict)
+    platform_metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def display_id(self) -> str:

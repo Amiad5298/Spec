@@ -287,7 +287,7 @@ class TestConfigManagerShow:
 class TestCascadingConfigHierarchy:
     """Tests for cascading configuration hierarchy."""
 
-    def test_global_config_loaded(self, tmp_path, monkeypatch):
+    def test_global_config_loaded(self, tmp_path):
         """Global config values are loaded."""
         # Create global config
         global_config = tmp_path / ".specflow-config"
@@ -316,9 +316,8 @@ class TestCascadingConfigHierarchy:
         # Change to project directory
         monkeypatch.chdir(project_dir)
 
-        # Create manager without explicit path (uses cascading)
-        manager = ConfigManager()
-        manager._global_config_path = global_config
+        # Create manager with explicit global config path
+        manager = ConfigManager(global_config)
         settings = manager.load()
 
         assert settings.default_model == "local-model"
@@ -340,8 +339,7 @@ class TestCascadingConfigHierarchy:
         # Set environment variable
         monkeypatch.setenv("DEFAULT_MODEL", "env-model")
 
-        manager = ConfigManager()
-        manager._global_config_path = global_config
+        manager = ConfigManager(global_config)
         settings = manager.load()
 
         assert settings.default_model == "env-model"
@@ -366,34 +364,12 @@ DEFAULT_JIRA_PROJECT="GLOBAL"
         # Environment overrides another
         monkeypatch.setenv("PLANNING_MODEL", "env-planning")
 
-        manager = ConfigManager()
-        manager._global_config_path = global_config
+        manager = ConfigManager(global_config)
         settings = manager.load()
 
         assert settings.default_model == "global-model"  # from global
         assert settings.planning_model == "env-planning"  # from env
         assert settings.default_jira_project == "LOCAL"  # from local
-
-    def test_legacy_mode_ignores_local_config(self, tmp_path, monkeypatch):
-        """Providing explicit config_path disables local config discovery."""
-        # Create global config
-        global_config = tmp_path / "custom-config"
-        global_config.write_text('DEFAULT_MODEL="custom-model"\n')
-
-        # Create local config that should be ignored
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        local_config = project_dir / ".specflow"
-        local_config.write_text('DEFAULT_MODEL="local-model"\n')
-        (project_dir / ".git").mkdir()
-        monkeypatch.chdir(project_dir)
-
-        # Use explicit path (legacy mode)
-        manager = ConfigManager(global_config)
-        settings = manager.load()
-
-        assert settings.default_model == "custom-model"
-        assert manager._legacy_mode is True
 
 
 class TestFindLocalConfig:
@@ -521,8 +497,7 @@ class TestGetConfigSource:
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(project_dir)
 
-        manager = ConfigManager()
-        manager._global_config_path = tmp_path / "nonexistent"
+        manager = ConfigManager(tmp_path / "nonexistent")
         manager.load()
 
         source = manager.get_config_source("DEFAULT_MODEL")
@@ -554,24 +529,24 @@ class TestGetConfigSource:
 
 
 class TestConfigManagerPathAccessors:
-    """Tests for config path accessor methods."""
+    """Tests for config path attributes."""
 
-    def test_get_global_config_path(self, tmp_path):
-        """get_global_config_path returns the global config path."""
+    def test_global_config_path_attribute(self, tmp_path):
+        """global_config_path is set from constructor."""
         config_path = tmp_path / "config"
         manager = ConfigManager(config_path)
 
-        assert manager.get_global_config_path() == config_path
+        assert manager.global_config_path == config_path
 
-    def test_get_local_config_path_before_load(self, tmp_path):
-        """get_local_config_path returns None before load."""
+    def test_local_config_path_none_before_load(self, tmp_path):
+        """local_config_path is None before load."""
         config_path = tmp_path / "config"
         manager = ConfigManager(config_path)
 
-        assert manager.get_local_config_path() is None
+        assert manager.local_config_path is None
 
-    def test_get_local_config_path_after_load(self, tmp_path, monkeypatch):
-        """get_local_config_path returns path after load finds it."""
+    def test_local_config_path_set_after_load(self, tmp_path, monkeypatch):
+        """local_config_path is set after load finds local config."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
         local_config = project_dir / ".specflow"
@@ -579,24 +554,7 @@ class TestConfigManagerPathAccessors:
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(project_dir)
 
-        manager = ConfigManager()
-        manager._global_config_path = tmp_path / "nonexistent"
+        manager = ConfigManager(tmp_path / "nonexistent")
         manager.load()
 
-        assert manager.get_local_config_path() == local_config
-
-    def test_config_path_property_backward_compatibility(self, tmp_path):
-        """config_path property returns global config for compatibility."""
-        config_path = tmp_path / "config"
-        manager = ConfigManager(config_path)
-
-        assert manager.config_path == config_path
-
-    def test_config_path_setter(self, tmp_path):
-        """config_path property can be set."""
-        manager = ConfigManager(tmp_path / "old")
-        new_path = tmp_path / "new"
-
-        manager.config_path = new_path
-
-        assert manager.config_path == new_path
+        assert manager.local_config_path == local_config

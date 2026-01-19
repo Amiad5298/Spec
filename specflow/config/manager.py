@@ -39,38 +39,25 @@ class ConfigManager:
 
     Attributes:
         settings: Current settings instance
-        _raw_values: Merged raw key-value pairs from all sources
-        _local_config_path: Path to discovered local .specflow file
-        _global_config_path: Path to global ~/.specflow-config file
+        global_config_path: Path to global ~/.specflow-config file
+        local_config_path: Path to discovered local .specflow file (after load)
     """
 
     LOCAL_CONFIG_NAME = ".specflow"
     GLOBAL_CONFIG_NAME = ".specflow-config"
 
-    def __init__(self, config_path: Path | None = None) -> None:
+    def __init__(self, global_config_path: Path | None = None) -> None:
         """Initialize the configuration manager.
 
         Args:
-            config_path: Optional custom path to override global config file.
-                         If provided, only this file is used (legacy behavior).
+            global_config_path: Optional custom path to global config file.
+                                Defaults to ~/.specflow-config.
         """
-        self._legacy_mode = config_path is not None
-        self._global_config_path = config_path or CONFIG_FILE
-        self._local_config_path: Optional[Path] = None
+        self.global_config_path = global_config_path or CONFIG_FILE
+        self.local_config_path: Optional[Path] = None
         self.settings = Settings()
         self._raw_values: dict[str, str] = {}
-        # Track source of each config value for debugging
         self._config_sources: dict[str, str] = {}
-
-    @property
-    def config_path(self) -> Path:
-        """Return the primary config path (for backward compatibility)."""
-        return self._global_config_path
-
-    @config_path.setter
-    def config_path(self, value: Path) -> None:
-        """Set the global config path."""
-        self._global_config_path = value
 
     def load(self) -> Settings:
         """Load configuration from all sources with cascading precedence.
@@ -94,19 +81,16 @@ class ConfigManager:
         # The Settings dataclass already has defaults, nothing to do here
 
         # Step 2: Load global config (~/.specflow-config) - lowest file-based priority
-        if self._global_config_path.exists():
-            log_message(f"Loading global configuration from {self._global_config_path}")
-            self._load_file(self._global_config_path, source="global")
-        else:
-            log_message(f"No global configuration file found at {self._global_config_path}")
+        if self.global_config_path.exists():
+            log_message(f"Loading global configuration from {self.global_config_path}")
+            self._load_file(self.global_config_path, source="global")
 
-        # Step 3: Load local config (.specflow) - higher priority, unless in legacy mode
-        if not self._legacy_mode:
-            local_path = self._find_local_config()
-            if local_path:
-                self._local_config_path = local_path
-                log_message(f"Loading local configuration from {local_path}")
-                self._load_file(local_path, source=f"local ({local_path})")
+        # Step 3: Load local config (.specflow) - higher priority
+        local_path = self._find_local_config()
+        if local_path:
+            self.local_config_path = local_path
+            log_message(f"Loading local configuration from {local_path}")
+            self._load_file(local_path, source=f"local ({local_path})")
 
         # Step 4: Environment variables override everything
         self._load_environment()
@@ -242,8 +226,8 @@ class ConfigManager:
 
         # Read existing file content
         existing_lines: list[str] = []
-        if self.config_path.exists():
-            existing_lines = self.config_path.read_text().splitlines()
+        if self.global_config_path.exists():
+            existing_lines = self.global_config_path.read_text().splitlines()
 
         # Build new file content
         new_lines: list[str] = []
@@ -287,7 +271,7 @@ class ConfigManager:
         """
         # Create temp file in same directory for atomic move
         fd, temp_path = tempfile.mkstemp(
-            dir=self.config_path.parent,
+            dir=self.global_config_path.parent,
             prefix=".specflow-config-",
         )
         try:
@@ -300,7 +284,7 @@ class ConfigManager:
             os.chmod(temp_path, 0o600)
 
             # Atomic replace
-            Path(temp_path).replace(self.config_path)
+            Path(temp_path).replace(self.global_config_path)
         except Exception:
             # Clean up temp file on error
             try:
@@ -335,14 +319,6 @@ class ConfigManager:
             return self._config_sources[key]
         return "default"
 
-    def get_local_config_path(self) -> Optional[Path]:
-        """Return the discovered local config path, if any."""
-        return self._local_config_path
-
-    def get_global_config_path(self) -> Path:
-        """Return the global config path."""
-        return self._global_config_path
-
     def show(self) -> None:
         """Display current configuration using Rich formatting."""
         from specflow.utils.console import console, print_header, print_info
@@ -350,9 +326,9 @@ class ConfigManager:
         print_header("Current Configuration")
 
         # Show config file locations
-        print_info(f"Global config: {self._global_config_path}")
-        if self._local_config_path:
-            print_info(f"Local config:  {self._local_config_path}")
+        print_info(f"Global config: {self.global_config_path}")
+        if self.local_config_path:
+            print_info(f"Local config:  {self.local_config_path}")
         else:
             print_info("Local config:  (not found)")
         console.print()

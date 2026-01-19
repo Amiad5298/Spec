@@ -379,16 +379,6 @@ class ConfigManager:
                 pass
             raise
 
-    def _atomic_write(self, lines: list[str]) -> None:
-        """Atomically write lines to global config file.
-
-        Deprecated: Use _atomic_write_to_path() for explicit path control.
-
-        Args:
-            lines: Lines to write
-        """
-        self._atomic_write_to_path(lines, self.global_config_path)
-
     def get(self, key: str, default: str = "") -> str:
         """Get a configuration value.
 

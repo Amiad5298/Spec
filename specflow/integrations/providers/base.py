@@ -20,6 +20,29 @@ from enum import Enum, auto
 from typing import Any, Optional
 
 
+def sanitize_title_for_branch(title: str, max_length: int = 50) -> str:
+    """Sanitize a title string for use in git branch names.
+
+    Converts title to lowercase, replaces non-alphanumeric characters
+    with hyphens, collapses consecutive hyphens, and strips leading/trailing
+    hyphens.
+
+    Args:
+        title: The title to sanitize
+        max_length: Maximum length of the output (default: 50)
+
+    Returns:
+        A git-friendly branch summary string
+    """
+    summary = title.lower()[:max_length]
+    # Replace non-alphanumeric with hyphens
+    summary = re.sub(r"[^a-z0-9-]", "-", summary)
+    # Collapse multiple hyphens
+    summary = re.sub(r"-+", "-", summary)
+    # Strip leading/trailing hyphens
+    return summary.strip("-")
+
+
 class Platform(Enum):
     """Supported issue tracking platforms.
 
@@ -163,11 +186,7 @@ class GenericTicket:
         # Use branch_summary if available, otherwise generate from title
         summary = self.branch_summary
         if not summary and self.title:
-            # Generate summary from title using same logic as IssueTrackerProvider
-            summary = self.title.lower()[:50]
-            summary = re.sub(r"[^a-z0-9-]", "-", summary)
-            summary = re.sub(r"-+", "-", summary)
-            summary = summary.strip("-")
+            summary = sanitize_title_for_branch(self.title)
 
         if summary:
             safe_summary = self._sanitize_for_git_ref(summary)
@@ -332,11 +351,5 @@ class IssueTrackerProvider(ABC):
         Returns:
             Short lowercase hyphenated summary (max 50 chars)
         """
-        summary = ticket.title.lower()[:50]
-        # Replace non-alphanumeric with hyphens
-        summary = re.sub(r"[^a-z0-9-]", "-", summary)
-        # Collapse multiple hyphens
-        summary = re.sub(r"-+", "-", summary)
-        # Strip leading/trailing hyphens
-        return summary.strip("-")
+        return sanitize_title_for_branch(ticket.title)
 

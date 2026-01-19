@@ -20,6 +20,7 @@ from specflow.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
+    sanitize_title_for_branch,
 )
 from specflow.integrations.providers.exceptions import (
     AuthenticationError,
@@ -42,6 +43,8 @@ __all__ = [
     "TicketType",
     # Data Models
     "GenericTicket",
+    # Utility Functions
+    "sanitize_title_for_branch",
     # Abstract Base Classes
     "IssueTrackerProvider",
     "UserInteractionInterface",

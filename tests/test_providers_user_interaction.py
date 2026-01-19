@@ -195,6 +195,23 @@ class TestCLIUserInteractionSelectOption:
         assert "Option A" in print_calls
         assert "First" in print_calls  # description
 
+    def test_empty_options_returns_none_when_cancel_allowed(self, cli):
+        """Empty options list returns None when allow_cancel=True."""
+        result = cli.select_option([], "Choose:", allow_cancel=True)
+        assert result is None
+
+    def test_empty_options_raises_when_cancel_not_allowed(self, cli):
+        """Empty options list raises ValueError when allow_cancel=False."""
+        with pytest.raises(ValueError, match="No options provided"):
+            cli.select_option([], "Choose:", allow_cancel=False)
+
+    @patch("builtins.input", side_effect=EOFError)
+    @patch("builtins.print")
+    def test_eof_error_returns_none(self, mock_print, mock_input, cli, sample_options):
+        """EOFError returns None (treat as cancel)."""
+        result = cli.select_option(sample_options, "Choose:")
+        assert result is None
+
 
 class TestCLIUserInteractionPromptText:
     """Tests for CLIUserInteraction.prompt_text method."""
@@ -233,6 +250,13 @@ class TestCLIUserInteractionPromptText:
     @patch("builtins.print")
     def test_keyboard_interrupt_returns_none(self, mock_print, mock_input, cli):
         """KeyboardInterrupt returns None."""
+        result = cli.prompt_text("Enter name:")
+        assert result is None
+
+    @patch("builtins.input", side_effect=EOFError)
+    @patch("builtins.print")
+    def test_eof_error_returns_none(self, mock_print, mock_input, cli):
+        """EOFError returns None (treat as cancel)."""
         result = cli.prompt_text("Enter name:")
         assert result is None
 
@@ -279,6 +303,18 @@ class TestCLIUserInteractionConfirm:
     def test_keyboard_interrupt_returns_false(self, mock_print, mock_input, cli):
         """KeyboardInterrupt returns False."""
         assert cli.confirm("Continue?") is False
+
+    @patch("builtins.input", side_effect=EOFError)
+    @patch("builtins.print")
+    def test_eof_error_returns_default(self, mock_print, mock_input, cli):
+        """EOFError returns default value."""
+        assert cli.confirm("Continue?", default=True) is True
+
+    @patch("builtins.input", side_effect=EOFError)
+    @patch("builtins.print")
+    def test_eof_error_returns_default_false(self, mock_print, mock_input, cli):
+        """EOFError returns default value (False)."""
+        assert cli.confirm("Continue?", default=False) is False
 
 
 class TestCLIUserInteractionDisplayMessage:

@@ -110,7 +110,7 @@ class CLIUserInteraction(UserInteractionInterface):
     """Command-line implementation of user interaction.
 
     Uses standard input/print for terminal-based interaction.
-    Handles KeyboardInterrupt gracefully for all prompts.
+    Handles KeyboardInterrupt and EOFError gracefully for all prompts.
     """
 
     def select_option(
@@ -119,7 +119,25 @@ class CLIUserInteraction(UserInteractionInterface):
         prompt: str,
         allow_cancel: bool = True,
     ) -> T | None:
-        """Present numbered options and get user selection."""
+        """Present numbered options and get user selection.
+
+        Args:
+            options: List of options to present
+            prompt: Message to display to user
+            allow_cancel: If True, user can cancel (returns None)
+
+        Returns:
+            Selected option value, or None if cancelled
+
+        Raises:
+            ValueError: If options is empty and allow_cancel is False
+        """
+        # Handle empty options list
+        if not options:
+            if allow_cancel:
+                return None
+            raise ValueError("No options provided and cancellation not allowed")
+
         print(f"\n{prompt}")
         for i, opt in enumerate(options, 1):
             desc = f" - {opt.description}" if opt.description else ""
@@ -143,8 +161,8 @@ class CLIUserInteraction(UserInteractionInterface):
                 print(f"Invalid selection. Enter 1-{len(options)}")
             except ValueError:
                 print("Please enter a number")
-            except KeyboardInterrupt:
-                print()  # Clean newline after ^C
+            except (KeyboardInterrupt, EOFError):
+                print()  # Clean newline after ^C or EOF
                 return None
 
     def prompt_text(
@@ -163,8 +181,8 @@ class CLIUserInteraction(UserInteractionInterface):
                 if result or not required:
                     return result
                 print("This field is required.")
-        except KeyboardInterrupt:
-            print()  # Clean newline after ^C
+        except (KeyboardInterrupt, EOFError):
+            print()  # Clean newline after ^C or EOF
             return None
 
     def confirm(
@@ -179,9 +197,9 @@ class CLIUserInteraction(UserInteractionInterface):
             if not result:
                 return default
             return result in ("y", "yes", "true", "1")
-        except KeyboardInterrupt:
-            print()  # Clean newline after ^C
-            return False
+        except (KeyboardInterrupt, EOFError):
+            print()  # Clean newline after ^C or EOF
+            return default
 
     def display_message(
         self,

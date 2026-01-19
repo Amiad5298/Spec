@@ -558,3 +558,159 @@ class TestConfigManagerPathAccessors:
         manager.load()
 
         assert manager.local_config_path == local_config
+
+
+class TestConfigManagerIdempotency:
+    """Tests for ConfigManager.load() idempotency."""
+
+    def test_load_resets_settings_on_each_call(self, tmp_path):
+        """Each load() call starts with fresh defaults."""
+        config_path = tmp_path / "config"
+        config_path.write_text('DEFAULT_MODEL="first-model"\n')
+
+        manager = ConfigManager(config_path)
+        settings1 = manager.load()
+        assert settings1.default_model == "first-model"
+
+        # Change the config file
+        config_path.write_text('DEFAULT_MODEL="second-model"\n')
+
+        # Load again - should get new values, not stale ones
+        settings2 = manager.load()
+        assert settings2.default_model == "second-model"
+
+    def test_load_resets_local_config_path(self, tmp_path, monkeypatch):
+        """Each load() resets local_config_path."""
+        # First load with local config
+        project1 = tmp_path / "project1"
+        project1.mkdir()
+        local1 = project1 / ".specflow"
+        local1.write_text("TEST=value1\n")
+        (project1 / ".git").mkdir()
+        monkeypatch.chdir(project1)
+
+        manager = ConfigManager(tmp_path / "global")
+        manager.load()
+        assert manager.local_config_path == local1
+
+        # Second load in project without local config
+        project2 = tmp_path / "project2"
+        project2.mkdir()
+        (project2 / ".git").mkdir()
+        monkeypatch.chdir(project2)
+
+        manager.load()
+        assert manager.local_config_path is None
+
+    def test_load_clears_raw_values(self, tmp_path):
+        """Each load() clears _raw_values from previous load."""
+        config_path = tmp_path / "config"
+        config_path.write_text('KEY1="value1"\nKEY2="value2"\n')
+
+        manager = ConfigManager(config_path)
+        manager.load()
+        assert "KEY1" in manager._raw_values
+        assert "KEY2" in manager._raw_values
+
+        # New config with only KEY1
+        config_path.write_text('KEY1="new-value1"\n')
+        manager.load()
+        assert manager._raw_values.get("KEY1") == "new-value1"
+        assert "KEY2" not in manager._raw_values
+
+
+class TestConfigManagerSaveScope:
+    """Tests for ConfigManager.save() scope parameter."""
+
+    def test_save_to_global_by_default(self, tmp_path):
+        """save() writes to global config by default."""
+        global_config = tmp_path / "global-config"
+        manager = ConfigManager(global_config)
+
+        manager.save("TEST_KEY", "test_value")
+
+        assert global_config.exists()
+        assert 'TEST_KEY="test_value"' in global_config.read_text()
+
+    def test_save_to_local_scope(self, tmp_path, monkeypatch):
+        """save() with scope='local' writes to local config."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        manager = ConfigManager(tmp_path / "global")
+        manager.load()  # Establish local config path
+
+        manager.save("LOCAL_KEY", "local_value", scope="local")
+
+        local_config = project / ".specflow"
+        assert local_config.exists()
+        assert 'LOCAL_KEY="local_value"' in local_config.read_text()
+
+    def test_save_invalid_scope_raises(self, tmp_path):
+        """Invalid scope raises ValueError."""
+        manager = ConfigManager(tmp_path / "config")
+
+        with pytest.raises(ValueError, match="Invalid scope"):
+            manager.save("KEY", "value", scope="invalid")
+
+    def test_save_warns_when_local_overrides_global(self, tmp_path, monkeypatch):
+        """save() returns warning when local config overrides saved value."""
+        project = tmp_path / "project"
+        project.mkdir()
+        local_config = project / ".specflow"
+        local_config.write_text('OVERRIDE_KEY="local-value"\n')
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / "global-config"
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        warning = manager.save("OVERRIDE_KEY", "global-value")
+
+        assert warning is not None
+        assert "overridden" in warning.lower()
+        assert "local" in warning.lower()
+
+    def test_save_warns_when_env_overrides(self, tmp_path, monkeypatch):
+        """save() returns warning when env var overrides saved value."""
+        monkeypatch.setenv("ENV_KEY", "env-value")
+
+        global_config = tmp_path / "global-config"
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        warning = manager.save("ENV_KEY", "saved-value")
+
+        assert warning is not None
+        assert "overridden" in warning.lower()
+        assert "environment" in warning.lower()
+
+    def test_save_no_warning_when_not_overridden(self, tmp_path):
+        """save() returns None when value is not overridden."""
+        global_config = tmp_path / "global-config"
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        warning = manager.save("UNIQUE_KEY", "value")
+
+        assert warning is None
+
+    def test_save_to_local_creates_file(self, tmp_path, monkeypatch):
+        """save() with scope='local' creates .specflow if it doesn't exist."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        manager = ConfigManager(tmp_path / "global")
+        # Don't call load() - local_config_path should be None
+        assert manager.local_config_path is None
+
+        manager.save("NEW_KEY", "new_value", scope="local")
+
+        local_config = project / ".specflow"
+        assert local_config.exists()
+        assert 'NEW_KEY="new_value"' in local_config.read_text()

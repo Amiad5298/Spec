@@ -71,9 +71,15 @@ class ConfigManager:
         Security: Uses safe line-by-line parsing instead of eval/exec.
         Only reads KEY=VALUE or KEY="VALUE" pairs.
 
+        Note: This method is idempotent - each call starts from clean defaults
+        to prevent stale values from persisting across multiple loads.
+
         Returns:
             Settings instance with loaded values
         """
+        # Reset to clean state for idempotency
+        self.settings = Settings()
+        self.local_config_path = None
         self._raw_values = {}
         self._config_sources = {}
 
@@ -204,7 +210,13 @@ class ConfigManager:
                 value = extract_model_id(value)
             setattr(self.settings, attr, value)
 
-    def save(self, key: str, value: str) -> None:
+    def save(
+        self,
+        key: str,
+        value: str,
+        scope: str = "global",
+        warn_on_override: bool = True,
+    ) -> str | None:
         """Save a configuration value to file.
 
         Security: Validates key name, uses atomic file replacement.
@@ -212,13 +224,33 @@ class ConfigManager:
         Args:
             key: Configuration key (alphanumeric + underscore)
             value: Configuration value
+            scope: Where to save - "global" (default) or "local"
+            warn_on_override: If True, returns warning message when saved value
+                              would be overridden by a higher-priority source
+
+        Returns:
+            Warning message if the saved value is overridden by another source,
+            None otherwise.
 
         Raises:
-            ValueError: If key name is invalid
+            ValueError: If key name is invalid or scope is invalid
+            RuntimeError: If scope="local" but no local config path is set
         """
         # Validate key name
         if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", key):
             raise ValueError(f"Invalid config key: {key}")
+
+        if scope not in ("global", "local"):
+            raise ValueError(f"Invalid scope: {scope}. Must be 'global' or 'local'")
+
+        # Determine target file
+        if scope == "local":
+            if self.local_config_path is None:
+                # Create local config in current directory
+                self.local_config_path = Path.cwd() / self.LOCAL_CONFIG_NAME
+            target_path = self.local_config_path
+        else:
+            target_path = self.global_config_path
 
         # Update in-memory values
         self._raw_values[key] = value
@@ -226,8 +258,8 @@ class ConfigManager:
 
         # Read existing file content
         existing_lines: list[str] = []
-        if self.global_config_path.exists():
-            existing_lines = self.global_config_path.read_text().splitlines()
+        if target_path.exists():
+            existing_lines = target_path.read_text().splitlines()
 
         # Build new file content
         new_lines: list[str] = []
@@ -243,35 +275,89 @@ class ConfigManager:
             match = key_pattern.match(line)
             if match:
                 existing_key = match.group(1)
-                if existing_key in self._raw_values:
-                    # Write updated value
-                    new_lines.append(f'{existing_key}="{self._raw_values[existing_key]}"')
-                    written_keys.add(existing_key)
+                if existing_key == key:
+                    # Write updated value for the key we're saving
+                    new_lines.append(f'{key}="{value}"')
+                    written_keys.add(key)
                 else:
-                    # Preserve unknown keys
+                    # Preserve other keys
                     new_lines.append(line)
             else:
                 # Preserve malformed lines
                 new_lines.append(line)
 
-        # Add new keys not in file
-        for k, v in self._raw_values.items():
-            if k not in written_keys:
-                new_lines.append(f'{k}="{v}"')
+        # Add new key if not already in file
+        if key not in written_keys:
+            new_lines.append(f'{key}="{value}"')
 
         # Atomic write using temp file
-        self._atomic_write(new_lines)
-        log_message(f"Configuration saved: {key}={value}")
+        self._atomic_write_to_path(new_lines, target_path)
+        log_message(f"Configuration saved to {scope}: {key}={value}")
 
-    def _atomic_write(self, lines: list[str]) -> None:
-        """Atomically write lines to config file.
+        # Check for override warning
+        warning = None
+        if warn_on_override and scope == "global":
+            # Check if local config overrides this key
+            if self.local_config_path and self.local_config_path.exists():
+                local_values = self._read_file_values(self.local_config_path)
+                if key in local_values:
+                    warning = (
+                        f"Warning: '{key}' saved to global config but is overridden "
+                        f"by local config at {self.local_config_path}"
+                    )
+            # Check if environment variable overrides this key
+            if os.environ.get(key) is not None:
+                env_warning = (
+                    f"Warning: '{key}' saved to {scope} config but is overridden "
+                    f"by environment variable"
+                )
+                warning = env_warning if warning is None else f"{warning}; {env_warning}"
+
+        return warning
+
+    def _read_file_values(self, path: Path) -> dict[str, str]:
+        """Read key=value pairs from a config file without modifying state.
+
+        Args:
+            path: Path to the config file
+
+        Returns:
+            Dictionary of key-value pairs
+        """
+        values: dict[str, str] = {}
+        pattern = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$")
+
+        if not path.exists():
+            return values
+
+        with path.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                match = pattern.match(line)
+                if match:
+                    key, value = match.groups()
+                    if (value.startswith('"') and value.endswith('"')) or (
+                        value.startswith("'") and value.endswith("'")
+                    ):
+                        value = value[1:-1]
+                    values[key] = value
+        return values
+
+    def _atomic_write_to_path(self, lines: list[str], target_path: Path) -> None:
+        """Atomically write lines to a specific config file.
 
         Args:
             lines: Lines to write
+            target_path: Path to write to
         """
+        # Ensure parent directory exists
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Create temp file in same directory for atomic move
         fd, temp_path = tempfile.mkstemp(
-            dir=self.global_config_path.parent,
+            dir=target_path.parent,
             prefix=".specflow-config-",
         )
         try:
@@ -284,7 +370,7 @@ class ConfigManager:
             os.chmod(temp_path, 0o600)
 
             # Atomic replace
-            Path(temp_path).replace(self.global_config_path)
+            Path(temp_path).replace(target_path)
         except Exception:
             # Clean up temp file on error
             try:
@@ -292,6 +378,16 @@ class ConfigManager:
             except OSError:
                 pass
             raise
+
+    def _atomic_write(self, lines: list[str]) -> None:
+        """Atomically write lines to global config file.
+
+        Deprecated: Use _atomic_write_to_path() for explicit path control.
+
+        Args:
+            lines: Lines to write
+        """
+        self._atomic_write_to_path(lines, self.global_config_path)
 
     def get(self, key: str, default: str = "") -> str:
         """Get a configuration value.

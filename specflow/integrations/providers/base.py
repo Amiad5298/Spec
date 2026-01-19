@@ -146,13 +146,84 @@ class GenericTicket:
         Uses semantic prefix based on ticket type and sanitizes
         the branch summary for git compatibility.
 
+        Handles edge cases:
+        - GitHub-style IDs like 'owner/repo#42'
+        - Special characters (/, spaces, :, etc.)
+        - Disallowed git sequences (.., @{, trailing /, .lock suffix)
+        - Empty branch_summary (generates from title)
+
         Returns:
             Git-compatible branch name like 'feat/proj-123-add-user-login'
         """
         prefix = self.semantic_branch_prefix
-        if self.branch_summary:
-            return f"{prefix}/{self.id.lower()}-{self.branch_summary}"
-        return f"{prefix}/{self.id.lower()}"
+
+        # Sanitize ticket ID for git ref safety
+        safe_id = self._sanitize_for_git_ref(self.id.lower())
+
+        # Use branch_summary if available, otherwise generate from title
+        summary = self.branch_summary
+        if not summary and self.title:
+            # Generate summary from title using same logic as IssueTrackerProvider
+            summary = self.title.lower()[:50]
+            summary = re.sub(r"[^a-z0-9-]", "-", summary)
+            summary = re.sub(r"-+", "-", summary)
+            summary = summary.strip("-")
+
+        if summary:
+            safe_summary = self._sanitize_for_git_ref(summary)
+            branch = f"{prefix}/{safe_id}-{safe_summary}"
+        else:
+            branch = f"{prefix}/{safe_id}"
+
+        # Final safety checks for git ref requirements
+        return self._finalize_git_ref(branch)
+
+    @staticmethod
+    def _sanitize_for_git_ref(value: str) -> str:
+        """Sanitize a string component for git ref name.
+
+        Args:
+            value: String to sanitize
+
+        Returns:
+            Git-safe string with problematic characters replaced
+        """
+        # Replace slashes, spaces, colons, #, and other problematic chars with hyphens
+        result = re.sub(r"[/\s:~^?*\[\]\\@{}<>|\"'#]", "-", value)
+        # Collapse multiple hyphens
+        result = re.sub(r"-+", "-", result)
+        # Strip leading/trailing hyphens and dots
+        result = result.strip("-.")
+        return result
+
+    @staticmethod
+    def _finalize_git_ref(branch: str) -> str:
+        """Apply final git ref safety rules.
+
+        Args:
+            branch: Branch name to finalize
+
+        Returns:
+            Git-safe branch name
+        """
+        # Remove disallowed sequences
+        branch = branch.replace("..", "-")
+        branch = branch.replace("@{", "-")
+
+        # Remove trailing slash
+        branch = branch.rstrip("/")
+
+        # Remove .lock suffix
+        if branch.endswith(".lock"):
+            branch = branch[:-5]
+
+        # Ensure no consecutive dots after replacements
+        branch = re.sub(r"\.+", ".", branch)
+
+        # Collapse any consecutive hyphens created by replacements
+        branch = re.sub(r"-+", "-", branch)
+
+        return branch
 
 
 class IssueTrackerProvider(ABC):

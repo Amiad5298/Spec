@@ -332,6 +332,150 @@ class TestGenericTicketSafeBranchName:
         assert branch.startswith("feature/")
 
 
+class TestGenericTicketSafeBranchNameEdgeCases:
+    """Tests for GenericTicket.safe_branch_name edge cases."""
+
+    def test_github_style_id_with_slash(self):
+        """Handles GitHub-style IDs like owner/repo#42."""
+        ticket = GenericTicket(
+            id="owner/repo#42",
+            platform=Platform.GITHUB,
+            url="https://github.com/owner/repo/issues/42",
+            type=TicketType.BUG,
+            branch_summary="fix-bug",
+        )
+        branch = ticket.safe_branch_name
+        assert "/" not in branch.split("/", 1)[1]  # No extra slashes after prefix
+        assert "#" not in branch
+        assert "owner-repo-42" in branch.lower()
+
+    def test_sanitizes_spaces_in_id(self):
+        """Replaces spaces with hyphens in ticket ID."""
+        ticket = GenericTicket(
+            id="PROJ 123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/PROJ-123",
+            type=TicketType.FEATURE,
+            branch_summary="test",
+        )
+        branch = ticket.safe_branch_name
+        assert " " not in branch
+
+    def test_sanitizes_colons_in_id(self):
+        """Replaces colons with hyphens."""
+        ticket = GenericTicket(
+            id="PREFIX:123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/PREFIX-123",
+            type=TicketType.TASK,
+            branch_summary="work",
+        )
+        branch = ticket.safe_branch_name
+        assert ":" not in branch
+
+    def test_removes_double_dot_sequence(self):
+        """Removes disallowed '..' sequence."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary="add..feature",
+        )
+        branch = ticket.safe_branch_name
+        assert ".." not in branch
+
+    def test_removes_at_brace_sequence(self):
+        """Removes disallowed '@{' sequence."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary="ref@{yesterday}",
+        )
+        branch = ticket.safe_branch_name
+        assert "@{" not in branch
+
+    def test_removes_trailing_slash(self):
+        """Removes trailing slash."""
+        ticket = GenericTicket(
+            id="TEST-123/",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+        )
+        branch = ticket.safe_branch_name
+        assert not branch.endswith("/")
+
+    def test_removes_lock_suffix(self):
+        """Removes .lock suffix."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary="config.lock",
+        )
+        branch = ticket.safe_branch_name
+        assert not branch.endswith(".lock")
+
+    def test_generates_summary_from_title_when_empty(self):
+        """Generates safe summary from title when branch_summary is empty."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            title="Add User Authentication Feature",
+            branch_summary="",  # Empty
+        )
+        branch = ticket.safe_branch_name
+        assert "add" in branch.lower()
+        assert "user" in branch.lower()
+        assert "authentication" in branch.lower()
+
+    def test_handles_empty_title_and_summary(self):
+        """Works with both empty title and summary."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.TASK,
+            title="",
+            branch_summary="",
+        )
+        branch = ticket.safe_branch_name
+        assert branch == "chore/test-123"
+
+    def test_sanitizes_special_characters_in_summary(self):
+        """Sanitizes special characters in branch summary."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.BUG,
+            branch_summary="fix: [critical] issue~1",
+        )
+        branch = ticket.safe_branch_name
+        assert ":" not in branch
+        assert "[" not in branch
+        assert "]" not in branch
+        assert "~" not in branch
+
+    def test_collapses_consecutive_hyphens(self):
+        """Collapses multiple consecutive hyphens."""
+        ticket = GenericTicket(
+            id="TEST---123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary="some---feature",
+        )
+        branch = ticket.safe_branch_name
+        assert "---" not in branch
+
+
 class TestIssueTrackerProviderABC:
     """Tests for IssueTrackerProvider abstract base class."""
 

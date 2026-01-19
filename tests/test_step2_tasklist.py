@@ -12,10 +12,11 @@ from spec.workflow.step2_tasklist import (
     _edit_tasklist,
     _create_default_tasklist,
     _validate_file_disjointness,
+    StrictFileScopingError,
 )
 
 from spec.workflow.state import WorkflowState
-from spec.workflow.tasks import parse_task_list, Task, TaskCategory, TaskStatus
+from spec.workflow.tasks import parse_task_list, Task, TaskCategory, TaskStatus, PathSecurityError
 from spec.integrations.jira import JiraTicket
 from spec.ui.menus import TaskReviewChoice
 
@@ -607,9 +608,13 @@ class TestGenerateTasklistRetry:
 
 
 class TestValidateFileDisjointness:
-    """Tests for _validate_file_disjointness function."""
+    """Tests for _validate_file_disjointness function.
 
-    def test_returns_empty_for_disjoint_files(self):
+    SECURITY: All tests now require repo_root parameter (no default).
+    STRICT MODE: Empty target_files on INDEPENDENT tasks raises exception.
+    """
+
+    def test_returns_empty_for_disjoint_files(self, tmp_path):
         """Returns empty list when independent tasks have disjoint files."""
         tasks = [
             Task(
@@ -624,11 +629,11 @@ class TestValidateFileDisjointness:
             ),
         ]
 
-        errors = _validate_file_disjointness(tasks)
+        errors = _validate_file_disjointness(tasks, repo_root=tmp_path)
 
         assert errors == []
 
-    def test_detects_file_collision(self):
+    def test_detects_file_collision(self, tmp_path):
         """Detects when two independent tasks target the same file."""
         tasks = [
             Task(
@@ -643,14 +648,14 @@ class TestValidateFileDisjointness:
             ),
         ]
 
-        errors = _validate_file_disjointness(tasks)
+        errors = _validate_file_disjointness(tasks, repo_root=tmp_path)
 
         assert len(errors) == 1
         assert "src/api/auth.py" in errors[0]
         assert "Add login feature" in errors[0]
         assert "Add logout feature" in errors[0]
 
-    def test_ignores_fundamental_tasks(self):
+    def test_ignores_fundamental_tasks(self, tmp_path):
         """Ignores fundamental tasks in collision detection."""
         tasks = [
             Task(
@@ -665,13 +670,13 @@ class TestValidateFileDisjointness:
             ),
         ]
 
-        errors = _validate_file_disjointness(tasks)
+        errors = _validate_file_disjointness(tasks, repo_root=tmp_path)
 
         # No error because fundamental tasks are not checked for collisions
         assert errors == []
 
-    def test_handles_empty_target_files(self):
-        """Warns on independent tasks with empty target_files."""
+    def test_raises_on_empty_target_files_strict_mode(self, tmp_path):
+        """STRICT MODE: Raises StrictFileScopingError on INDEPENDENT tasks without target_files."""
         tasks = [
             Task(
                 name="Task without files",
@@ -685,14 +690,14 @@ class TestValidateFileDisjointness:
             ),
         ]
 
-        errors = _validate_file_disjointness(tasks)
+        with pytest.raises(StrictFileScopingError) as exc_info:
+            _validate_file_disjointness(tasks, repo_root=tmp_path)
 
-        # Now warns on missing target_files for independent tasks
-        assert len(errors) == 1
-        assert "Missing target_files metadata" in errors[0]
-        assert "Task without files" in errors[0]
+        assert "Task without files" in str(exc_info.value)
+        assert "Strict file scoping required" in str(exc_info.value)
+        assert exc_info.value.task_name == "Task without files"
 
-    def test_detects_multiple_collisions(self):
+    def test_detects_multiple_collisions(self, tmp_path):
         """Detects multiple file collisions."""
         tasks = [
             Task(
@@ -712,7 +717,7 @@ class TestValidateFileDisjointness:
             ),
         ]
 
-        errors = _validate_file_disjointness(tasks)
+        errors = _validate_file_disjointness(tasks, repo_root=tmp_path)
 
         assert len(errors) == 2
         # Check both collisions are reported
@@ -720,7 +725,7 @@ class TestValidateFileDisjointness:
         assert "src/shared.py" in error_text
         assert "src/utils.py" in error_text
 
-    def test_returns_empty_for_no_independent_tasks(self):
+    def test_returns_empty_for_no_independent_tasks(self, tmp_path):
         """Returns empty list when there are no independent tasks."""
         tasks = [
             Task(
@@ -735,9 +740,48 @@ class TestValidateFileDisjointness:
             ),
         ]
 
-        errors = _validate_file_disjointness(tasks)
+        errors = _validate_file_disjointness(tasks, repo_root=tmp_path)
 
         assert errors == []
+
+    def test_raises_on_path_traversal_attack(self, tmp_path):
+        """SECURITY: Raises PathSecurityError on directory traversal attempt."""
+        tasks = [
+            Task(
+                name="Malicious task",
+                category=TaskCategory.INDEPENDENT,
+                target_files=["../outside_repo.py", "src/inside.py"],
+            ),
+        ]
+
+        with pytest.raises(PathSecurityError) as exc_info:
+            _validate_file_disjointness(tasks, repo_root=tmp_path)
+
+        assert "outside_repo.py" in str(exc_info.value)
+        assert "escapes repository root" in str(exc_info.value)
+
+    def test_detects_collision_with_path_normalization(self, tmp_path):
+        """SECURITY: Detects collision between ./src/foo.py and src/foo.py (normalization)."""
+        tasks = [
+            Task(
+                name="Task A using ./src",
+                category=TaskCategory.INDEPENDENT,
+                target_files=["./src/foo.py"],
+            ),
+            Task(
+                name="Task B using src",
+                category=TaskCategory.INDEPENDENT,
+                target_files=["src/foo.py"],
+            ),
+        ]
+
+        errors = _validate_file_disjointness(tasks, repo_root=tmp_path)
+
+        # Both paths normalize to src/foo.py, so there should be a collision
+        assert len(errors) == 1
+        assert "src/foo.py" in errors[0]
+        assert "Task A using ./src" in errors[0]
+        assert "Task B using src" in errors[0]
 
 
 # =============================================================================

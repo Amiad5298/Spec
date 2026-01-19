@@ -35,22 +35,25 @@ class PathSecurityError(Exception):
 # =============================================================================
 
 
-def normalize_path(file_path: str, repo_root: Optional[Path] = None) -> str:
-    """Normalize a file path for consistent comparison.
+def normalize_path(file_path: str, repo_root: Path) -> str:
+    """Normalize a file path for consistent comparison with security validation.
 
     This function:
     1. Trims whitespace
     2. Standardizes path separators (converts \\ to /)
     3. Resolves relative path components (../, ./)
-    4. Ensures path is within repo_root if provided (jail check)
+    4. Enforces jail check: path must resolve to within repo_root
+
+    SECURITY: repo_root is REQUIRED. All paths are validated against the
+    repository root to prevent directory traversal attacks.
 
     Args:
         file_path: The file path to normalize
-        repo_root: Optional repository root for jail check. If provided,
-                   paths must resolve to within this directory.
+        repo_root: Repository root for jail check. Paths must resolve
+                   to within this directory. REQUIRED for security.
 
     Returns:
-        Normalized path string (relative to repo_root if provided, else absolute)
+        Normalized path string relative to repo_root
 
     Raises:
         PathSecurityError: If the resolved path escapes the repository root
@@ -67,43 +70,38 @@ def normalize_path(file_path: str, repo_root: Optional[Path] = None) -> str:
     # Step 3: Convert to Path object and resolve
     path_obj = Path(cleaned)
 
-    if repo_root is not None:
-        # Ensure repo_root is absolute and resolved
-        repo_root_resolved = repo_root.resolve()
+    # Ensure repo_root is absolute and resolved
+    repo_root_resolved = repo_root.resolve()
 
-        # Resolve the path relative to repo_root
-        if path_obj.is_absolute():
-            resolved = path_obj.resolve()
-        else:
-            resolved = (repo_root_resolved / path_obj).resolve()
-
-        # Step 4: Jail check - ensure path is within repo_root
-        try:
-            resolved.relative_to(repo_root_resolved)
-        except ValueError:
-            raise PathSecurityError(file_path, str(repo_root_resolved))
-
-        # Return as relative path string
-        return str(resolved.relative_to(repo_root_resolved))
+    # Resolve the path relative to repo_root
+    if path_obj.is_absolute():
+        resolved = path_obj.resolve()
     else:
-        # No repo_root - just normalize the path
-        # For relative paths, normalize without resolving to absolute
-        if path_obj.is_absolute():
-            return str(path_obj.resolve())
-        else:
-            # Normalize relative path using os.path.normpath
-            return os.path.normpath(cleaned).replace("\\", "/")
+        resolved = (repo_root_resolved / path_obj).resolve()
+
+    # Step 4: Jail check - ensure path is within repo_root
+    try:
+        resolved.relative_to(repo_root_resolved)
+    except ValueError:
+        raise PathSecurityError(file_path, str(repo_root_resolved))
+
+    # Return as relative path string
+    return str(resolved.relative_to(repo_root_resolved))
 
 
-def deduplicate_paths(paths: list[str], repo_root: Optional[Path] = None) -> list[str]:
-    """Deduplicate a list of file paths preserving order.
+def deduplicate_paths(paths: list[str], repo_root: Path) -> list[str]:
+    """Deduplicate a list of file paths preserving order with security validation.
 
     Uses normalize_path to ensure equivalent paths (e.g., ./src/file.py and
-    src/file.py) are treated as duplicates.
+    src/file.py) are treated as duplicates. All paths are validated against
+    repo_root to prevent directory traversal attacks.
+
+    SECURITY: repo_root is REQUIRED for path normalization and jail check.
 
     Args:
         paths: List of file paths to deduplicate
-        repo_root: Optional repository root for normalization
+        repo_root: Repository root for normalization and security validation.
+                   REQUIRED - all paths must resolve within this directory.
 
     Returns:
         Order-preserving deduplicated list of normalized paths

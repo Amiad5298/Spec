@@ -943,51 +943,62 @@ class TestFundamentalTaskOrdering:
 
 
 class TestNormalizePath:
-    """Tests for normalize_path function."""
+    """Tests for normalize_path function.
 
-    def test_trims_whitespace(self):
+    SECURITY: repo_root is now REQUIRED for all normalize_path calls.
+    All tests use tmp_path fixture to provide a valid repo_root.
+    """
+
+    def test_trims_whitespace(self, tmp_path):
         """Trims leading and trailing whitespace."""
         from spec.workflow.tasks import normalize_path
 
-        assert normalize_path("  src/file.py  ") == "src/file.py"
-        assert normalize_path("\tsrc/file.py\n") == "src/file.py"
+        assert normalize_path("  src/file.py  ", repo_root=tmp_path) == "src/file.py"
+        assert normalize_path("\tsrc/file.py\n", repo_root=tmp_path) == "src/file.py"
 
-    def test_standardizes_separators(self):
+    def test_standardizes_separators(self, tmp_path):
         """Converts backslashes to forward slashes."""
         from spec.workflow.tasks import normalize_path
 
-        assert normalize_path("src\\utils\\file.py") == "src/utils/file.py"
-        assert normalize_path("src\\\\nested\\\\file.py") == "src/nested/file.py"
+        assert normalize_path("src\\utils\\file.py", repo_root=tmp_path) == "src/utils/file.py"
+        assert normalize_path("src\\\\nested\\\\file.py", repo_root=tmp_path) == "src/nested/file.py"
 
-    def test_resolves_dot_components(self):
+    def test_resolves_dot_components(self, tmp_path):
         """Resolves ./ and removes it."""
         from spec.workflow.tasks import normalize_path
 
-        assert normalize_path("./src/file.py") == "src/file.py"
-        assert normalize_path("src/./utils/./file.py") == "src/utils/file.py"
+        assert normalize_path("./src/file.py", repo_root=tmp_path) == "src/file.py"
+        assert normalize_path("src/./utils/./file.py", repo_root=tmp_path) == "src/utils/file.py"
 
-    def test_resolves_double_dot_components(self):
-        """Resolves ../ components in paths."""
+    def test_resolves_double_dot_components(self, tmp_path):
+        """Resolves ../ components in paths that stay within repo."""
         from spec.workflow.tasks import normalize_path
 
-        assert normalize_path("src/../lib/file.py") == "lib/file.py"
-        assert normalize_path("src/utils/../file.py") == "src/file.py"
+        # Create directories so paths resolve correctly
+        (tmp_path / "src").mkdir()
+        (tmp_path / "lib").mkdir()
 
-    def test_empty_path_returns_empty_string(self):
+        assert normalize_path("src/../lib/file.py", repo_root=tmp_path) == "lib/file.py"
+        assert normalize_path("src/utils/../file.py", repo_root=tmp_path) == "src/file.py"
+
+    def test_empty_path_returns_empty_string(self, tmp_path):
         """Empty or whitespace-only paths return empty string."""
         from spec.workflow.tasks import normalize_path
 
-        assert normalize_path("") == ""
-        assert normalize_path("   ") == ""
-        assert normalize_path("\t\n") == ""
+        assert normalize_path("", repo_root=tmp_path) == ""
+        assert normalize_path("   ", repo_root=tmp_path) == ""
+        assert normalize_path("\t\n", repo_root=tmp_path) == ""
 
-    def test_equivalent_paths_normalize_same(self):
+    def test_equivalent_paths_normalize_same(self, tmp_path):
         """Equivalent paths normalize to the same string."""
         from spec.workflow.tasks import normalize_path
 
-        path1 = normalize_path("./src/file.py")
-        path2 = normalize_path("src/file.py")
-        path3 = normalize_path("src/../src/file.py")
+        # Create src directory
+        (tmp_path / "src").mkdir()
+
+        path1 = normalize_path("./src/file.py", repo_root=tmp_path)
+        path2 = normalize_path("src/file.py", repo_root=tmp_path)
+        path3 = normalize_path("src/../src/file.py", repo_root=tmp_path)
 
         assert path1 == path2 == path3 == "src/file.py"
 
@@ -1043,50 +1054,57 @@ class TestNormalizePathWithRepoRoot:
 
 
 class TestDeduplicatePaths:
-    """Tests for deduplicate_paths function."""
+    """Tests for deduplicate_paths function.
 
-    def test_removes_exact_duplicates(self):
+    SECURITY: repo_root is now REQUIRED for all deduplicate_paths calls.
+    All tests use tmp_path fixture to provide a valid repo_root.
+    """
+
+    def test_removes_exact_duplicates(self, tmp_path):
         """Removes exact duplicate paths."""
         from spec.workflow.tasks import deduplicate_paths
 
         paths = ["src/file.py", "src/other.py", "src/file.py"]
-        result = deduplicate_paths(paths)
+        result = deduplicate_paths(paths, repo_root=tmp_path)
 
         assert result == ["src/file.py", "src/other.py"]
 
-    def test_removes_equivalent_duplicates(self):
+    def test_removes_equivalent_duplicates(self, tmp_path):
         """Removes duplicates that differ only by normalization."""
         from spec.workflow.tasks import deduplicate_paths
 
+        # Create src directory
+        (tmp_path / "src").mkdir()
+
         paths = ["./src/file.py", "src/file.py", "src/../src/file.py"]
-        result = deduplicate_paths(paths)
+        result = deduplicate_paths(paths, repo_root=tmp_path)
 
         assert len(result) == 1
         assert result[0] == "src/file.py"
 
-    def test_preserves_order(self):
+    def test_preserves_order(self, tmp_path):
         """Preserves insertion order of first occurrence."""
         from spec.workflow.tasks import deduplicate_paths
 
         paths = ["z_file.py", "a_file.py", "m_file.py"]
-        result = deduplicate_paths(paths)
+        result = deduplicate_paths(paths, repo_root=tmp_path)
 
         assert result == ["z_file.py", "a_file.py", "m_file.py"]
 
-    def test_removes_empty_paths(self):
+    def test_removes_empty_paths(self, tmp_path):
         """Removes empty strings from result."""
         from spec.workflow.tasks import deduplicate_paths
 
         paths = ["src/file.py", "", "  ", "src/other.py"]
-        result = deduplicate_paths(paths)
+        result = deduplicate_paths(paths, repo_root=tmp_path)
 
         assert result == ["src/file.py", "src/other.py"]
 
-    def test_handles_empty_list(self):
+    def test_handles_empty_list(self, tmp_path):
         """Handles empty input list."""
         from spec.workflow.tasks import deduplicate_paths
 
-        assert deduplicate_paths([]) == []
+        assert deduplicate_paths([], repo_root=tmp_path) == []
 
     def test_deduplicates_with_repo_root(self, tmp_path):
         """Deduplicates using repo_root for normalization."""
@@ -1623,3 +1641,121 @@ It should prevent the metadata from attaching to the task.
 
         # Metadata should NOT attach due to code block in between
         assert target_files == []
+
+
+
+# =============================================================================
+# Security Regression Tests (Predictive Context)
+# =============================================================================
+
+
+class TestSecurityRegressions:
+    """Security regression tests for path normalization and jail check.
+
+    These tests verify that the security primitives correctly prevent:
+    1. Directory traversal attacks (../outside.py)
+    2. Path collision via normalization bypass (./src/foo.py vs src/foo.py)
+
+    CRITICAL: These tests must NEVER be removed or weakened.
+    """
+
+    def test_malicious_path_traversal_raises_security_error(self, tmp_path):
+        """SECURITY: Malicious path ../outside.py with repo_root raises PathSecurityError."""
+        from spec.workflow.tasks import normalize_path, PathSecurityError
+
+        # Attempt directory traversal attack
+        with pytest.raises(PathSecurityError) as exc_info:
+            normalize_path("../outside.py", repo_root=tmp_path)
+
+        # Verify exception contains attack path and repo info
+        assert "../outside.py" in str(exc_info.value)
+        assert "escapes repository root" in str(exc_info.value)
+        assert exc_info.value.path == "../outside.py"
+
+    def test_deeply_nested_traversal_attack(self, tmp_path):
+        """SECURITY: Deeply nested traversal ../../../../../../etc/passwd is blocked."""
+        from spec.workflow.tasks import normalize_path, PathSecurityError
+
+        with pytest.raises(PathSecurityError):
+            normalize_path("src/../../../../../../etc/passwd", repo_root=tmp_path)
+
+    def test_path_normalization_detects_collision(self, tmp_path):
+        """SECURITY: src/foo.py and ./src/foo.py normalize to same path (collision detection)."""
+        from spec.workflow.tasks import normalize_path
+
+        # Create src directory
+        (tmp_path / "src").mkdir()
+
+        # Both paths should normalize to the same value
+        path1 = normalize_path("src/foo.py", repo_root=tmp_path)
+        path2 = normalize_path("./src/foo.py", repo_root=tmp_path)
+
+        assert path1 == path2 == "src/foo.py"
+
+    def test_deduplicate_detects_normalized_collision(self, tmp_path):
+        """SECURITY: deduplicate_paths treats ./src/foo.py and src/foo.py as same file."""
+        from spec.workflow.tasks import deduplicate_paths
+
+        # Create src directory
+        (tmp_path / "src").mkdir()
+
+        paths = ["./src/foo.py", "src/foo.py", "src/bar.py"]
+        result = deduplicate_paths(paths, repo_root=tmp_path)
+
+        # Should deduplicate to 2 unique paths
+        assert len(result) == 2
+        assert "src/foo.py" in result
+        assert "src/bar.py" in result
+
+    def test_absolute_path_outside_repo_blocked(self, tmp_path):
+        """SECURITY: Absolute paths outside repo are blocked."""
+        from spec.workflow.tasks import normalize_path, PathSecurityError
+
+        with pytest.raises(PathSecurityError):
+            normalize_path("/etc/passwd", repo_root=tmp_path)
+
+    def test_symlink_escape_attempt_blocked(self, tmp_path):
+        """SECURITY: Symlink-based escape attempts are blocked by resolve()."""
+        from spec.workflow.tasks import normalize_path, PathSecurityError
+        import os
+
+        # Create a symlink pointing outside the repo
+        outside_dir = tmp_path.parent / "outside_target"
+        outside_dir.mkdir(exist_ok=True)
+        (outside_dir / "secret.txt").touch()
+
+        symlink_path = tmp_path / "escape_link"
+        try:
+            symlink_path.symlink_to(outside_dir)
+        except OSError:
+            pytest.skip("Cannot create symlinks on this system")
+
+        # Attempting to access file through symlink should be blocked
+        with pytest.raises(PathSecurityError):
+            normalize_path("escape_link/secret.txt", repo_root=tmp_path)
+
+    def test_repo_root_is_required_not_optional(self, tmp_path):
+        """SECURITY: normalize_path requires repo_root (no default None)."""
+        from spec.workflow.tasks import normalize_path
+        import inspect
+
+        # Verify repo_root has no default value (is required)
+        sig = inspect.signature(normalize_path)
+        repo_root_param = sig.parameters.get("repo_root")
+
+        assert repo_root_param is not None
+        assert repo_root_param.default is inspect.Parameter.empty, \
+            "repo_root must be required (no default) for security"
+
+    def test_deduplicate_paths_repo_root_is_required(self, tmp_path):
+        """SECURITY: deduplicate_paths requires repo_root (no default None)."""
+        from spec.workflow.tasks import deduplicate_paths
+        import inspect
+
+        # Verify repo_root has no default value (is required)
+        sig = inspect.signature(deduplicate_paths)
+        repo_root_param = sig.parameters.get("repo_root")
+
+        assert repo_root_param is not None
+        assert repo_root_param.default is inspect.Parameter.empty, \
+            "repo_root must be required (no default) for security"

@@ -6,7 +6,6 @@ a task list from the implementation plan with user approval.
 
 import re
 from pathlib import Path
-from typing import Optional
 
 from spec.integrations.auggie import AuggieClient
 from spec.ui.menus import TaskReviewChoice, show_task_review_menu
@@ -33,9 +32,25 @@ from spec.workflow.tasks import (
 )
 
 
+class StrictFileScopingError(ValueError):
+    """Raised when an INDEPENDENT task lacks required target_files metadata.
+
+    Strict file scoping is required for parallel execution to prevent race
+    conditions. INDEPENDENT tasks MUST declare their target files explicitly.
+    """
+
+    def __init__(self, task_name: str):
+        self.task_name = task_name
+        super().__init__(
+            f"Strict file scoping required: INDEPENDENT task '{task_name}' "
+            f"has no target_files. Parallel execution requires explicit file "
+            f"declarations to prevent race conditions."
+        )
+
+
 def _validate_file_disjointness(
     tasks: list[Task],
-    repo_root: Optional[Path] = None,
+    repo_root: Path,
 ) -> list[str]:
     """Validate that independent tasks have disjoint file sets.
 
@@ -45,16 +60,23 @@ def _validate_file_disjointness(
     Uses normalized paths for comparison to ensure equivalent paths
     (e.g., ./src/file.py and src/file.py) are treated as the same file.
 
-    Also emits warnings for:
-    - Independent tasks with no target_files (disjointness cannot be validated)
-    - Paths that attempt to escape the repository root (security violation)
+    SECURITY: repo_root is REQUIRED for path normalization and jail check.
+    All paths are validated to ensure they do not escape the repository.
+
+    STRICT MODE: Independent tasks with empty target_files will raise an
+    exception. This enforces strict file scoping for parallel execution.
 
     Args:
         tasks: List of all tasks
-        repo_root: Optional repository root for path normalization and security
+        repo_root: Repository root for path normalization and security.
+                   REQUIRED - all paths must resolve within this directory.
 
     Returns:
-        List of warning messages for overlapping files or missing metadata
+        List of warning messages for overlapping files
+
+    Raises:
+        StrictFileScopingError: If an INDEPENDENT task has no target_files
+        PathSecurityError: If any path escapes the repository root
     """
     independent = [t for t in tasks if t.category == TaskCategory.INDEPENDENT]
     warnings: list[str] = []
@@ -63,22 +85,13 @@ def _validate_file_disjointness(
     file_to_tasks: dict[str, list[str]] = {}
 
     for task in independent:
-        # Warn if independent task has no target_files
+        # STRICT: Raise exception if independent task has no target_files
         if not task.target_files:
-            warnings.append(
-                f"Missing target_files metadata: Independent task '{task.name}' "
-                f"has no files specified. Disjointness cannot be validated."
-            )
-            continue
+            raise StrictFileScopingError(task.name)
 
         # Normalize and deduplicate paths within the task
-        try:
-            normalized_files = deduplicate_paths(task.target_files, repo_root)
-        except PathSecurityError as e:
-            warnings.append(
-                f"Security violation in task '{task.name}': {e}"
-            )
-            continue
+        # PathSecurityError will propagate if path escapes repo
+        normalized_files = deduplicate_paths(task.target_files, repo_root)
 
         for file_path in normalized_files:
             if file_path not in file_to_tasks:
@@ -301,14 +314,26 @@ Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
             _create_default_tasklist(tasklist_path, state)
         else:
             # Validate file disjointness for independent tasks
-            warnings = _validate_file_disjointness(tasks)
-            for warning in warnings:
-                print_warning(warning)
-            if warnings:
-                print_warning(
-                    "File collisions detected! Consider extracting shared files to a "
-                    "FUNDAMENTAL setup task or merging the conflicting tasks."
+            # Uses state.repo_root for security validation
+            try:
+                warnings = _validate_file_disjointness(tasks, state.repo_root)
+                for warning in warnings:
+                    print_warning(warning)
+                if warnings:
+                    print_warning(
+                        "File collisions detected! Consider extracting shared files to a "
+                        "FUNDAMENTAL setup task or merging the conflicting tasks."
+                    )
+            except StrictFileScopingError as e:
+                print_error(str(e))
+                print_info(
+                    "INDEPENDENT tasks require explicit target_files for parallel execution. "
+                    "Add <!-- files: path/to/file.py --> metadata or change category to FUNDAMENTAL."
                 )
+                return False
+            except PathSecurityError as e:
+                print_error(f"Security violation: {e}")
+                return False
     else:
         # No tasks extracted from output, check if AI wrote the file
         if tasklist_path.exists():
@@ -320,14 +345,26 @@ Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
                 _create_default_tasklist(tasklist_path, state)
             else:
                 # Validate file disjointness for independent tasks
-                warnings = _validate_file_disjointness(tasks)
-                for warning in warnings:
-                    print_warning(warning)
-                if warnings:
-                    print_warning(
-                        "File collisions detected! Consider extracting shared files to a "
-                        "FUNDAMENTAL setup task or merging the conflicting tasks."
+                # Uses state.repo_root for security validation
+                try:
+                    warnings = _validate_file_disjointness(tasks, state.repo_root)
+                    for warning in warnings:
+                        print_warning(warning)
+                    if warnings:
+                        print_warning(
+                            "File collisions detected! Consider extracting shared files to a "
+                            "FUNDAMENTAL setup task or merging the conflicting tasks."
+                        )
+                except StrictFileScopingError as e:
+                    print_error(str(e))
+                    print_info(
+                        "INDEPENDENT tasks require explicit target_files for parallel execution. "
+                        "Add <!-- files: path/to/file.py --> metadata or change category to FUNDAMENTAL."
                     )
+                    return False
+                except PathSecurityError as e:
+                    print_error(f"Security violation: {e}")
+                    return False
         else:
             # Fall back to default template
             log_message("No tasks extracted and no file created, using default")
@@ -407,5 +444,6 @@ __all__ = [
     "_generate_tasklist",
     "_extract_tasklist_from_output",
     "_validate_file_disjointness",
+    "StrictFileScopingError",
 ]
 

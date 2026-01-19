@@ -714,3 +714,209 @@ class TestConfigManagerSaveScope:
         local_config = project / ".specflow"
         assert local_config.exists()
         assert 'NEW_KEY="new_value"' in local_config.read_text()
+
+
+class TestConfigManagerSavePrecedence:
+    """Tests for ConfigManager.save() precedence correctness.
+
+    These tests verify that after calling save(), the in-memory state
+    correctly reflects the effective precedence (env > local > global).
+    """
+
+    def test_global_save_when_local_overrides(self, tmp_path, monkeypatch):
+        """Global save preserves local override in memory.
+
+        Verifies that when saving to global config while local config
+        overrides the same key, the in-memory settings still reflect
+        the local (higher priority) value.
+        """
+        # Setup: global has one value, local has a different value
+        global_config = tmp_path / ".specflow-config"
+        global_config.write_text('DEFAULT_MODEL="global-model"\n')
+
+        project = tmp_path / "project"
+        project.mkdir()
+        local_config = project / ".specflow"
+        local_config.write_text('DEFAULT_MODEL="local-model"\n')
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Verify initial state
+        assert manager.settings.default_model == "local-model"
+        assert "local" in manager.get_config_source("DEFAULT_MODEL")
+
+        # Act: save a new value to global
+        warning = manager.save("DEFAULT_MODEL", "new-global", scope="global")
+
+        # Assert: warning mentions local override
+        assert warning is not None
+        assert "overridden" in warning.lower()
+        assert "local" in warning.lower()
+
+        # Assert: global file was updated
+        assert 'DEFAULT_MODEL="new-global"' in global_config.read_text()
+
+        # Assert: in-memory state still reflects local (higher priority)
+        assert manager.settings.default_model == "local-model"
+        assert "local" in manager.get_config_source("DEFAULT_MODEL")
+        assert manager.get("DEFAULT_MODEL") == "local-model"
+
+    def test_global_save_when_env_overrides(self, tmp_path, monkeypatch):
+        """Global save preserves env override in memory.
+
+        Verifies that when saving to global config while an environment
+        variable overrides the same key, the in-memory settings still
+        reflect the env (highest priority) value.
+        """
+        # Setup: set environment variable
+        monkeypatch.setenv("DEFAULT_MODEL", "env-model")
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Verify initial state
+        assert manager.settings.default_model == "env-model"
+        assert manager.get_config_source("DEFAULT_MODEL") == "environment"
+
+        # Act: save a new value to global
+        warning = manager.save("DEFAULT_MODEL", "new-global", scope="global")
+
+        # Assert: warning mentions env override
+        assert warning is not None
+        assert "overridden" in warning.lower()
+        assert "environment" in warning.lower()
+
+        # Assert: global file was updated
+        assert 'DEFAULT_MODEL="new-global"' in global_config.read_text()
+
+        # Assert: in-memory state still reflects env (highest priority)
+        assert manager.settings.default_model == "env-model"
+        assert manager.get_config_source("DEFAULT_MODEL") == "environment"
+        assert manager.get("DEFAULT_MODEL") == "env-model"
+
+    def test_local_save_when_env_overrides(self, tmp_path, monkeypatch):
+        """Local save preserves env override in memory.
+
+        Verifies that when saving to local config while an environment
+        variable overrides the same key, the in-memory settings still
+        reflect the env (highest priority) value.
+        """
+        # Setup: set environment variable
+        monkeypatch.setenv("DEFAULT_MODEL", "env-model")
+
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Verify initial state
+        assert manager.settings.default_model == "env-model"
+        assert manager.get_config_source("DEFAULT_MODEL") == "environment"
+
+        # Act: save a new value to local
+        warning = manager.save("DEFAULT_MODEL", "new-local", scope="local")
+
+        # Assert: warning mentions env override
+        assert warning is not None
+        assert "overridden" in warning.lower()
+        assert "environment" in warning.lower()
+
+        # Assert: local file was created with new value
+        local_config = project / ".specflow"
+        assert local_config.exists()
+        assert 'DEFAULT_MODEL="new-local"' in local_config.read_text()
+
+        # Assert: in-memory state still reflects env (highest priority)
+        assert manager.settings.default_model == "env-model"
+        assert manager.get_config_source("DEFAULT_MODEL") == "environment"
+        assert manager.get("DEFAULT_MODEL") == "env-model"
+
+    def test_global_save_without_override_updates_memory(self, tmp_path):
+        """Global save updates memory when no higher priority overrides.
+
+        Verifies that when saving to global config without any local
+        or env overrides, the in-memory settings are updated.
+        """
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Verify initial state (defaults)
+        assert manager.settings.default_model == ""
+
+        # Act: save a new value to global
+        warning = manager.save("DEFAULT_MODEL", "new-global", scope="global")
+
+        # Assert: no warning
+        assert warning is None
+
+        # Assert: global file was created with new value
+        assert 'DEFAULT_MODEL="new-global"' in global_config.read_text()
+
+        # Assert: in-memory state is updated
+        assert manager.settings.default_model == "new-global"
+        assert manager.get_config_source("DEFAULT_MODEL") == "global"
+        assert manager.get("DEFAULT_MODEL") == "new-global"
+
+    def test_local_save_without_env_updates_memory(self, tmp_path, monkeypatch):
+        """Local save updates memory when no env override exists.
+
+        Verifies that when saving to local config without env override,
+        the in-memory settings are updated.
+        """
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        global_config.write_text('DEFAULT_MODEL="global-model"\n')
+
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Verify initial state
+        assert manager.settings.default_model == "global-model"
+
+        # Act: save a new value to local
+        warning = manager.save("DEFAULT_MODEL", "new-local", scope="local")
+
+        # Assert: no warning (local is higher priority than global)
+        assert warning is None
+
+        # Assert: local file was created with new value
+        local_config = project / ".specflow"
+        assert local_config.exists()
+        assert 'DEFAULT_MODEL="new-local"' in local_config.read_text()
+
+        # Assert: in-memory state is updated (local > global)
+        assert manager.settings.default_model == "new-local"
+        assert "local" in manager.get_config_source("DEFAULT_MODEL")
+        assert manager.get("DEFAULT_MODEL") == "new-local"
+
+    def test_local_config_path_correct_after_save(self, tmp_path, monkeypatch):
+        """local_config_path is correctly set after save creates local file."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+        # Don't call load() first to test save creating local config
+
+        # Act: save to local (creates the file)
+        manager.save("TEST_KEY", "test_value", scope="local")
+
+        # Assert: local_config_path is set correctly
+        expected_path = project / ".specflow"
+        assert manager.local_config_path == expected_path
+        assert manager.local_config_path.exists()

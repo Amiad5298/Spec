@@ -10,6 +10,8 @@ Tests cover:
 - sanitize_for_branch_component helper function
 """
 
+import re
+
 import pytest
 from abc import ABC
 from enum import Enum
@@ -1015,4 +1017,288 @@ class TestProviderPlatformAttribute:
 
         assert platform == Platform.LINEAR
         assert not init_called, "Provider should not be instantiated during registration"
+
+
+class TestGenericTicketSafeBranchNameFallback:
+    """Tests for GenericTicket.safe_branch_name empty ID fallback.
+
+    These tests verify that when the ticket ID sanitizes to empty,
+    a deterministic fallback ID is used.
+    """
+
+    def test_emoji_only_id_uses_fallback(self):
+        """ID containing only emojis produces deterministic fallback."""
+        ticket = GenericTicket(
+            id="🎉🎉🎉",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/emoji",
+            type=TicketType.FEATURE,
+        )
+        branch = ticket.safe_branch_name
+
+        # Should have format prefix/fallback-id
+        assert branch.startswith("feat/")
+        assert "ticket-" in branch
+        # Should be deterministic
+        assert ticket.safe_branch_name == branch
+        # Verify fallback ID format (ticket-<6-char-hash>)
+        parts = branch.split("/")
+        assert len(parts) == 2
+        id_part = parts[1]
+        assert id_part.startswith("ticket-")
+        # Hash should be 6 hex chars
+        hash_part = id_part.split("-")[1]
+        assert len(hash_part) == 6
+        assert all(c in "0123456789abcdef" for c in hash_part)
+
+    def test_special_chars_only_id_uses_fallback(self):
+        """ID containing only special chars produces deterministic fallback."""
+        ticket = GenericTicket(
+            id="@#$%^&*()",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/special",
+            type=TicketType.BUG,
+        )
+        branch = ticket.safe_branch_name
+
+        # Should have format prefix/fallback-id
+        assert branch.startswith("fix/")
+        assert "ticket-" in branch
+        # Should match allowed pattern
+        assert re.match(r"^[a-z]+/ticket-[a-f0-9]{6}$", branch)
+
+    def test_fallback_id_is_deterministic(self):
+        """Same original ID produces same fallback hash."""
+        id_value = "🚀🔥💯"
+
+        ticket1 = GenericTicket(
+            id=id_value,
+            platform=Platform.JIRA,
+            url="https://jira.example.com/1",
+            type=TicketType.TASK,
+        )
+        ticket2 = GenericTicket(
+            id=id_value,
+            platform=Platform.JIRA,
+            url="https://jira.example.com/2",
+            type=TicketType.TASK,
+        )
+
+        assert ticket1.safe_branch_name == ticket2.safe_branch_name
+
+    def test_different_emoji_ids_produce_different_fallbacks(self):
+        """Different emoji IDs produce different fallback hashes."""
+        ticket1 = GenericTicket(
+            id="🎉",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/1",
+            type=TicketType.FEATURE,
+        )
+        ticket2 = GenericTicket(
+            id="🚀",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/2",
+            type=TicketType.FEATURE,
+        )
+
+        assert ticket1.safe_branch_name != ticket2.safe_branch_name
+
+    def test_fallback_with_branch_summary(self):
+        """Fallback ID works with branch summary."""
+        ticket = GenericTicket(
+            id="🎉🎉",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/emoji",
+            type=TicketType.FEATURE,
+            branch_summary="add-feature",
+        )
+        branch = ticket.safe_branch_name
+
+        # Should have format: prefix/fallback-id-summary
+        assert branch.startswith("feat/")
+        assert "ticket-" in branch
+        assert "add-feature" in branch
+
+
+class TestGenericTicketSafeBranchNameLongSummary:
+    """Tests for GenericTicket.safe_branch_name with long summaries.
+
+    These tests verify that long branch_summary values are truncated
+    and don't produce trailing hyphens.
+    """
+
+    def test_long_branch_summary_truncated(self):
+        """Long branch_summary is truncated to max length."""
+        long_summary = "a" * 200  # Way longer than 50 chars
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary=long_summary,
+        )
+        branch = ticket.safe_branch_name
+
+        # Branch should be reasonable length
+        # prefix (4-7) + "/" + id (8) + "-" + summary (max 50) = ~66 max
+        assert len(branch) <= 70
+        # Should contain truncated summary
+        assert branch.startswith("feat/test-123-")
+
+    def test_long_summary_with_special_chars_truncated_cleanly(self):
+        """Long summary with special chars truncates without trailing hyphen."""
+        # Create a long summary that would have hyphens at truncation point
+        long_summary = "fix-bug-" * 30  # Lots of hyphens
+        ticket = GenericTicket(
+            id="TEST-456",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-456",
+            type=TicketType.BUG,
+            branch_summary=long_summary,
+        )
+        branch = ticket.safe_branch_name
+
+        # Should not end with hyphen
+        assert not branch.endswith("-")
+
+    def test_long_summary_500_chars(self):
+        """500-char summary is truncated properly."""
+        # Create 500 char mixed summary
+        long_summary = "this-is-a-very-long-summary-" * 20
+        ticket = GenericTicket(
+            id="PROJ-789",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/PROJ-789",
+            type=TicketType.TASK,
+            branch_summary=long_summary,
+        )
+        branch = ticket.safe_branch_name
+
+        # Verify reasonable length
+        assert len(branch) <= 70
+        # Verify no trailing hyphen
+        assert not branch.endswith("-")
+        # Verify matches allowed pattern
+        assert re.match(r"^[a-z]+/[a-z0-9-]+$", branch)
+
+    def test_long_summary_unicode_truncation(self):
+        """Unicode in long summary is handled during truncation."""
+        # Mix of unicode and ASCII
+        long_summary = "feature-with-émojis-🎉-" * 20
+        ticket = GenericTicket(
+            id="TEST-001",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-001",
+            type=TicketType.FEATURE,
+            branch_summary=long_summary,
+        )
+        branch = ticket.safe_branch_name
+
+        # Should be truncated and safe
+        assert len(branch) <= 70
+        # Should not contain unicode
+        assert all(c in "abcdefghijklmnopqrstuvwxyz0123456789-/" for c in branch)
+
+
+class TestGenericTicketSafeBranchNameNoMalformed:
+    """Tests ensuring safe_branch_name never produces malformed branches.
+
+    These tests verify that the branch name always has proper structure:
+    - Never just the prefix (e.g., "feat" or "fix")
+    - Always has ticket ID component
+    - Proper format: prefix/id or prefix/id-summary
+    """
+
+    def test_never_returns_prefix_only(self):
+        """Branch name never degenerates to just prefix."""
+        # Even with empty everything, should have fallback ID
+        ticket = GenericTicket(
+            id="🎉",  # Will sanitize to empty
+            platform=Platform.JIRA,
+            url="https://jira.example.com/test",
+            type=TicketType.FEATURE,
+            title="",
+            branch_summary="",
+        )
+        branch = ticket.safe_branch_name
+
+        # Should not be just "feat" or "feat/"
+        assert branch != "feat"
+        assert branch != "feat/"
+        assert "/" in branch
+        parts = branch.split("/")
+        assert len(parts) == 2
+        assert len(parts[1]) > 0  # Has ID component
+
+    def test_never_returns_prefix_hyphen_only(self):
+        """Branch name never degenerates to 'prefix/-'."""
+        # ID that sanitizes to empty, summary that sanitizes to empty
+        ticket = GenericTicket(
+            id="@#$",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/test",
+            type=TicketType.BUG,
+            branch_summary="!@#$%",  # Will sanitize to empty
+        )
+        branch = ticket.safe_branch_name
+
+        # Should not have patterns like "/-" or "-/"
+        assert "/-" not in branch
+        assert "-/" not in branch
+        # Should have format prefix/ticket-hash
+        assert re.match(r"^fix/ticket-[a-f0-9]{6}$", branch)
+
+    def test_all_ticket_types_produce_valid_branches(self):
+        """All ticket types produce valid branch names with fallback ID."""
+        for ticket_type in TicketType:
+            ticket = GenericTicket(
+                id="🔥",  # Will need fallback
+                platform=Platform.JIRA,
+                url="https://jira.example.com/test",
+                type=ticket_type,
+            )
+            branch = ticket.safe_branch_name
+
+            # Should have valid format
+            assert "/" in branch
+            parts = branch.split("/")
+            assert len(parts) == 2
+            assert len(parts[0]) > 0  # Has prefix
+            assert len(parts[1]) > 0  # Has ID
+
+            # Should contain only valid chars
+            assert re.match(r"^[a-z]+/[a-z0-9-]+$", branch)
+
+    def test_empty_id_with_title_fallback(self):
+        """Empty sanitized ID with title still produces valid branch."""
+        ticket = GenericTicket(
+            id="🎉",  # Will sanitize to empty
+            platform=Platform.JIRA,
+            url="https://jira.example.com/test",
+            type=TicketType.FEATURE,
+            title="Add user login feature",
+        )
+        branch = ticket.safe_branch_name
+
+        # Should have format prefix/fallback-id-summary
+        assert branch.startswith("feat/")
+        assert "ticket-" in branch
+        # Should include title-derived summary
+        assert "add" in branch or "user" in branch or "login" in branch
+
+    def test_whitespace_only_branch_summary_handled(self):
+        """Whitespace-only branch_summary doesn't cause issues."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.TASK,
+            branch_summary="   \t\n   ",  # Whitespace only
+        )
+        branch = ticket.safe_branch_name
+
+        # Should work without summary
+        assert branch.startswith("chore/test-123")
+        # Should not have trailing hyphen
+        assert not branch.endswith("-")
 

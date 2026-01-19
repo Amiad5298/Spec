@@ -16,7 +16,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from specflow.config.settings import CONFIG_FILE, Settings
 from specflow.utils.logging import log_message
@@ -214,27 +214,42 @@ class ConfigManager:
         self,
         key: str,
         value: str,
-        scope: str = "global",
+        scope: Literal["global", "local"] = "global",
         warn_on_override: bool = True,
     ) -> str | None:
-        """Save a configuration value to file.
+        """Save a configuration value to a config file.
+
+        Writes the value to the specified config file (global or local) and then
+        reloads all configuration to maintain correct precedence. The in-memory
+        state always reflects the *effective* value after applying the full
+        precedence hierarchy (env > local > global > defaults).
 
         Security: Validates key name, uses atomic file replacement.
 
+        Behavior notes:
+            - If scope="local" and no local config exists, creates a .specflow
+              file in the current working directory.
+            - After saving, load() is called internally to recompute effective
+              values, ensuring manager.settings reflects correct precedence.
+            - The value written to the file may not be the effective value if
+              a higher-priority source overrides it (env var or local config).
+
         Args:
-            key: Configuration key (alphanumeric + underscore)
-            value: Configuration value
-            scope: Where to save - "global" (default) or "local"
-            warn_on_override: If True, returns warning message when saved value
-                              would be overridden by a higher-priority source
+            key: Configuration key (must match pattern: [a-zA-Z_][a-zA-Z0-9_]*)
+            value: Configuration value to save
+            scope: Target config file - "global" (~/.specflow-config) or
+                   "local" (.specflow in project directory)
+            warn_on_override: If True, returns warning message when the saved
+                              value is overridden by a higher-priority source
 
         Returns:
-            Warning message if the saved value is overridden by another source,
-            None otherwise.
+            Warning message describing overrides (if any), None otherwise.
+            For global scope: warns if local config or env var overrides.
+            For local scope: warns if env var overrides.
 
         Raises:
-            ValueError: If key name is invalid or scope is invalid
-            RuntimeError: If scope="local" but no local config path is set
+            ValueError: If key name is invalid (doesn't match pattern) or
+                        scope is not "global" or "local"
         """
         # Validate key name
         if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", key):
@@ -251,10 +266,6 @@ class ConfigManager:
             target_path = self.local_config_path
         else:
             target_path = self.global_config_path
-
-        # Update in-memory values
-        self._raw_values[key] = value
-        self._apply_value_to_settings(key, value)
 
         # Read existing file content
         existing_lines: list[str] = []
@@ -294,24 +305,56 @@ class ConfigManager:
         self._atomic_write_to_path(new_lines, target_path)
         log_message(f"Configuration saved to {scope}: {key}={value}")
 
-        # Check for override warning
+        # Build override warning BEFORE reload (need to check current state)
+        warning = self._check_override_warning(key, value, scope, warn_on_override)
+
+        # Reload configuration to maintain correct precedence
+        # This ensures in-memory state reflects effective values after save
+        self.load()
+
+        return warning
+
+    def _check_override_warning(
+        self,
+        key: str,
+        saved_value: str,
+        scope: Literal["global", "local"],
+        warn_on_override: bool,
+    ) -> str | None:
+        """Check if saved value will be overridden by higher-priority source.
+
+        Args:
+            key: Configuration key that was saved
+            saved_value: Value that was written to file
+            scope: Scope of the save operation
+            warn_on_override: Whether to generate warnings
+
+        Returns:
+            Warning message if overridden, None otherwise
+        """
+        if not warn_on_override:
+            return None
+
         warning = None
-        if warn_on_override and scope == "global":
-            # Check if local config overrides this key
+
+        # Environment variables always override both global and local
+        if os.environ.get(key) is not None:
+            warning = (
+                f"Warning: '{key}' saved to {scope} config but is overridden "
+                f"by environment variable (effective value: '{os.environ.get(key)}')"
+            )
+            return warning  # Env is highest priority, no need to check local
+
+        # For global scope, check if local config overrides
+        if scope == "global":
             if self.local_config_path and self.local_config_path.exists():
                 local_values = self._read_file_values(self.local_config_path)
                 if key in local_values:
                     warning = (
                         f"Warning: '{key}' saved to global config but is overridden "
-                        f"by local config at {self.local_config_path}"
+                        f"by local config at {self.local_config_path} "
+                        f"(effective value: '{local_values[key]}')"
                     )
-            # Check if environment variable overrides this key
-            if os.environ.get(key) is not None:
-                env_warning = (
-                    f"Warning: '{key}' saved to {scope} config but is overridden "
-                    f"by environment variable"
-                )
-                warning = env_warning if warning is None else f"{warning}; {env_warning}"
 
         return warning
 

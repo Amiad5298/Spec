@@ -57,18 +57,21 @@ def sanitize_title_for_branch(title: str, max_length: int = 50) -> str:
 
     Converts title to lowercase, replaces non-alphanumeric characters
     with hyphens, collapses consecutive hyphens, and strips leading/trailing
-    hyphens.
+    hyphens. Ensures output does not end with a hyphen after truncation.
 
     Args:
         title: The title to sanitize
         max_length: Maximum length of the output (default: 50)
 
     Returns:
-        A git-friendly branch summary string
+        A git-friendly branch summary string (max `max_length` chars,
+        no trailing hyphens)
     """
     # Truncate first, then sanitize to get consistent behavior
     truncated = title[:max_length]
-    return sanitize_for_branch_component(truncated)
+    result = sanitize_for_branch_component(truncated)
+    # Ensure truncation didn't leave trailing hyphens
+    return result.rstrip("-")
 
 
 class Platform(Enum):
@@ -190,6 +193,9 @@ class GenericTicket:
         }
         return prefix_map.get(self.type, "feature")
 
+    # Default max length for branch summary (same as sanitize_title_for_branch)
+    _BRANCH_SUMMARY_MAX_LENGTH: int = 50
+
     @property
     def safe_branch_name(self) -> str:
         """Generate safe git branch name from ticket.
@@ -202,9 +208,16 @@ class GenericTicket:
         - Special characters (/, spaces, :, etc.)
         - Disallowed git sequences (.., @{, trailing /, .lock suffix)
         - Empty branch_summary (generates from title)
+        - Empty sanitized ticket ID (uses deterministic fallback)
+        - Long branch_summary (truncated to max 50 chars)
 
         Output is deterministic, lowercase, and contains only git-safe
         characters: [a-z0-9/-] (slash only in prefix separator).
+
+        Guarantees:
+        - Never returns just prefix without ticket component
+        - Always has format: prefix/id or prefix/id-summary
+        - Maximum summary length is enforced
 
         Returns:
             Git-compatible branch name like 'feat/proj-123-add-user-login'
@@ -214,23 +227,45 @@ class GenericTicket:
         # Sanitize ticket ID using shared sanitizer (ensures [a-z0-9-] only)
         safe_id = sanitize_for_branch_component(self.id)
 
+        # Handle empty sanitized ID (e.g., ticket ID was only emojis/special chars)
+        if not safe_id:
+            safe_id = self._generate_fallback_id()
+
         # Use branch_summary if available, otherwise generate from title
         summary = self.branch_summary
-        if not summary and self.title:
-            summary = sanitize_title_for_branch(self.title)
-
-        # Sanitize summary using shared sanitizer
         if summary:
-            safe_summary = sanitize_for_branch_component(summary)
-            if safe_summary:
-                branch = f"{prefix}/{safe_id}-{safe_summary}"
-            else:
-                branch = f"{prefix}/{safe_id}"
+            # Apply max length limit to user-provided summary
+            safe_summary = sanitize_title_for_branch(
+                summary, max_length=self._BRANCH_SUMMARY_MAX_LENGTH
+            )
+        elif self.title:
+            safe_summary = sanitize_title_for_branch(self.title)
+        else:
+            safe_summary = ""
+
+        # Build branch name
+        if safe_summary:
+            branch = f"{prefix}/{safe_id}-{safe_summary}"
         else:
             branch = f"{prefix}/{safe_id}"
 
         # Final safety checks for git ref requirements
         return self._finalize_git_ref(branch)
+
+    def _generate_fallback_id(self) -> str:
+        """Generate a deterministic fallback ID when sanitized ticket ID is empty.
+
+        Uses a short hash of the original ticket ID to maintain determinism
+        and avoid collisions.
+
+        Returns:
+            Fallback ID string like 'ticket-a1b2c3'
+        """
+        import hashlib
+
+        # Create deterministic hash from original ID
+        id_hash = hashlib.sha256(self.id.encode("utf-8")).hexdigest()[:6]
+        return f"ticket-{id_hash}"
 
     @staticmethod
     def _finalize_git_ref(branch: str) -> str:

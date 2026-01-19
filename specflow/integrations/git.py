@@ -366,6 +366,50 @@ def commit_changes(message: str) -> str:
         return ""
 
 
+def get_diff_from_baseline(base_commit: str) -> str:
+    """Get the git diff from a baseline commit to the current state.
+
+    This includes both committed and uncommitted changes since the baseline.
+
+    Args:
+        base_commit: The baseline commit hash to diff from
+
+    Returns:
+        The git diff output as a string, or empty string if no changes or error
+    """
+    if not base_commit:
+        return ""
+
+    try:
+        # Get diff from base commit to current working state (including uncommitted)
+        result = subprocess.run(
+            ["git", "diff", base_commit, "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        log_command(f"git diff {base_commit} HEAD", result.returncode)
+
+        diff_output = result.stdout
+
+        # Also include any uncommitted changes
+        if is_dirty():
+            uncommitted_result = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True,
+                text=True,
+            )
+            if uncommitted_result.stdout:
+                diff_output += "\n" + uncommitted_result.stdout
+
+        return diff_output.strip()
+
+    except subprocess.CalledProcessError as e:
+        log_command(f"git diff {base_commit}", e.returncode)
+        return ""
+    except Exception:
+        return ""
+
+
 __all__ = [
     "DirtyStateAction",
     "is_git_repo",
@@ -384,5 +428,6 @@ __all__ = [
     "revert_changes",
     "stash_changes",
     "commit_changes",
+    "get_diff_from_baseline",
 ]
 

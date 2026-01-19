@@ -20,6 +20,7 @@ from specflow.integrations.git import (
     squash_commits,
     has_changes,
     revert_changes,
+    get_diff_from_baseline,
 )
 
 
@@ -186,9 +187,59 @@ class TestAddToGitignore:
         monkeypatch.chdir(tmp_path)
         gitignore = tmp_path / ".gitignore"
         gitignore.write_text("*.log\n")
-        
+
         add_to_gitignore("*.log")
-        
+
         content = gitignore.read_text()
         assert content.count("*.log") == 1
+
+
+class TestGetDiffFromBaseline:
+    """Tests for get_diff_from_baseline function."""
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_returns_diff_content(self, mock_run):
+        """Returns diff content from baseline commit."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="diff --git a/file.py b/file.py\n+new line",
+        )
+
+        result = get_diff_from_baseline("abc123")
+
+        assert "diff --git" in result
+        # Check that the diff command was called with the base commit
+        diff_calls = [c for c in mock_run.call_args_list if "abc123" in str(c)]
+        assert len(diff_calls) == 1
+        call_args = diff_calls[0][0][0]
+        assert "abc123" in call_args
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_returns_empty_string_on_empty_diff(self, mock_run):
+        """Returns empty string when no changes."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="",
+        )
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result == ""
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_returns_empty_string_on_error(self, mock_run):
+        """Returns empty string when git command fails."""
+        mock_run.side_effect = subprocess.CalledProcessError(1, "git")
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result == ""
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_returns_empty_string_for_empty_commit(self, mock_run):
+        """Returns empty string when base_commit is empty."""
+        result = get_diff_from_baseline("")
+
+        assert result == ""
+        mock_run.assert_not_called()
 

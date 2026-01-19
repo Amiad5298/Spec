@@ -20,6 +20,38 @@ from enum import Enum, auto
 from typing import Any, Optional
 
 
+def sanitize_for_branch_component(value: str) -> str:
+    """Sanitize a string component for use in git branch names.
+
+    This is the core sanitizer that ensures output contains only git-safe
+    characters: lowercase letters, digits, and hyphens.
+
+    Steps:
+    1. Lowercase the input
+    2. Replace any character not in [a-z0-9-] with hyphen
+    3. Collapse multiple consecutive hyphens
+    4. Strip leading/trailing hyphens
+    5. Handle empty result gracefully
+
+    Args:
+        value: The string to sanitize
+
+    Returns:
+        A git-safe string containing only [a-z0-9-]
+    """
+    if not value:
+        return ""
+    # Lowercase first
+    result = value.lower()
+    # Replace any non-[a-z0-9-] with hyphens
+    result = re.sub(r"[^a-z0-9-]", "-", result)
+    # Collapse multiple hyphens
+    result = re.sub(r"-+", "-", result)
+    # Strip leading/trailing hyphens
+    result = result.strip("-")
+    return result
+
+
 def sanitize_title_for_branch(title: str, max_length: int = 50) -> str:
     """Sanitize a title string for use in git branch names.
 
@@ -34,13 +66,9 @@ def sanitize_title_for_branch(title: str, max_length: int = 50) -> str:
     Returns:
         A git-friendly branch summary string
     """
-    summary = title.lower()[:max_length]
-    # Replace non-alphanumeric with hyphens
-    summary = re.sub(r"[^a-z0-9-]", "-", summary)
-    # Collapse multiple hyphens
-    summary = re.sub(r"-+", "-", summary)
-    # Strip leading/trailing hyphens
-    return summary.strip("-")
+    # Truncate first, then sanitize to get consistent behavior
+    truncated = title[:max_length]
+    return sanitize_for_branch_component(truncated)
 
 
 class Platform(Enum):
@@ -175,22 +203,29 @@ class GenericTicket:
         - Disallowed git sequences (.., @{, trailing /, .lock suffix)
         - Empty branch_summary (generates from title)
 
+        Output is deterministic, lowercase, and contains only git-safe
+        characters: [a-z0-9/-] (slash only in prefix separator).
+
         Returns:
             Git-compatible branch name like 'feat/proj-123-add-user-login'
         """
         prefix = self.semantic_branch_prefix
 
-        # Sanitize ticket ID for git ref safety
-        safe_id = self._sanitize_for_git_ref(self.id.lower())
+        # Sanitize ticket ID using shared sanitizer (ensures [a-z0-9-] only)
+        safe_id = sanitize_for_branch_component(self.id)
 
         # Use branch_summary if available, otherwise generate from title
         summary = self.branch_summary
         if not summary and self.title:
             summary = sanitize_title_for_branch(self.title)
 
+        # Sanitize summary using shared sanitizer
         if summary:
-            safe_summary = self._sanitize_for_git_ref(summary)
-            branch = f"{prefix}/{safe_id}-{safe_summary}"
+            safe_summary = sanitize_for_branch_component(summary)
+            if safe_summary:
+                branch = f"{prefix}/{safe_id}-{safe_summary}"
+            else:
+                branch = f"{prefix}/{safe_id}"
         else:
             branch = f"{prefix}/{safe_id}"
 
@@ -198,26 +233,12 @@ class GenericTicket:
         return self._finalize_git_ref(branch)
 
     @staticmethod
-    def _sanitize_for_git_ref(value: str) -> str:
-        """Sanitize a string component for git ref name.
-
-        Args:
-            value: String to sanitize
-
-        Returns:
-            Git-safe string with problematic characters replaced
-        """
-        # Replace slashes, spaces, colons, #, and other problematic chars with hyphens
-        result = re.sub(r"[/\s:~^?*\[\]\\@{}<>|\"'#]", "-", value)
-        # Collapse multiple hyphens
-        result = re.sub(r"-+", "-", result)
-        # Strip leading/trailing hyphens and dots
-        result = result.strip("-.")
-        return result
-
-    @staticmethod
     def _finalize_git_ref(branch: str) -> str:
         """Apply final git ref safety rules.
+
+        Handles sequences that are invalid in git refs even when individual
+        characters are valid: consecutive dots, @{ sequences, .lock suffix,
+        trailing slashes.
 
         Args:
             branch: Branch name to finalize
@@ -225,7 +246,8 @@ class GenericTicket:
         Returns:
             Git-safe branch name
         """
-        # Remove disallowed sequences
+        # Remove disallowed sequences (these can't appear with new sanitizer
+        # but kept for safety)
         branch = branch.replace("..", "-")
         branch = branch.replace("@{", "-")
 
@@ -236,11 +258,11 @@ class GenericTicket:
         if branch.endswith(".lock"):
             branch = branch[:-5]
 
-        # Ensure no consecutive dots after replacements
-        branch = re.sub(r"\.+", ".", branch)
-
         # Collapse any consecutive hyphens created by replacements
         branch = re.sub(r"-+", "-", branch)
+
+        # Strip any trailing hyphens that might result
+        branch = branch.rstrip("-")
 
         return branch
 

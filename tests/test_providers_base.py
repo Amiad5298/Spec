@@ -7,6 +7,7 @@ Tests cover:
 - safe_branch_name property
 - IssueTrackerProvider abstract methods
 - Default generate_branch_summary implementation
+- sanitize_for_branch_component helper function
 """
 
 import pytest
@@ -19,7 +20,98 @@ from specflow.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
+    sanitize_for_branch_component,
+    sanitize_title_for_branch,
 )
+
+
+class TestSanitizeForBranchComponent:
+    """Tests for sanitize_for_branch_component helper function."""
+
+    def test_lowercases_input(self):
+        """Converts input to lowercase."""
+        assert sanitize_for_branch_component("UPPERCASE") == "uppercase"
+
+    def test_replaces_spaces_with_hyphens(self):
+        """Replaces spaces with hyphens."""
+        assert sanitize_for_branch_component("hello world") == "hello-world"
+
+    def test_replaces_special_chars_with_hyphens(self):
+        """Replaces special characters with hyphens."""
+        result = sanitize_for_branch_component("test@#$%^&*()")
+        assert "@" not in result
+        assert "#" not in result
+        # Should collapse to something like "test"
+        assert result == "test"
+
+    def test_collapses_multiple_hyphens(self):
+        """Collapses multiple consecutive hyphens."""
+        assert sanitize_for_branch_component("a---b") == "a-b"
+        assert sanitize_for_branch_component("a - - - b") == "a-b"
+
+    def test_strips_leading_trailing_hyphens(self):
+        """Strips leading and trailing hyphens."""
+        assert sanitize_for_branch_component("-test-") == "test"
+        assert sanitize_for_branch_component("---test---") == "test"
+
+    def test_handles_empty_string(self):
+        """Returns empty string for empty input."""
+        assert sanitize_for_branch_component("") == ""
+
+    def test_handles_only_special_chars(self):
+        """Returns empty string when input has only special chars."""
+        assert sanitize_for_branch_component("@#$%^&*()") == ""
+
+    def test_preserves_numbers(self):
+        """Preserves numbers in input."""
+        assert sanitize_for_branch_component("test123") == "test123"
+
+    def test_preserves_hyphens(self):
+        """Preserves existing hyphens."""
+        assert sanitize_for_branch_component("test-value") == "test-value"
+
+    def test_replaces_slashes_with_hyphens(self):
+        """Replaces forward slashes with hyphens."""
+        assert sanitize_for_branch_component("owner/repo") == "owner-repo"
+
+    def test_replaces_hash_with_hyphen(self):
+        """Replaces hash symbol with hyphen."""
+        result = sanitize_for_branch_component("repo#123")
+        assert "#" not in result
+        assert result == "repo-123"
+
+    def test_complex_github_id(self):
+        """Handles complex GitHub-style IDs."""
+        result = sanitize_for_branch_component("my-org/my-repo#456")
+        assert result == "my-org-my-repo-456"
+
+    def test_unicode_replaced(self):
+        """Unicode characters are replaced with hyphens."""
+        result = sanitize_for_branch_component("test émoji 🎉")
+        # All non-[a-z0-9-] replaced
+        assert "é" not in result
+        assert "🎉" not in result
+
+
+class TestSanitizeTitleForBranch:
+    """Tests for sanitize_title_for_branch helper function."""
+
+    def test_truncates_to_max_length(self):
+        """Truncates title to max_length."""
+        long_title = "a" * 100
+        result = sanitize_title_for_branch(long_title, max_length=50)
+        assert len(result) <= 50
+
+    def test_sanitizes_after_truncation(self):
+        """Sanitizes properly after truncation."""
+        result = sanitize_title_for_branch("Add New Feature", max_length=50)
+        assert result == "add-new-feature"
+
+    def test_default_max_length_is_50(self):
+        """Default max_length is 50."""
+        long_title = "a" * 100
+        result = sanitize_title_for_branch(long_title)
+        assert len(result) <= 50
 
 
 class TestPlatformEnum:
@@ -474,6 +566,125 @@ class TestGenericTicketSafeBranchNameEdgeCases:
         )
         branch = ticket.safe_branch_name
         assert "---" not in branch
+
+    def test_output_is_entirely_lowercase(self):
+        """Branch name is entirely lowercase."""
+        ticket = GenericTicket(
+            id="UPPERCASE-ID",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary="MixedCase-Summary",
+        )
+        branch = ticket.safe_branch_name
+        assert branch == branch.lower()
+
+    def test_output_contains_only_safe_characters(self):
+        """Branch name contains only [a-z0-9/-] characters."""
+        import re
+        ticket = GenericTicket(
+            id="PROJ@123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/PROJ-123",
+            type=TicketType.FEATURE,
+            branch_summary="feature! with [special] chars: test~1",
+        )
+        branch = ticket.safe_branch_name
+        # Only a-z, 0-9, hyphens, and one forward slash (prefix separator)
+        assert re.match(r"^[a-z0-9]+/[a-z0-9-]+$", branch), f"Invalid branch: {branch}"
+
+    def test_summary_with_spaces_and_punctuation(self):
+        """Summaries with spaces and punctuation are properly sanitized."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.BUG,
+            branch_summary="Fix the API endpoint (urgent)!",
+        )
+        branch = ticket.safe_branch_name
+        assert " " not in branch
+        assert "(" not in branch
+        assert ")" not in branch
+        assert "!" not in branch
+        assert branch == branch.lower()
+        # Verify structure
+        assert branch.startswith("fix/")
+        assert "test-123" in branch
+
+    def test_summary_with_unicode_characters(self):
+        """Unicode characters are replaced with hyphens."""
+        ticket = GenericTicket(
+            id="TEST-123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-123",
+            type=TicketType.FEATURE,
+            branch_summary="Add émoji 🎉 support",
+        )
+        branch = ticket.safe_branch_name
+        # Unicode should be replaced, result should be safe
+        import re
+        assert re.match(r"^[a-z0-9]+/[a-z0-9-]+$", branch), f"Invalid branch: {branch}"
+
+    def test_complex_github_style_id(self):
+        """Complex GitHub-style IDs like 'org/repo#123' are properly sanitized."""
+        ticket = GenericTicket(
+            id="my-org/my-repo#456",
+            platform=Platform.GITHUB,
+            url="https://github.com/my-org/my-repo/issues/456",
+            type=TicketType.BUG,
+            branch_summary="fix-auth-issue",
+        )
+        branch = ticket.safe_branch_name
+        # Should not contain / (except prefix separator), should not contain #
+        parts = branch.split("/", 1)
+        assert len(parts) == 2
+        assert "/" not in parts[1]
+        assert "#" not in parts[1]
+        # The ID portion should be sanitized to my-org-my-repo-456
+        assert "my-org-my-repo-456" in branch.lower()
+
+    def test_deterministic_output(self):
+        """Same input produces same output every time."""
+        ticket = GenericTicket(
+            id="PROJ-999",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/PROJ-999",
+            type=TicketType.FEATURE,
+            branch_summary="New Feature: Add SSO",
+        )
+        branch1 = ticket.safe_branch_name
+        branch2 = ticket.safe_branch_name
+        branch3 = ticket.safe_branch_name
+        assert branch1 == branch2 == branch3
+
+    def test_empty_branch_summary_uses_title(self):
+        """When branch_summary is empty, uses sanitized title (max 50 chars)."""
+        long_title = "A" * 60 + " Feature Title"
+        ticket = GenericTicket(
+            id="TEST-1",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/TEST-1",
+            type=TicketType.FEATURE,
+            title=long_title,
+            branch_summary="",
+        )
+        branch = ticket.safe_branch_name
+        # Should use title, truncated and sanitized
+        assert "a" in branch  # From the A's in title
+
+    def test_id_with_dots_handled(self):
+        """IDs containing dots are properly sanitized."""
+        ticket = GenericTicket(
+            id="proj.sub.123",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/proj.sub.123",
+            type=TicketType.TASK,
+            branch_summary="task-work",
+        )
+        branch = ticket.safe_branch_name
+        # Dots should be replaced
+        assert ".." not in branch
 
 
 class TestIssueTrackerProviderABC:

@@ -824,3 +824,85 @@ class TestNonDocSnapshotGuardrailFixes:
         # File should be deleted (restoring the "deleted" state)
         assert "src/foo.py" in reverted
         assert not recreated_file.exists()
+
+    def test_clean_tracked_file_modified_by_agent_uses_git_restore(self, tmp_path, monkeypatch):
+        """CRITICAL FIX: Clean tracked file modified by agent is reverted with git restore, NOT deleted.
+
+        Scenario:
+        - Pre-step4 repo is clean (snapshot has no entry for src/code.py)
+        - Agent modifies src/code.py (git status shows ' M src/code.py')
+
+        Expected:
+        - detect_changes returns ["src/code.py"]
+        - revert_changes calls _git_restore_file("src/code.py")
+        - File is NOT deleted
+        """
+        monkeypatch.chdir(tmp_path)
+
+        # Create the file (simulating a tracked file that exists)
+        src_dir = tmp_path / "src"
+        src_dir.mkdir(exist_ok=True)
+        tracked_file = src_dir / "code.py"
+        tracked_file.write_text("original content from repo")
+
+        # Create snapshot (starts empty - no dirty or untracked files before Step 4)
+        snapshot = NonDocSnapshot()
+
+        # Mock subprocess.run for detect_changes() - reports modified tracked file
+        # " M" = modified in worktree (unstaged modification of tracked file)
+        with patch("specflow.workflow.step4_update_docs.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout=" M src/code.py\0"
+            )
+
+            changed = snapshot.detect_changes()
+
+        # Should detect the changed file
+        assert "src/code.py" in changed
+
+        # Check snapshot was created with correct flags
+        assert "src/code.py" in snapshot.snapshots
+        file_snap = snapshot.snapshots["src/code.py"]
+        assert file_snap.was_untracked is False  # It's tracked
+        assert file_snap.was_dirty is False  # It wasn't dirty before agent ran
+        # CRITICAL: existed=True for tracked files so git restore is used
+        assert file_snap.existed is True
+
+        # Revert should call git restore (not delete the file)
+        with patch("specflow.workflow.step4_update_docs._git_restore_file") as mock_restore:
+            mock_restore.return_value = True  # git restore succeeds
+
+            reverted = snapshot.revert_changes(["src/code.py"])
+
+            # MUST call git restore for tracked files
+            mock_restore.assert_called_once_with("src/code.py")
+
+        assert "src/code.py" in reverted
+        # File should still exist (not deleted)
+        assert tracked_file.exists()
+
+    def test_rename_status_both_paths_handled(self, tmp_path, monkeypatch):
+        """Optional hardening: Rename status restores correctly."""
+        monkeypatch.chdir(tmp_path)
+
+        # Create snapshot (starts empty)
+        snapshot = NonDocSnapshot()
+
+        # Mock subprocess.run for detect_changes() - reports renamed file
+        with patch("specflow.workflow.step4_update_docs.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="R  old_name.py\0new_name.py\0"
+            )
+
+            changed = snapshot.detect_changes()
+
+        # Should detect the new path from rename
+        assert "new_name.py" in changed
+
+        # Snapshot should have the new name with existed=True (tracked)
+        assert "new_name.py" in snapshot.snapshots
+        file_snap = snapshot.snapshots["new_name.py"]
+        assert file_snap.was_untracked is False  # Renames are tracked
+        assert file_snap.existed is True  # Tracked files use git restore

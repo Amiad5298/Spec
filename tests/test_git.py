@@ -562,6 +562,49 @@ class TestParseNameStatusLine:
         assert _parse_name_status_line("") == ""
 
 
+class TestGetDiffFromBaselineCommandSyntax:
+    """Tests to verify correct git command syntax in get_diff_from_baseline."""
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_committed_diff_uses_double_dot_syntax(self, mock_run):
+        """Committed diff uses 'base..HEAD' (double dot), not 'base.HEAD' (single dot)."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="diff content", stderr=""),  # committed diff
+            MagicMock(returncode=0, stdout="", stderr=""),  # staged diff
+            MagicMock(returncode=0, stdout="", stderr=""),  # unstaged diff
+            MagicMock(returncode=0, stdout="", stderr=""),  # staged files
+            MagicMock(returncode=0, stdout="", stderr=""),  # unstaged files
+            MagicMock(returncode=0, stdout="M\tfile.py", stderr=""),  # committed files
+            MagicMock(returncode=0, stdout="", stderr=""),  # staged stat
+            MagicMock(returncode=0, stdout="", stderr=""),  # unstaged stat
+            MagicMock(returncode=0, stdout="", stderr=""),  # committed stat
+            MagicMock(returncode=0, stdout="", stderr=""),  # untracked
+        ]
+
+        get_diff_from_baseline("abc123")
+
+        # Find the committed diff call (first call with base_commit reference)
+        calls = mock_run.call_args_list
+        committed_diff_call = calls[0]  # First call is committed diff
+        committed_files_call = calls[5]  # 6th call is committed files (name-status)
+        committed_stat_call = calls[8]  # 9th call is committed stat
+
+        # Verify committed diff uses ..HEAD (double dot)
+        diff_cmd = committed_diff_call[0][0]  # args[0] is the command list
+        assert "abc123..HEAD" in diff_cmd, f"Expected 'abc123..HEAD' in {diff_cmd}"
+        assert "abc123.HEAD" not in diff_cmd, f"Found invalid 'abc123.HEAD' in {diff_cmd}"
+
+        # Verify committed name-status uses ..HEAD (double dot)
+        name_status_cmd = committed_files_call[0][0]
+        assert "abc123..HEAD" in name_status_cmd, f"Expected 'abc123..HEAD' in {name_status_cmd}"
+        assert "abc123.HEAD" not in name_status_cmd, f"Found invalid 'abc123.HEAD' in {name_status_cmd}"
+
+        # Verify committed stat uses ..HEAD (double dot)
+        stat_cmd = committed_stat_call[0][0]
+        assert "abc123..HEAD" in stat_cmd, f"Expected 'abc123..HEAD' in {stat_cmd}"
+        assert "abc123.HEAD" not in stat_cmd, f"Found invalid 'abc123.HEAD' in {stat_cmd}"
+
+
 class TestGetDiffFromBaselineRenameHandling:
     """Tests for rename/copy handling in get_diff_from_baseline."""
 

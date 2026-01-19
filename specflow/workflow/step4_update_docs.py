@@ -390,13 +390,16 @@ class NonDocSnapshot:
                     # File not in our snapshot - agent created/modified it
                     is_untracked = status_code == "??"
                     # Record it for revert handling
-                    # IMPORTANT: existed=False because this file was NOT in our snapshot
-                    # (meaning it didn't exist or wasn't dirty/untracked before Step 4)
+                    # CRITICAL: For tracked files that were CLEAN before Step 4 (not in
+                    # snapshot), we set existed=True so revert_changes() uses git restore.
+                    # For truly untracked files ("??"), set existed=False so they get deleted.
+                    # This prevents deleting tracked files that the agent modified.
+                    file_existed_pre_step4 = not is_untracked  # Tracked files "existed" for restore purposes
                     self.snapshots[filepath] = FileSnapshot(
                         path=filepath,
                         was_untracked=is_untracked,
                         was_dirty=False,  # It wasn't dirty before agent ran
-                        existed=False,  # A1 FIX: Mark as non-existent pre-Step4
+                        existed=file_existed_pre_step4,
                         content=None,
                     )
                     changed.append(filepath)

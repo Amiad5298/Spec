@@ -177,7 +177,13 @@ def run_spec_driven_workflow(
         if auto_update_docs:
             print_info("Starting Step 4: Update Documentation")
             # Note: This step is non-blocking - failures don't stop the workflow
-            step_4_update_docs(state)
+            step4_result = step_4_update_docs(state)
+            if step4_result.non_doc_reverted:
+                log_message(
+                    f"Step 4 enforcement: reverted {len(step4_result.non_doc_reverted)} non-doc file(s)"
+                )
+            if step4_result.error_message:
+                log_message(f"Step 4 warning: {step4_result.error_message}")
 
         # Workflow complete
         _show_completion(state)

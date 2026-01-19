@@ -5,11 +5,50 @@ commit operations, dirty state handling, and checkpoint commit squashing.
 """
 
 import subprocess
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 from specflow.utils.console import print_error, print_info, print_success, print_warning
 from specflow.utils.logging import log_command
+
+
+@dataclass
+class DiffResult:
+    """Result of a git diff operation.
+
+    Attributes:
+        diff: The diff content (empty string if no changes or error)
+        has_error: True if git command failed
+        error_message: Description of the error if has_error is True
+        changed_files: List of changed file paths (from git diff --name-status)
+        diffstat: Summary of changes (insertions/deletions)
+        untracked_files: List of untracked file paths
+    """
+
+    diff: str = ""
+    has_error: bool = False
+    error_message: str = ""
+    changed_files: list[str] = None  # type: ignore[assignment]
+    diffstat: str = ""
+    untracked_files: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.changed_files is None:
+            self.changed_files = []
+        if self.untracked_files is None:
+            self.untracked_files = []
+
+    @property
+    def has_changes(self) -> bool:
+        """True if there are any changes (diff content, changed files, or untracked)."""
+        return bool(self.diff.strip() or self.changed_files or self.untracked_files)
+
+    @property
+    def is_success(self) -> bool:
+        """True if the diff operation succeeded (even if no changes)."""
+        return not self.has_error
 
 
 class DirtyStateAction(Enum):
@@ -366,63 +405,270 @@ def commit_changes(message: str) -> str:
         return ""
 
 
-def get_diff_from_baseline(base_commit: str) -> str:
+def get_diff_from_baseline(base_commit: str) -> DiffResult:
     """Get the git diff from a baseline commit to the current state.
 
-    This includes committed changes, staged changes, and unstaged changes
-    since the baseline.
+    This includes committed changes, staged changes, unstaged changes,
+    and untracked files since the baseline.
+
+    Uses --no-color and --no-ext-diff for clean, parseable output.
 
     Args:
         base_commit: The baseline commit hash to diff from
 
     Returns:
-        The git diff output as a string, or empty string if no changes or error
+        DiffResult with diff content, changed files list, diffstat, and error status.
+        On error, has_error is True and error_message contains details.
     """
     if not base_commit:
-        return ""
+        return DiffResult(has_error=True, error_message="No base commit provided")
+
+    diff_sections: list[str] = []
+    changed_files: list[str] = []
+    untracked_files: list[str] = []
+    diffstat = ""
 
     try:
-        # Get diff from base commit to HEAD (committed changes)
-        result = subprocess.run(
-            ["git", "diff", base_commit, "HEAD"],
+        # Base git diff flags for clean output
+        base_flags = ["--no-color", "--no-ext-diff"]
+
+        # 1. Get committed changes: git diff <base>..HEAD
+        committed_result = subprocess.run(
+            ["git", "diff", *base_flags, f"{base_commit}..HEAD"],
             capture_output=True,
             text=True,
         )
-        log_command(f"git diff {base_commit} HEAD", result.returncode)
+        log_command(f"git diff {base_commit}..HEAD", committed_result.returncode)
 
-        diff_output = result.stdout
-
-        # Also include any uncommitted changes (staged + unstaged)
-        if is_dirty():
-            # Get staged changes (git diff --cached)
-            staged_result = subprocess.run(
-                ["git", "diff", "--cached"],
-                capture_output=True,
-                text=True,
+        if committed_result.returncode != 0:
+            stderr = committed_result.stderr.strip() if committed_result.stderr else "unknown error"
+            print_warning(f"Failed to compute committed diff: {stderr}")
+            return DiffResult(
+                has_error=True,
+                error_message=f"git diff {base_commit}..HEAD failed: {stderr}",
             )
-            if staged_result.stdout:
-                diff_output += "\n" + staged_result.stdout
 
-            # Get unstaged changes (git diff without args)
-            unstaged_result = subprocess.run(
-                ["git", "diff"],
-                capture_output=True,
-                text=True,
+        if committed_result.stdout.strip():
+            diff_sections.append("=== Committed Changes ===\n" + committed_result.stdout)
+
+        # 2. Get staged changes: git diff --cached
+        staged_result = subprocess.run(
+            ["git", "diff", *base_flags, "--cached"],
+            capture_output=True,
+            text=True,
+        )
+        log_command("git diff --cached", staged_result.returncode)
+
+        if staged_result.returncode != 0:
+            stderr = staged_result.stderr.strip() if staged_result.stderr else "unknown error"
+            print_warning(f"Failed to compute staged diff: {stderr}")
+            return DiffResult(
+                has_error=True,
+                error_message=f"git diff --cached failed: {stderr}",
             )
-            if unstaged_result.stdout:
-                diff_output += "\n" + unstaged_result.stdout
 
-        return diff_output.strip()
+        if staged_result.stdout.strip():
+            diff_sections.append("=== Staged Changes ===\n" + staged_result.stdout)
 
-    except subprocess.CalledProcessError as e:
-        log_command(f"git diff {base_commit}", e.returncode)
-        return ""
+        # 3. Get unstaged changes: git diff
+        unstaged_result = subprocess.run(
+            ["git", "diff", *base_flags],
+            capture_output=True,
+            text=True,
+        )
+        log_command("git diff", unstaged_result.returncode)
+
+        if unstaged_result.returncode != 0:
+            stderr = unstaged_result.stderr.strip() if unstaged_result.stderr else "unknown error"
+            print_warning(f"Failed to compute unstaged diff: {stderr}")
+            return DiffResult(
+                has_error=True,
+                error_message=f"git diff failed: {stderr}",
+            )
+
+        if unstaged_result.stdout.strip():
+            diff_sections.append("=== Unstaged Changes ===\n" + unstaged_result.stdout)
+
+        # 4. Get changed files list: git diff --name-status <base>..HEAD
+        name_status_result = subprocess.run(
+            ["git", "diff", "--name-status", f"{base_commit}..HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        if name_status_result.returncode == 0 and name_status_result.stdout.strip():
+            changed_files = [
+                line.split("\t", 1)[-1]
+                for line in name_status_result.stdout.strip().split("\n")
+                if line.strip()
+            ]
+
+        # 5. Get diffstat summary
+        stat_result = subprocess.run(
+            ["git", "diff", "--stat", f"{base_commit}..HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        if stat_result.returncode == 0 and stat_result.stdout.strip():
+            diffstat = stat_result.stdout.strip()
+
+        # 6. Get untracked files: git ls-files --others --exclude-standard
+        untracked_result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True,
+            text=True,
+        )
+        if untracked_result.returncode == 0 and untracked_result.stdout.strip():
+            untracked_files = [
+                f for f in untracked_result.stdout.strip().split("\n") if f.strip()
+            ]
+
+            # Generate diff-like content for small text untracked files
+            untracked_diff_parts = []
+            for filepath in untracked_files:
+                untracked_diff_parts.append(_generate_untracked_file_diff(filepath))
+
+            if untracked_diff_parts:
+                diff_sections.append(
+                    "=== Untracked Files ===\n" + "\n".join(untracked_diff_parts)
+                )
+
+        diff_output = "\n\n".join(diff_sections).strip()
+
+        return DiffResult(
+            diff=diff_output,
+            has_error=False,
+            changed_files=changed_files,
+            diffstat=diffstat,
+            untracked_files=untracked_files,
+        )
+
     except Exception as e:
         print_warning(f"Failed to get diff from baseline: {e}")
-        return ""
+        return DiffResult(
+            has_error=True,
+            error_message=f"Exception during diff: {e}",
+        )
+
+
+def _generate_untracked_file_diff(
+    filepath: str, max_file_size: int = 50_000
+) -> str:
+    """Generate diff-like output for a single untracked file.
+
+    Args:
+        filepath: Path to the untracked file.
+        max_file_size: Max bytes to include content (default 50KB).
+
+    Returns:
+        Diff-like string for the file.
+    """
+    import os
+
+    try:
+        if not os.path.isfile(filepath):
+            return f"diff --git a/{filepath} b/{filepath}\nnew file (not readable)\n"
+
+        file_size = os.path.getsize(filepath)
+
+        if file_size > max_file_size:
+            return (
+                f"diff --git a/{filepath} b/{filepath}\n"
+                f"new file mode 100644\n"
+                f"[LARGE FILE: {filepath} ({file_size} bytes) - content omitted]\n"
+            )
+
+        # Check if binary by looking for null bytes
+        try:
+            with open(filepath, "rb") as f:
+                sample = f.read(8192)
+            if b"\x00" in sample:
+                return (
+                    f"diff --git a/{filepath} b/{filepath}\n"
+                    f"new file mode 100644\n"
+                    f"[BINARY FILE: {filepath}]\n"
+                )
+        except (OSError, IOError):
+            pass
+
+        # Read and format text file
+        with open(filepath, encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        lines = content.splitlines(keepends=True)
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+
+        diff_lines = [
+            f"diff --git a/{filepath} b/{filepath}\n",
+            "new file mode 100644\n",
+            "--- /dev/null\n",
+            f"+++ b/{filepath}\n",
+            f"@@ -0,0 +1,{len(lines)} @@\n",
+        ]
+        for line in lines:
+            diff_lines.append(f"+{line}")
+
+        return "".join(diff_lines)
+
+    except (OSError, IOError) as e:
+        return (
+            f"diff --git a/{filepath} b/{filepath}\n"
+            f"new file mode 100644\n"
+            f"[ERROR READING FILE: {filepath} - {e}]\n"
+        )
+
+
+def get_changed_files_list(base_commit: str) -> tuple[list[str], str]:
+    """Get list of changed files and name-status output since base commit.
+
+    Args:
+        base_commit: The baseline commit hash
+
+    Returns:
+        Tuple of (file_list, name_status_output) where name_status_output
+        is the raw git diff --name-status output.
+    """
+    if not base_commit:
+        return [], ""
+
+    result = subprocess.run(
+        ["git", "diff", "--name-status", f"{base_commit}..HEAD"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        return [], ""
+
+    output = result.stdout.strip()
+    files = [
+        line.split("\t", 1)[-1]
+        for line in output.split("\n")
+        if line.strip()
+    ]
+    return files, output
+
+
+def get_untracked_files_list() -> list[str]:
+    """Get list of untracked files (excluding ignored).
+
+    Returns:
+        List of untracked file paths.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        return []
+
+    return [f for f in result.stdout.strip().split("\n") if f.strip()]
 
 
 __all__ = [
+    "DiffResult",
     "DirtyStateAction",
     "is_git_repo",
     "is_dirty",
@@ -441,5 +687,7 @@ __all__ = [
     "stash_changes",
     "commit_changes",
     "get_diff_from_baseline",
+    "get_changed_files_list",
+    "get_untracked_files_list",
 ]
 

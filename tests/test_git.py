@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 import subprocess
 
 from specflow.integrations.git import (
+    DiffResult,
     DirtyStateAction,
     is_git_repo,
     is_dirty,
@@ -195,75 +196,147 @@ class TestAddToGitignore:
 
 
 class TestGetDiffFromBaseline:
-    """Tests for get_diff_from_baseline function."""
-
-    @patch("specflow.integrations.git.is_dirty")
-    @patch("specflow.integrations.git.subprocess.run")
-    def test_returns_diff_content(self, mock_run, mock_is_dirty):
-        """Returns diff content from baseline commit."""
-        mock_is_dirty.return_value = False
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="diff --git a/file.py b/file.py\n+new line",
-        )
-
-        result = get_diff_from_baseline("abc123")
-
-        assert "diff --git" in result
-        # Check that the diff command was called with the base commit
-        diff_calls = [c for c in mock_run.call_args_list if "abc123" in str(c)]
-        assert len(diff_calls) == 1
-        call_args = diff_calls[0][0][0]
-        assert "abc123" in call_args
-
-    @patch("specflow.integrations.git.is_dirty")
-    @patch("specflow.integrations.git.subprocess.run")
-    def test_returns_empty_string_on_empty_diff(self, mock_run, mock_is_dirty):
-        """Returns empty string when no changes."""
-        mock_is_dirty.return_value = False
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="",
-        )
-
-        result = get_diff_from_baseline("abc123")
-
-        assert result == ""
+    """Tests for get_diff_from_baseline function (returns DiffResult)."""
 
     @patch("specflow.integrations.git.subprocess.run")
-    def test_returns_empty_string_on_error(self, mock_run):
-        """Returns empty string when git command fails."""
-        mock_run.side_effect = subprocess.CalledProcessError(1, "git")
-
-        result = get_diff_from_baseline("abc123")
-
-        assert result == ""
-
-    @patch("specflow.integrations.git.subprocess.run")
-    def test_returns_empty_string_for_empty_commit(self, mock_run):
-        """Returns empty string when base_commit is empty."""
-        result = get_diff_from_baseline("")
-
-        assert result == ""
-        mock_run.assert_not_called()
-
-    @patch("specflow.integrations.git.is_dirty")
-    @patch("specflow.integrations.git.subprocess.run")
-    def test_includes_staged_changes_when_dirty(self, mock_run, mock_is_dirty):
-        """Includes staged changes when working tree is dirty."""
-        mock_is_dirty.return_value = True
-        # Return different output for each call
+    def test_returns_diff_result_with_content(self, mock_run):
+        """Returns DiffResult with diff content from baseline commit."""
+        # Mock all the subprocess calls that get_diff_from_baseline makes
         mock_run.side_effect = [
-            MagicMock(returncode=0, stdout="committed changes"),  # git diff base HEAD
-            MagicMock(returncode=0, stdout="staged changes"),     # git diff --cached
-            MagicMock(returncode=0, stdout="unstaged changes"),   # git diff
+            # 1. git diff --no-color --no-ext-diff base..HEAD (committed)
+            MagicMock(returncode=0, stdout="diff --git a/file.py b/file.py\n+new line", stderr=""),
+            # 2. git diff --no-color --no-ext-diff --cached (staged)
+            MagicMock(returncode=0, stdout="", stderr=""),
+            # 3. git diff --no-color --no-ext-diff (unstaged)
+            MagicMock(returncode=0, stdout="", stderr=""),
+            # 4. git diff --name-status base..HEAD
+            MagicMock(returncode=0, stdout="M\tfile.py", stderr=""),
+            # 5. git diff --stat base..HEAD
+            MagicMock(returncode=0, stdout=" file.py | 1 +\n 1 file changed, 1 insertion(+)", stderr=""),
+            # 6. git ls-files --others --exclude-standard
+            MagicMock(returncode=0, stdout="", stderr=""),
         ]
 
         result = get_diff_from_baseline("abc123")
 
-        assert "committed changes" in result
-        assert "staged changes" in result
-        assert "unstaged changes" in result
-        # Should have 3 subprocess calls
-        assert mock_run.call_count == 3
+        assert result.is_success
+        assert not result.has_error
+        assert "diff --git" in result.diff
+        assert result.has_changes
+        assert "file.py" in result.changed_files
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_returns_no_changes_on_empty_diff(self, mock_run):
+        """Returns DiffResult with has_changes=False when no changes."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),  # committed
+            MagicMock(returncode=0, stdout="", stderr=""),  # staged
+            MagicMock(returncode=0, stdout="", stderr=""),  # unstaged
+            MagicMock(returncode=0, stdout="", stderr=""),  # name-status
+            MagicMock(returncode=0, stdout="", stderr=""),  # stat
+            MagicMock(returncode=0, stdout="", stderr=""),  # untracked
+        ]
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result.is_success
+        assert not result.has_changes
+        assert result.diff == ""
+
+    @patch("specflow.integrations.git.print_warning")
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_returns_error_on_git_failure(self, mock_run, mock_warning):
+        """Returns DiffResult with has_error=True when git command fails."""
+        # First call fails with non-zero returncode
+        mock_run.return_value = MagicMock(
+            returncode=128, stdout="", stderr="fatal: bad revision 'abc123'"
+        )
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result.has_error
+        assert not result.is_success
+        assert "failed" in result.error_message.lower()
+        mock_warning.assert_called()
+
+    def test_returns_error_for_empty_commit(self):
+        """Returns DiffResult with has_error=True when base_commit is empty."""
+        result = get_diff_from_baseline("")
+
+        assert result.has_error
+        assert "No base commit provided" in result.error_message
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_includes_all_change_types(self, mock_run):
+        """Includes committed, staged, unstaged changes with section headers."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="committed changes", stderr=""),
+            MagicMock(returncode=0, stdout="staged changes", stderr=""),
+            MagicMock(returncode=0, stdout="unstaged changes", stderr=""),
+            MagicMock(returncode=0, stdout="M\tfile.py", stderr=""),
+            MagicMock(returncode=0, stdout=" file.py | 1 +", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result.is_success
+        assert "Committed Changes" in result.diff
+        assert "Staged Changes" in result.diff
+        assert "Unstaged Changes" in result.diff
+        assert "committed changes" in result.diff
+        assert "staged changes" in result.diff
+        assert "unstaged changes" in result.diff
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_includes_untracked_files(self, mock_run):
+        """Includes untracked files in diff output."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),  # committed
+            MagicMock(returncode=0, stdout="", stderr=""),  # staged
+            MagicMock(returncode=0, stdout="", stderr=""),  # unstaged
+            MagicMock(returncode=0, stdout="", stderr=""),  # name-status
+            MagicMock(returncode=0, stdout="", stderr=""),  # stat
+            MagicMock(returncode=0, stdout="new_file.txt", stderr=""),  # untracked
+        ]
+
+        # We need to mock _generate_untracked_file_diff or create the file
+        with patch("specflow.integrations.git._generate_untracked_file_diff") as mock_gen:
+            mock_gen.return_value = "diff --git a/new_file.txt\n+content"
+
+            result = get_diff_from_baseline("abc123")
+
+            assert result.is_success
+            assert "new_file.txt" in result.untracked_files
+            assert result.has_changes  # Untracked files count as changes
+
+    @patch("specflow.integrations.git.print_warning")
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_handles_exception_gracefully(self, mock_run, mock_warning):
+        """Returns DiffResult with error on unexpected exception."""
+        mock_run.side_effect = Exception("Unexpected error")
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result.has_error
+        assert "Exception" in result.error_message
+        mock_warning.assert_called()
+
+    @patch("specflow.integrations.git.subprocess.run")
+    def test_populates_diffstat(self, mock_run):
+        """Populates diffstat summary in result."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="diff content", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="M\tfile.py", stderr=""),
+            MagicMock(returncode=0, stdout=" file.py | 10 +++++++---\n 1 file changed, 7 insertions(+), 3 deletions(-)", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = get_diff_from_baseline("abc123")
+
+        assert result.is_success
+        assert "7 insertions" in result.diffstat
+        assert "3 deletions" in result.diffstat
 

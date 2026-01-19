@@ -158,6 +158,20 @@ class TestTicketNotFoundError:
         assert "{" not in error.ticket_id
         assert "}" not in error.ticket_id
 
+    def test_ticket_id_is_keyword_only(self):
+        """ticket_id must be passed as keyword argument.
+
+        This prevents misuse like:
+            raise TicketNotFoundError("Some error message")  # Wrong!
+        """
+        # Positional usage should raise TypeError
+        with pytest.raises(TypeError, match="positional"):
+            TicketNotFoundError("PROJ-123")  # type: ignore[misc]
+
+        # Keyword usage should work
+        error = TicketNotFoundError(ticket_id="PROJ-123")
+        assert error.ticket_id == "PROJ-123"
+
 
 class TestRateLimitError:
     """Tests for RateLimitError exception."""

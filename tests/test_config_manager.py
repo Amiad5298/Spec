@@ -920,3 +920,276 @@ class TestConfigManagerSavePrecedence:
         expected_path = project / ".specflow"
         assert manager.local_config_path == expected_path
         assert manager.local_config_path.exists()
+
+
+class TestConfigManagerSensitiveValueMasking:
+    """Tests for sensitive value masking in logs."""
+
+    def test_is_sensitive_key_detects_token(self):
+        """Keys containing TOKEN are detected as sensitive."""
+        assert ConfigManager._is_sensitive_key("JIRA_TOKEN") is True
+        assert ConfigManager._is_sensitive_key("jira_token") is True
+        assert ConfigManager._is_sensitive_key("MY_API_TOKEN") is True
+
+    def test_is_sensitive_key_detects_key(self):
+        """Keys containing KEY are detected as sensitive."""
+        assert ConfigManager._is_sensitive_key("API_KEY") is True
+        assert ConfigManager._is_sensitive_key("api_key") is True
+        assert ConfigManager._is_sensitive_key("ENCRYPTION_KEY") is True
+
+    def test_is_sensitive_key_detects_secret(self):
+        """Keys containing SECRET are detected as sensitive."""
+        assert ConfigManager._is_sensitive_key("CLIENT_SECRET") is True
+        assert ConfigManager._is_sensitive_key("secret_value") is True
+
+    def test_is_sensitive_key_detects_password(self):
+        """Keys containing PASSWORD are detected as sensitive."""
+        assert ConfigManager._is_sensitive_key("DB_PASSWORD") is True
+        assert ConfigManager._is_sensitive_key("password") is True
+
+    def test_is_sensitive_key_detects_pat(self):
+        """Keys containing PAT are detected as sensitive."""
+        assert ConfigManager._is_sensitive_key("GITHUB_PAT") is True
+        assert ConfigManager._is_sensitive_key("pat_token") is True
+
+    def test_is_sensitive_key_non_sensitive(self):
+        """Non-sensitive keys are not flagged."""
+        assert ConfigManager._is_sensitive_key("DEFAULT_MODEL") is False
+        assert ConfigManager._is_sensitive_key("AUTO_OPEN_FILES") is False
+        assert ConfigManager._is_sensitive_key("JIRA_PROJECT") is False
+
+    def test_save_does_not_log_sensitive_values(self, tmp_path, monkeypatch, caplog):
+        """Sensitive values are not logged in plaintext."""
+        import logging
+
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        # Enable logging
+        monkeypatch.setenv("SPECFLOW_LOG", "true")
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Capture logs
+        with caplog.at_level(logging.DEBUG):
+            manager.save("API_TOKEN", "super-secret-value-12345", scope="global")
+
+        # Assert: secret value is not in logs
+        log_text = caplog.text
+        assert "super-secret-value-12345" not in log_text
+        assert "REDACTED" in log_text or "API_TOKEN" in log_text
+
+
+class TestConfigManagerQuoteEscaping:
+    """Tests for quote and special character escaping in config values."""
+
+    def test_escape_value_for_storage_handles_quotes(self):
+        """Double quotes are escaped for storage."""
+        result = ConfigManager._escape_value_for_storage('value with "quotes"')
+        assert result == 'value with \\"quotes\\"'
+
+    def test_escape_value_for_storage_handles_backslashes(self):
+        """Backslashes are escaped for storage."""
+        result = ConfigManager._escape_value_for_storage("path\\to\\file")
+        assert result == "path\\\\to\\\\file"
+
+    def test_escape_value_for_storage_handles_both(self):
+        """Both quotes and backslashes are escaped correctly."""
+        result = ConfigManager._escape_value_for_storage('say \\"hello\\"')
+        assert result == 'say \\\\\\"hello\\\\\\"'
+
+    def test_unescape_value_reverses_quotes(self):
+        """Escaped quotes are unescaped correctly."""
+        result = ConfigManager._unescape_value('value with \\"quotes\\"')
+        assert result == 'value with "quotes"'
+
+    def test_unescape_value_reverses_backslashes(self):
+        """Escaped backslashes are unescaped correctly."""
+        result = ConfigManager._unescape_value("path\\\\to\\\\file")
+        assert result == "path\\to\\file"
+
+    def test_round_trip_with_quotes(self, tmp_path, monkeypatch):
+        """Values with quotes survive save/load round-trip."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Save value with quotes
+        original_value = 'model with "special" name'
+        manager.save("TEST_VALUE", original_value, scope="global")
+
+        # Create new manager and load
+        manager2 = ConfigManager(global_config)
+        manager2.load()
+
+        # Assert: value is preserved
+        assert manager2.get("TEST_VALUE") == original_value
+
+    def test_round_trip_with_backslashes(self, tmp_path, monkeypatch):
+        """Values with backslashes survive save/load round-trip."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Save value with backslashes
+        original_value = "C:\\Users\\test\\path"
+        manager.save("TEST_PATH", original_value, scope="global")
+
+        # Create new manager and load
+        manager2 = ConfigManager(global_config)
+        manager2.load()
+
+        # Assert: value is preserved
+        assert manager2.get("TEST_PATH") == original_value
+
+    def test_round_trip_with_special_characters(self, tmp_path, monkeypatch):
+        """Values with various special characters survive save/load round-trip."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Save value with multiple special characters
+        original_value = 'path\\to\\"file" with spaces & symbols!'
+        manager.save("COMPLEX_VALUE", original_value, scope="global")
+
+        # Create new manager and load
+        manager2 = ConfigManager(global_config)
+        manager2.load()
+
+        # Assert: value is preserved
+        assert manager2.get("COMPLEX_VALUE") == original_value
+
+    def test_single_quoted_values_not_unescaped(self, tmp_path, monkeypatch):
+        """Single-quoted values in config file are not unescaped (literal treatment)."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+
+        # Manually write a config file with single-quoted value containing backslashes
+        # In bash single quotes, \\ is literal (not an escape sequence)
+        global_config.write_text("SINGLE_QUOTED='path\\\\with\\\\backslashes'\n")
+
+        # Load the config
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Assert: backslashes are preserved literally (not unescaped)
+        assert manager.get("SINGLE_QUOTED") == "path\\\\with\\\\backslashes"
+
+    def test_double_quoted_values_are_unescaped(self, tmp_path, monkeypatch):
+        """Double-quoted values in config file are properly unescaped."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+
+        # Manually write a config file with double-quoted escaped value
+        # This represents a value that was escaped on save
+        global_config.write_text('DOUBLE_QUOTED="path\\\\with\\\\backslashes"\n')
+
+        # Load the config
+        manager = ConfigManager(global_config)
+        manager.load()
+
+        # Assert: backslashes are unescaped (double backslash -> single)
+        assert manager.get("DOUBLE_QUOTED") == "path\\with\\backslashes"
+
+
+class TestConfigManagerRepoRootDetection:
+    """Tests for local config creation at repository root."""
+
+    def test_save_local_creates_at_repo_root_from_nested_dir(self, tmp_path, monkeypatch):
+        """Local config is created at repo root when saving from nested directory."""
+        # Setup: repo with nested directory structure
+        repo_root = tmp_path / "my-repo"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+        nested_dir = repo_root / "src" / "deep" / "nested"
+        nested_dir.mkdir(parents=True)
+
+        # Change to nested directory
+        monkeypatch.chdir(nested_dir)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Act: save to local scope
+        manager.save("PROJECT_SETTING", "value", scope="local")
+
+        # Assert: config created at repo root, not in nested dir
+        expected_path = repo_root / ".specflow"
+        assert expected_path.exists()
+        assert not (nested_dir / ".specflow").exists()
+        assert manager.local_config_path == expected_path
+
+    def test_save_local_falls_back_to_cwd_without_git(self, tmp_path, monkeypatch):
+        """Local config is created in cwd when no .git directory exists."""
+        # Setup: directory without .git
+        project = tmp_path / "no-git-project"
+        project.mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Act: save to local scope
+        manager.save("SETTING", "value", scope="local")
+
+        # Assert: config created in cwd
+        expected_path = project / ".specflow"
+        assert expected_path.exists()
+        assert manager.local_config_path == expected_path
+
+    def test_find_repo_root_returns_correct_path(self, tmp_path, monkeypatch):
+        """_find_repo_root correctly identifies repository root."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+        nested = repo_root / "a" / "b" / "c"
+        nested.mkdir(parents=True)
+
+        monkeypatch.chdir(nested)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Act
+        result = manager._find_repo_root()
+
+        # Assert
+        assert result == repo_root
+
+    def test_find_repo_root_returns_none_without_git(self, tmp_path, monkeypatch):
+        """_find_repo_root returns None when no .git directory exists."""
+        project = tmp_path / "no-git"
+        project.mkdir()
+        monkeypatch.chdir(project)
+
+        global_config = tmp_path / ".specflow-config"
+        manager = ConfigManager(global_config)
+
+        # Act
+        result = manager._find_repo_root()
+
+        # Assert
+        assert result is None

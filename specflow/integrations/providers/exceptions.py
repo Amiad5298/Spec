@@ -59,10 +59,16 @@ class TicketNotFoundError(IssueTrackerError):
     - The ticket ID does not exist
     - The user lacks permission to view the ticket
     - The ticket has been deleted
+
+    Note: ticket_id is keyword-only to prevent misuse like:
+        raise TicketNotFoundError("Some error message")  # Wrong!
+    Instead, use:
+        raise TicketNotFoundError(ticket_id="PROJ-123")  # Correct
     """
 
     def __init__(
         self,
+        *,  # All following parameters are keyword-only
         ticket_id: str,
         message: Optional[str] = None,
         platform: Optional[str] = None,
@@ -70,7 +76,7 @@ class TicketNotFoundError(IssueTrackerError):
         """Initialize the ticket not found error.
 
         Args:
-            ticket_id: The ticket ID that was not found
+            ticket_id: The ticket ID that was not found (keyword-only)
             message: Optional custom message
             platform: Optional platform name for context
         """

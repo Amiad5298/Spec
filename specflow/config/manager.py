@@ -22,6 +22,10 @@ from specflow.config.settings import CONFIG_FILE, Settings
 from specflow.utils.logging import log_message
 
 
+# Keys containing these substrings are considered sensitive and should not be logged
+SENSITIVE_KEY_PATTERNS = ("TOKEN", "KEY", "SECRET", "PASSWORD", "PAT")
+
+
 class ConfigManager:
     """Manages configuration loading and saving with cascading hierarchy.
 
@@ -137,6 +141,28 @@ class ConfigManager:
 
         return None
 
+    def _find_repo_root(self) -> Optional[Path]:
+        """Find the repository root by looking for .git directory.
+
+        Traverses from current working directory upward until:
+        - A .git directory is found (returns that directory)
+        - The filesystem root is reached (returns None)
+
+        Returns:
+            Path to repository root, or None if not in a repository
+        """
+        current = Path.cwd()
+        while True:
+            if (current / ".git").exists():
+                return current
+
+            parent = current.parent
+            if parent == current:  # Reached filesystem root
+                break
+            current = parent
+
+        return None
+
     def _load_file(self, path: Path, source: str = "file") -> None:
         """Load key=value pairs from a config file.
 
@@ -159,9 +185,13 @@ class ConfigManager:
                     key, value = match.groups()
 
                     # Remove surrounding quotes
-                    if (value.startswith('"') and value.endswith('"')) or (
-                        value.startswith("'") and value.endswith("'")
-                    ):
+                    # Only unescape for double-quoted values (single quotes are literal)
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                        # Unescape escaped characters for double-quoted strings
+                        value = self._unescape_value(value)
+                    elif value.startswith("'") and value.endswith("'"):
+                        # Single quotes: no escaping, just remove quotes
                         value = value[1:-1]
 
                     self._raw_values[key] = value
@@ -224,15 +254,19 @@ class ConfigManager:
         state always reflects the *effective* value after applying the full
         precedence hierarchy (env > local > global > defaults).
 
-        Security: Validates key name, uses atomic file replacement.
+        Security: Validates key name, uses atomic file replacement, masks
+        sensitive values in logs.
 
         Behavior notes:
             - If scope="local" and no local config exists, creates a .specflow
-              file in the current working directory.
+              file at the repository root (detected via .git directory).
+              Falls back to the current working directory if no .git is found.
             - After saving, load() is called internally to recompute effective
               values, ensuring manager.settings reflects correct precedence.
             - The value written to the file may not be the effective value if
               a higher-priority source overrides it (env var or local config).
+            - Values containing special characters (quotes, backslashes) are
+              properly escaped for safe round-trip through save/load.
 
         Args:
             key: Configuration key (must match pattern: [a-zA-Z_][a-zA-Z0-9_]*)
@@ -261,8 +295,12 @@ class ConfigManager:
         # Determine target file
         if scope == "local":
             if self.local_config_path is None:
-                # Create local config in current directory
-                self.local_config_path = Path.cwd() / self.LOCAL_CONFIG_NAME
+                # Try to find repo root first, fall back to cwd
+                repo_root = self._find_repo_root()
+                if repo_root:
+                    self.local_config_path = repo_root / self.LOCAL_CONFIG_NAME
+                else:
+                    self.local_config_path = Path.cwd() / self.LOCAL_CONFIG_NAME
             target_path = self.local_config_path
         else:
             target_path = self.global_config_path
@@ -277,6 +315,9 @@ class ConfigManager:
         written_keys: set[str] = set()
         key_pattern = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)=")
 
+        # Escape value for safe storage (handle quotes and backslashes)
+        escaped_value = self._escape_value_for_storage(value)
+
         for line in existing_lines:
             # Preserve comments and empty lines
             if not line.strip() or line.strip().startswith("#"):
@@ -288,7 +329,7 @@ class ConfigManager:
                 existing_key = match.group(1)
                 if existing_key == key:
                     # Write updated value for the key we're saving
-                    new_lines.append(f'{key}="{value}"')
+                    new_lines.append(f'{key}="{escaped_value}"')
                     written_keys.add(key)
                 else:
                     # Preserve other keys
@@ -299,11 +340,13 @@ class ConfigManager:
 
         # Add new key if not already in file
         if key not in written_keys:
-            new_lines.append(f'{key}="{value}"')
+            new_lines.append(f'{key}="{escaped_value}"')
 
         # Atomic write using temp file
         self._atomic_write_to_path(new_lines, target_path)
-        log_message(f"Configuration saved to {scope}: {key}={value}")
+
+        # Log without exposing sensitive values
+        self._log_config_save(key, scope)
 
         # Build override warning BEFORE reload (need to check current state)
         warning = self._check_override_warning(key, value, scope, warn_on_override)
@@ -381,9 +424,13 @@ class ConfigManager:
                 match = pattern.match(line)
                 if match:
                     key, value = match.groups()
-                    if (value.startswith('"') and value.endswith('"')) or (
-                        value.startswith("'") and value.endswith("'")
-                    ):
+                    # Only unescape for double-quoted values (single quotes are literal)
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                        # Unescape escaped characters for double-quoted strings
+                        value = self._unescape_value(value)
+                    elif value.startswith("'") and value.endswith("'"):
+                        # Single quotes: no escaping, just remove quotes
                         value = value[1:-1]
                     values[key] = value
         return values
@@ -421,6 +468,72 @@ class ConfigManager:
             except OSError:
                 pass
             raise
+
+    @staticmethod
+    def _escape_value_for_storage(value: str) -> str:
+        """Escape a value for safe storage in config file.
+
+        Handles:
+        - Backslashes (escape with another backslash)
+        - Double quotes (escape with backslash)
+
+        Args:
+            value: The raw value to escape
+
+        Returns:
+            Escaped value safe for storage in double-quoted format
+        """
+        # Escape backslashes first, then quotes
+        result = value.replace("\\", "\\\\")
+        result = result.replace('"', '\\"')
+        return result
+
+    @staticmethod
+    def _unescape_value(value: str) -> str:
+        """Unescape a value read from config file.
+
+        Reverses the escaping done by _escape_value_for_storage.
+
+        Args:
+            value: The escaped value from the config file
+
+        Returns:
+            Original unescaped value
+        """
+        # Unescape backslashes first, then quotes
+        # (reverse order of escaping to handle \\\" correctly)
+        result = value.replace("\\\\", "\\")
+        result = result.replace('\\"', '"')
+        return result
+
+    @staticmethod
+    def _is_sensitive_key(key: str) -> bool:
+        """Check if a configuration key contains sensitive data.
+
+        Args:
+            key: The configuration key name
+
+        Returns:
+            True if the key is considered sensitive
+        """
+        key_upper = key.upper()
+        return any(pattern in key_upper for pattern in SENSITIVE_KEY_PATTERNS)
+
+    def _log_config_save(self, key: str, scope: str) -> None:
+        """Log a configuration save without exposing sensitive values.
+
+        For sensitive keys (containing TOKEN, KEY, SECRET, PASSWORD, PAT),
+        the value is not logged. For other keys, only the key and scope
+        are logged.
+
+        Args:
+            key: The configuration key that was saved
+            scope: The scope (global or local) where it was saved
+        """
+        if self._is_sensitive_key(key):
+            log_message(f"Configuration saved to {scope}: {key}=<REDACTED>")
+        else:
+            log_message(f"Configuration saved to {scope}: {key}")
 
     def get(self, key: str, default: str = "") -> str:
         """Get a configuration value.

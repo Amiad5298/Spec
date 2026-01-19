@@ -1,21 +1,35 @@
 """Configuration manager for SPEC.
 
 This module provides the ConfigManager class for loading, saving, and
-managing configuration values, matching the original Bash script's
-configuration handling with security improvements.
+managing configuration values with a cascading hierarchy:
+
+    1. Environment Variables (highest priority)
+    2. Local Config (.specflow in project/parent directories)
+    3. Global Config (~/.specflow-config)
+    4. Built-in Defaults (lowest priority)
+
+This enables developers working on multiple projects with different
+trackers to have project-specific settings while maintaining global defaults.
 """
 
 import os
 import re
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from specflow.config.settings import CONFIG_FILE, Settings
 from specflow.utils.logging import log_message
 
 
 class ConfigManager:
-    """Manages configuration loading and saving.
+    """Manages configuration loading and saving with cascading hierarchy.
+
+    Configuration Precedence (highest to lowest):
+    1. Environment Variables - CI/CD, temporary overrides
+    2. Local Config (.specflow) - Project-specific settings
+    3. Global Config (~/.specflow-config) - User defaults
+    4. Built-in Defaults - Fallback values
 
     Security features:
     - Safe line-by-line parsing (no eval/exec)
@@ -24,23 +38,48 @@ class ConfigManager:
     - Secure file permissions (600)
 
     Attributes:
-        config_path: Path to the configuration file
         settings: Current settings instance
-        _raw_values: Raw key-value pairs from file
+        _raw_values: Merged raw key-value pairs from all sources
+        _local_config_path: Path to discovered local .specflow file
+        _global_config_path: Path to global ~/.specflow-config file
     """
+
+    LOCAL_CONFIG_NAME = ".specflow"
+    GLOBAL_CONFIG_NAME = ".specflow-config"
 
     def __init__(self, config_path: Path | None = None) -> None:
         """Initialize the configuration manager.
 
         Args:
-            config_path: Optional custom path to config file
+            config_path: Optional custom path to override global config file.
+                         If provided, only this file is used (legacy behavior).
         """
-        self.config_path = config_path or CONFIG_FILE
+        self._legacy_mode = config_path is not None
+        self._global_config_path = config_path or CONFIG_FILE
+        self._local_config_path: Optional[Path] = None
         self.settings = Settings()
         self._raw_values: dict[str, str] = {}
+        # Track source of each config value for debugging
+        self._config_sources: dict[str, str] = {}
+
+    @property
+    def config_path(self) -> Path:
+        """Return the primary config path (for backward compatibility)."""
+        return self._global_config_path
+
+    @config_path.setter
+    def config_path(self, value: Path) -> None:
+        """Set the global config path."""
+        self._global_config_path = value
 
     def load(self) -> Settings:
-        """Load configuration from file.
+        """Load configuration from all sources with cascading precedence.
+
+        Loading order (later sources override earlier ones):
+        1. Built-in defaults (from Settings dataclass)
+        2. Global config (~/.specflow-config)
+        3. Local config (.specflow in project/parent directories)
+        4. Environment variables (highest priority)
 
         Security: Uses safe line-by-line parsing instead of eval/exec.
         Only reads KEY=VALUE or KEY="VALUE" pairs.
@@ -49,17 +88,75 @@ class ConfigManager:
             Settings instance with loaded values
         """
         self._raw_values = {}
+        self._config_sources = {}
 
-        if not self.config_path.exists():
-            log_message(f"No configuration file found at {self.config_path}")
-            return self.settings
+        # Step 1: Start with built-in defaults (from Settings dataclass)
+        # The Settings dataclass already has defaults, nothing to do here
 
-        log_message(f"Loading configuration from {self.config_path}")
+        # Step 2: Load global config (~/.specflow-config) - lowest file-based priority
+        if self._global_config_path.exists():
+            log_message(f"Loading global configuration from {self._global_config_path}")
+            self._load_file(self._global_config_path, source="global")
+        else:
+            log_message(f"No global configuration file found at {self._global_config_path}")
 
-        # Pattern for KEY=VALUE or KEY="VALUE" or KEY='VALUE'
+        # Step 3: Load local config (.specflow) - higher priority, unless in legacy mode
+        if not self._legacy_mode:
+            local_path = self._find_local_config()
+            if local_path:
+                self._local_config_path = local_path
+                log_message(f"Loading local configuration from {local_path}")
+                self._load_file(local_path, source=f"local ({local_path})")
+
+        # Step 4: Environment variables override everything
+        self._load_environment()
+
+        # Apply all values to settings
+        for key, value in self._raw_values.items():
+            self._apply_value_to_settings(key, value)
+
+        log_message(f"Configuration loaded successfully ({len(self._raw_values)} keys)")
+        return self.settings
+
+    def _find_local_config(self) -> Optional[Path]:
+        """Find local .specflow config by traversing up from CWD.
+
+        Starts from current working directory and traverses parent
+        directories until:
+        - A .specflow file is found
+        - A .git directory is found (repository root)
+        - The filesystem root is reached
+
+        Returns:
+            Path to local config file, or None if not found
+        """
+        current = Path.cwd()
+        while True:
+            config_path = current / self.LOCAL_CONFIG_NAME
+            if config_path.exists():
+                return config_path
+
+            # Stop at repository root
+            if (current / ".git").exists():
+                break
+
+            parent = current.parent
+            if parent == current:  # Reached filesystem root
+                break
+            current = parent
+
+        return None
+
+    def _load_file(self, path: Path, source: str = "file") -> None:
+        """Load key=value pairs from a config file.
+
+        Args:
+            path: Path to the config file
+            source: Source identifier for debugging
+        """
         pattern = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$")
 
-        with self.config_path.open() as f:
+        with path.open() as f:
             for line in f:
                 line = line.strip()
 
@@ -78,10 +175,20 @@ class ConfigManager:
                         value = value[1:-1]
 
                     self._raw_values[key] = value
-                    self._apply_value_to_settings(key, value)
+                    self._config_sources[key] = source
 
-        log_message(f"Configuration loaded successfully ({len(self._raw_values)} keys)")
-        return self.settings
+    def _load_environment(self) -> None:
+        """Override config with environment variables.
+
+        Only loads environment variables for known config keys
+        to avoid polluting the configuration with unrelated env vars.
+        """
+        known_keys = Settings.get_config_keys()
+        for key in known_keys:
+            env_value = os.environ.get(key)
+            if env_value is not None:
+                self._raw_values[key] = env_value
+                self._config_sources[key] = "environment"
 
     def _apply_value_to_settings(self, key: str, value: str) -> None:
         """Apply a raw config value to the settings object.
@@ -214,18 +321,40 @@ class ConfigManager:
         """
         return self._raw_values.get(key, default)
 
+    def get_config_source(self, key: str) -> str:
+        """Return the source of a configuration value (for debugging).
+
+        Args:
+            key: Configuration key
+
+        Returns:
+            Source identifier: "environment", "local (/path)", "global (/path)",
+            or "default" if the value comes from built-in defaults.
+        """
+        if key in self._config_sources:
+            return self._config_sources[key]
+        return "default"
+
+    def get_local_config_path(self) -> Optional[Path]:
+        """Return the discovered local config path, if any."""
+        return self._local_config_path
+
+    def get_global_config_path(self) -> Path:
+        """Return the global config path."""
+        return self._global_config_path
+
     def show(self) -> None:
         """Display current configuration using Rich formatting."""
         from specflow.utils.console import console, print_header, print_info
 
         print_header("Current Configuration")
 
-        if not self.config_path.exists():
-            print_info(f"No configuration file found at: {self.config_path}")
-            print_info("Configuration will be created when you save settings.")
-            return
-
-        print_info(f"Configuration file: {self.config_path}")
+        # Show config file locations
+        print_info(f"Global config: {self._global_config_path}")
+        if self._local_config_path:
+            print_info(f"Local config:  {self._local_config_path}")
+        else:
+            print_info("Local config:  (not found)")
         console.print()
 
         s = self.settings

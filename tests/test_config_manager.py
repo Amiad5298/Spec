@@ -1,4 +1,15 @@
-"""Tests for spec.config.manager module."""
+"""Tests for spec.config.manager module.
+
+Tests cover:
+- ConfigManager.load method with legacy and cascading hierarchy
+- ConfigManager.save method with validation and atomic writes
+- ConfigManager.get method
+- ConfigManager.show method
+- Cascading hierarchy: environment > local > global > defaults
+- Local config discovery (_find_local_config)
+- Environment variable loading (_load_environment)
+- Config source tracking (get_config_source)
+"""
 
 import os
 import pytest
@@ -272,3 +283,320 @@ class TestConfigManagerShow:
         # Should print multiple setting lines
         assert mock_console.print.call_count >= 5
 
+
+class TestCascadingConfigHierarchy:
+    """Tests for cascading configuration hierarchy."""
+
+    def test_global_config_loaded(self, tmp_path, monkeypatch):
+        """Global config values are loaded."""
+        # Create global config
+        global_config = tmp_path / ".specflow-config"
+        global_config.write_text('DEFAULT_MODEL="global-model"\n')
+
+        manager = ConfigManager(global_config)
+        settings = manager.load()
+
+        assert settings.default_model == "global-model"
+
+    def test_local_overrides_global(self, tmp_path, monkeypatch):
+        """Local config overrides global config."""
+        # Create global config
+        global_config = tmp_path / ".specflow-config"
+        global_config.write_text('DEFAULT_MODEL="global-model"\n')
+
+        # Create local config in a subdirectory
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text('DEFAULT_MODEL="local-model"\n')
+
+        # Create fake .git to mark repo root
+        (project_dir / ".git").mkdir()
+
+        # Change to project directory
+        monkeypatch.chdir(project_dir)
+
+        # Create manager without explicit path (uses cascading)
+        manager = ConfigManager()
+        manager._global_config_path = global_config
+        settings = manager.load()
+
+        assert settings.default_model == "local-model"
+
+    def test_environment_overrides_all(self, tmp_path, monkeypatch):
+        """Environment variables override local and global config."""
+        # Create global config
+        global_config = tmp_path / ".specflow-config"
+        global_config.write_text('DEFAULT_MODEL="global-model"\n')
+
+        # Create local config
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text('DEFAULT_MODEL="local-model"\n')
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(project_dir)
+
+        # Set environment variable
+        monkeypatch.setenv("DEFAULT_MODEL", "env-model")
+
+        manager = ConfigManager()
+        manager._global_config_path = global_config
+        settings = manager.load()
+
+        assert settings.default_model == "env-model"
+
+    def test_multiple_keys_from_different_sources(self, tmp_path, monkeypatch):
+        """Different keys can come from different sources."""
+        # Global has multiple keys
+        global_config = tmp_path / ".specflow-config"
+        global_config.write_text('''DEFAULT_MODEL="global-model"
+PLANNING_MODEL="global-planning"
+DEFAULT_JIRA_PROJECT="GLOBAL"
+''')
+
+        # Local overrides one key
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text('DEFAULT_JIRA_PROJECT="LOCAL"\n')
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(project_dir)
+
+        # Environment overrides another
+        monkeypatch.setenv("PLANNING_MODEL", "env-planning")
+
+        manager = ConfigManager()
+        manager._global_config_path = global_config
+        settings = manager.load()
+
+        assert settings.default_model == "global-model"  # from global
+        assert settings.planning_model == "env-planning"  # from env
+        assert settings.default_jira_project == "LOCAL"  # from local
+
+    def test_legacy_mode_ignores_local_config(self, tmp_path, monkeypatch):
+        """Providing explicit config_path disables local config discovery."""
+        # Create global config
+        global_config = tmp_path / "custom-config"
+        global_config.write_text('DEFAULT_MODEL="custom-model"\n')
+
+        # Create local config that should be ignored
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text('DEFAULT_MODEL="local-model"\n')
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(project_dir)
+
+        # Use explicit path (legacy mode)
+        manager = ConfigManager(global_config)
+        settings = manager.load()
+
+        assert settings.default_model == "custom-model"
+        assert manager._legacy_mode is True
+
+
+class TestFindLocalConfig:
+    """Tests for _find_local_config method."""
+
+    def test_finds_config_in_cwd(self, tmp_path, monkeypatch):
+        """Finds .specflow in current directory."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text("TEST_KEY=value\n")
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(project_dir)
+
+        manager = ConfigManager()
+        found = manager._find_local_config()
+
+        assert found == local_config
+
+    def test_finds_config_in_parent(self, tmp_path, monkeypatch):
+        """Finds .specflow in parent directory."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        sub_dir = project_dir / "src" / "module"
+        sub_dir.mkdir(parents=True)
+        local_config = project_dir / ".specflow"
+        local_config.write_text("TEST_KEY=value\n")
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(sub_dir)
+
+        manager = ConfigManager()
+        found = manager._find_local_config()
+
+        assert found == local_config
+
+    def test_stops_at_git_root(self, tmp_path, monkeypatch):
+        """Stops traversing at .git directory."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        project = workspace / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+
+        # Config above .git should not be found
+        (workspace / ".specflow").write_text("TEST_KEY=value\n")
+        monkeypatch.chdir(project)
+
+        manager = ConfigManager()
+        found = manager._find_local_config()
+
+        assert found is None
+
+    def test_returns_none_if_not_found(self, tmp_path, monkeypatch):
+        """Returns None when no .specflow exists."""
+        project = tmp_path / "empty-project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+
+        manager = ConfigManager()
+        found = manager._find_local_config()
+
+        assert found is None
+
+
+class TestLoadEnvironment:
+    """Tests for _load_environment method."""
+
+    def test_loads_known_keys_only(self, tmp_path, monkeypatch):
+        """Only loads environment variables for known config keys."""
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+        monkeypatch.setenv("DEFAULT_MODEL", "env-model")
+        monkeypatch.setenv("UNKNOWN_RANDOM_VAR", "should-be-ignored")
+
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager._raw_values.get("DEFAULT_MODEL") == "env-model"
+        assert "UNKNOWN_RANDOM_VAR" not in manager._raw_values
+
+    def test_environment_sets_config_source(self, tmp_path, monkeypatch):
+        """Environment variables are tracked as 'environment' source."""
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+        monkeypatch.setenv("PLANNING_MODEL", "env-planning")
+
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager.get_config_source("PLANNING_MODEL") == "environment"
+
+    def test_empty_env_values_are_loaded(self, tmp_path, monkeypatch):
+        """Empty environment values are still loaded."""
+        config_path = tmp_path / "config"
+        config_path.write_text('DEFAULT_MODEL="file-model"\n')
+        monkeypatch.setenv("DEFAULT_MODEL", "")
+
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager._raw_values.get("DEFAULT_MODEL") == ""
+
+
+class TestGetConfigSource:
+    """Tests for get_config_source method."""
+
+    def test_returns_global_for_global_config(self, tmp_path):
+        """Returns 'global' for values from global config."""
+        config_path = tmp_path / "config"
+        config_path.write_text('DEFAULT_MODEL="value"\n')
+
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        source = manager.get_config_source("DEFAULT_MODEL")
+        assert "global" in source
+
+    def test_returns_local_for_local_config(self, tmp_path, monkeypatch):
+        """Returns 'local (path)' for values from local config."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text('DEFAULT_MODEL="local-value"\n')
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(project_dir)
+
+        manager = ConfigManager()
+        manager._global_config_path = tmp_path / "nonexistent"
+        manager.load()
+
+        source = manager.get_config_source("DEFAULT_MODEL")
+        assert "local" in source
+        assert str(local_config) in source
+
+    def test_returns_environment_for_env_vars(self, tmp_path, monkeypatch):
+        """Returns 'environment' for env var values."""
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+        monkeypatch.setenv("DEFAULT_MODEL", "env-value")
+
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        source = manager.get_config_source("DEFAULT_MODEL")
+        assert source == "environment"
+
+    def test_returns_default_for_unknown_key(self, tmp_path):
+        """Returns 'default' for keys not in any config source."""
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        source = manager.get_config_source("UNKNOWN_KEY")
+        assert source == "default"
+
+
+class TestConfigManagerPathAccessors:
+    """Tests for config path accessor methods."""
+
+    def test_get_global_config_path(self, tmp_path):
+        """get_global_config_path returns the global config path."""
+        config_path = tmp_path / "config"
+        manager = ConfigManager(config_path)
+
+        assert manager.get_global_config_path() == config_path
+
+    def test_get_local_config_path_before_load(self, tmp_path):
+        """get_local_config_path returns None before load."""
+        config_path = tmp_path / "config"
+        manager = ConfigManager(config_path)
+
+        assert manager.get_local_config_path() is None
+
+    def test_get_local_config_path_after_load(self, tmp_path, monkeypatch):
+        """get_local_config_path returns path after load finds it."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        local_config = project_dir / ".specflow"
+        local_config.write_text("TEST=value\n")
+        (project_dir / ".git").mkdir()
+        monkeypatch.chdir(project_dir)
+
+        manager = ConfigManager()
+        manager._global_config_path = tmp_path / "nonexistent"
+        manager.load()
+
+        assert manager.get_local_config_path() == local_config
+
+    def test_config_path_property_backward_compatibility(self, tmp_path):
+        """config_path property returns global config for compatibility."""
+        config_path = tmp_path / "config"
+        manager = ConfigManager(config_path)
+
+        assert manager.config_path == config_path
+
+    def test_config_path_setter(self, tmp_path):
+        """config_path property can be set."""
+        manager = ConfigManager(tmp_path / "old")
+        new_path = tmp_path / "new"
+
+        manager.config_path = new_path
+
+        assert manager.config_path == new_path

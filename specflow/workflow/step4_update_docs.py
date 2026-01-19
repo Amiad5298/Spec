@@ -30,10 +30,11 @@ from specflow.workflow.state import WorkflowState
 MAX_DIFF_SIZE = 8000
 
 # Documentation file patterns (extensions)
+# Note: .txt is intentionally excluded to avoid modifying config files like
+# requirements.txt, constraints.txt, etc.
 DOC_FILE_EXTENSIONS = frozenset({
     ".md",
     ".rst",
-    ".txt",
     ".adoc",
     ".asciidoc",
 })
@@ -198,6 +199,58 @@ def _git_restore_file(filepath: str) -> bool:
     return result.returncode == 0
 
 
+def _parse_porcelain_z_output(output: str) -> list[tuple[str, str]]:
+    """Parse git status --porcelain -z output.
+
+    The -z flag uses NUL as delimiter between entries and between renamed file paths.
+    This handles filenames with spaces and special characters correctly.
+
+    Format for each entry:
+    - Regular file: "XY path\\0" (status code followed by space, then path, then NUL)
+    - Renamed file: "XY old_path\\0new_path\\0" (status, old path, NUL, new path, NUL)
+
+    Args:
+        output: Raw output from git status --porcelain -z
+
+    Returns:
+        List of (status_code, filepath) tuples. For renames, returns the new path.
+    """
+    if not output:
+        return []
+
+    entries = []
+    # Split on NUL bytes
+    parts = output.split("\0")
+
+    i = 0
+    while i < len(parts):
+        part = parts[i]
+        if not part:
+            i += 1
+            continue
+
+        # Status code is first 2 chars, then a space, then the path
+        if len(part) < 3:
+            i += 1
+            continue
+
+        status_code = part[:2]
+        filepath = part[3:]
+
+        # Check if this is a rename (R) or copy (C) - next part is the destination
+        if status_code[0] in ("R", "C") and i + 1 < len(parts) and parts[i + 1]:
+            # For renames/copies, the current filepath is the old path
+            # The next part (before next status entry) is the new path
+            new_path = parts[i + 1]
+            entries.append((status_code, new_path))
+            i += 2  # Skip both old path entry and new path
+        else:
+            entries.append((status_code, filepath))
+            i += 1
+
+    return entries
+
+
 @dataclass
 class NonDocSnapshot:
     """Snapshot of all non-doc files for enforcement.
@@ -218,10 +271,10 @@ class NonDocSnapshot:
         """Capture state of all non-doc files with changes (tracked or untracked)."""
         snapshot = cls()
 
-        # Use git status --porcelain for parseable output
-        # Format: XY filename (where XY is 2-char status code)
+        # Use git status --porcelain -z for robust parsing
+        # The -z flag uses NUL as delimiter, handling filenames with spaces correctly
         result = subprocess.run(
-            ["git", "status", "--porcelain", "-uall"],
+            ["git", "status", "--porcelain", "-z", "-uall"],
             capture_output=True,
             text=True,
         )
@@ -229,19 +282,8 @@ class NonDocSnapshot:
         if result.returncode != 0:
             return snapshot
 
-        for line in result.stdout.strip().split("\n"):
-            if not line.strip():
-                continue
-
-            # Parse porcelain format: XY filename
-            # X = index status, Y = worktree status
-            status_code = line[:2]
-            filepath = line[3:].strip()
-
-            # Handle renamed files (format: old -> new)
-            if " -> " in filepath:
-                filepath = filepath.split(" -> ")[-1]
-
+        # Parse the null-delimited output
+        for status_code, filepath in _parse_porcelain_z_output(result.stdout):
             # Skip doc files - we only want to track non-doc files
             if is_doc_file(filepath):
                 continue
@@ -282,21 +324,13 @@ class NonDocSnapshot:
 
         # Get current git status to detect new changes
         result = subprocess.run(
-            ["git", "status", "--porcelain", "-uall"],
+            ["git", "status", "--porcelain", "-z", "-uall"],
             capture_output=True,
             text=True,
         )
 
         if result.returncode == 0:
-            for line in result.stdout.strip().split("\n"):
-                if not line.strip():
-                    continue
-
-                status_code = line[:2]
-                filepath = line[3:].strip()
-                if " -> " in filepath:
-                    filepath = filepath.split(" -> ")[-1]
-
+            for status_code, filepath in _parse_porcelain_z_output(result.stdout):
                 # Skip doc files
                 if is_doc_file(filepath):
                     continue
@@ -577,14 +611,14 @@ def _build_doc_update_prompt(state: WorkflowState, diff_result: DiffResult) -> s
 **YOU MUST ONLY EDIT DOCUMENTATION FILES.**
 
 Documentation files include:
-- Files with extensions: .md, .rst, .txt, .adoc, .asciidoc
+- Files with extensions: .md, .rst, .adoc, .asciidoc
 - Files in directories: docs/, doc/, documentation/
 - .github/ doc files: README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, ISSUE_TEMPLATE, PULL_REQUEST_TEMPLATE
 - Root files named: README, CHANGELOG, CONTRIBUTING, LICENSE, AUTHORS, etc.
 
 **DO NOT EDIT:**
 - Source code files (.py, .js, .ts, .go, .java, .rs, etc.)
-- Configuration files (.json, .yaml, .toml, .ini, etc.)
+- Configuration files (.json, .yaml, .toml, .ini, .txt, requirements.txt, constraints.txt, etc.)
 - Test files
 - .github/workflows/, .github/actions/, .github/scripts/ (these are code, not docs)
 - Any other non-documentation files

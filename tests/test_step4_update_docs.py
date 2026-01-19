@@ -9,6 +9,7 @@ from specflow.integrations.git import DiffResult
 from specflow.workflow.step4_update_docs import (
     step_4_update_docs,
     _build_doc_update_prompt,
+    _parse_porcelain_z_output,
     is_doc_file,
     Step4Result,
     FileSnapshot,
@@ -82,6 +83,63 @@ class TestIsDocFile:
         assert not is_doc_file("config.yaml")
         assert not is_doc_file("settings.json")
         assert not is_doc_file("pyproject.toml")
+
+
+# =============================================================================
+# Tests for _parse_porcelain_z_output helper
+# =============================================================================
+
+
+class TestParsePorcelainZOutput:
+    """Tests for _parse_porcelain_z_output helper function."""
+
+    def test_parses_empty_output(self):
+        """Returns empty list for empty output."""
+        assert _parse_porcelain_z_output("") == []
+
+    def test_parses_single_modified_file(self):
+        """Parses a single modified file."""
+        # Format: "XY path\0"
+        output = " M file.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [(" M", "file.py")]
+
+    def test_parses_multiple_files(self):
+        """Parses multiple files."""
+        output = " M file1.py\0?? newfile.txt\0A  staged.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [(" M", "file1.py"), ("??", "newfile.txt"), ("A ", "staged.py")]
+
+    def test_parses_file_with_spaces(self):
+        """Correctly parses filenames with spaces."""
+        output = " M file with spaces.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [(" M", "file with spaces.py")]
+
+    def test_parses_renamed_file(self):
+        """Parses renamed files (R status) - returns new path."""
+        # For renames: "R  old_path\0new_path\0"
+        output = "R  old_name.py\0new_name.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [("R ", "new_name.py")]
+
+    def test_parses_copied_file(self):
+        """Parses copied files (C status) - returns new path."""
+        output = "C  source.py\0copy.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [("C ", "copy.py")]
+
+    def test_parses_untracked_file(self):
+        """Parses untracked files."""
+        output = "?? untracked.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [("??", "untracked.py")]
+
+    def test_handles_mixed_entries(self):
+        """Handles mix of regular and renamed files."""
+        output = " M regular.py\0R  old.py\0new.py\0?? untracked.py\0"
+        result = _parse_porcelain_z_output(output)
+        assert result == [(" M", "regular.py"), ("R ", "new.py"), ("??", "untracked.py")]
 
 
 # =============================================================================

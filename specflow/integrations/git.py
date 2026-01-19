@@ -676,7 +676,9 @@ def _is_doc_file_for_diff(filepath: str) -> bool:
         True if the file appears to be documentation.
     """
     path = Path(filepath)
-    doc_extensions = {".md", ".rst", ".txt", ".adoc", ".asciidoc"}
+    # Note: .txt is intentionally excluded to avoid treating config files like
+    # requirements.txt, constraints.txt as documentation
+    doc_extensions = {".md", ".rst", ".adoc", ".asciidoc"}
     doc_directories = ("docs/", "doc/", "documentation/", "wiki/")
     doc_names = {"README", "CHANGELOG", "CONTRIBUTING", "LICENSE", "AUTHORS", "HISTORY"}
 

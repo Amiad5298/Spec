@@ -157,7 +157,21 @@ class TicketStatus(Enum):
     REVIEW = "review"
     DONE = "done"
     CLOSED = "closed"
+    BLOCKED = "blocked"
     UNKNOWN = "unknown"
+
+
+class TicketType(Enum):
+    """Normalized ticket types across platforms.
+
+    Used for downstream automation such as generating semantic branch names
+    (e.g., feat/, fix/, chore/) and categorizing work items.
+    """
+    FEATURE = "feature"      # New functionality, user stories, enhancements
+    BUG = "bug"              # Defects, issues, fixes
+    TASK = "task"            # General tasks, chores, housekeeping
+    MAINTENANCE = "maintenance"  # Tech debt, refactoring, infrastructure
+    UNKNOWN = "unknown"      # Unable to determine type
 
 @dataclass
 class GenericTicket:
@@ -173,6 +187,7 @@ class GenericTicket:
         title: Ticket title/summary
         description: Full description/body text
         status: Normalized status
+        type: Normalized ticket type (feature, bug, task, etc.)
         assignee: Assigned user (display name or username)
         labels: List of labels/tags
         created_at: Creation timestamp
@@ -195,6 +210,7 @@ class GenericTicket:
     title: str = ""
     description: str = ""
     status: TicketStatus = TicketStatus.UNKNOWN
+    type: TicketType = TicketType.UNKNOWN
 
     # Assignment
     assignee: Optional[str] = None
@@ -219,11 +235,31 @@ class GenericTicket:
         return self.id
 
     @property
+    def semantic_branch_prefix(self) -> str:
+        """Get semantic branch prefix based on ticket type.
+
+        Returns:
+            Conventional prefix for git branch naming.
+        """
+        prefix_map = {
+            TicketType.FEATURE: "feat",
+            TicketType.BUG: "fix",
+            TicketType.TASK: "chore",
+            TicketType.MAINTENANCE: "refactor",
+            TicketType.UNKNOWN: "feature",
+        }
+        return prefix_map.get(self.type, "feature")
+
+    @property
     def safe_branch_name(self) -> str:
-        """Generate safe git branch name from ticket."""
+        """Generate safe git branch name from ticket.
+
+        Uses semantic prefix based on ticket type.
+        """
+        prefix = self.semantic_branch_prefix
         if self.branch_summary:
-            return f"{self.id.lower()}-{self.branch_summary}"
-        return f"feature/{self.id.lower()}"
+            return f"{prefix}/{self.id.lower()}-{self.branch_summary}"
+        return f"{prefix}/{self.id.lower()}"
 ```
 
 ### 3.2 Backward Compatibility Bridge
@@ -622,10 +658,154 @@ class JiraProvider(IssueTrackerProvider):
 
 ## 7. Configuration & Authentication
 
-### 7.1 Environment Variables Structure
+### 7.1 Configuration Hierarchy
+
+Configuration follows a **cascading hierarchy** to support developers working on multiple projects with different trackers. The system loads configuration in the following order, with earlier sources taking precedence:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CONFIGURATION PRECEDENCE                              │
+│                         (Highest to Lowest)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  1. Environment Variables    ─── Highest priority (CI/CD, temporary overrides)│
+│  2. Local Config (.specflow) ─── Project-specific settings                    │
+│  3. Global Config (~/.specflow-config) ─── User defaults                      │
+│  4. Built-in Defaults        ─── Fallback values                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 7.1.1 Local Configuration
+
+A `.specflow` file in the current working directory (or any parent directory up to the repository root) provides project-specific configuration:
 
 ```bash
-# ~/.specflow-config (updated structure)
+# .specflow (in project root)
+DEFAULT_PLATFORM=github
+GITHUB_DEFAULT_OWNER=myorg
+GITHUB_DEFAULT_REPO=my-project
+```
+
+**Resolution Algorithm:**
+1. Start from current working directory
+2. Look for `.specflow` file
+3. If not found, traverse parent directories until repository root (`.git` directory)
+4. Stop at repository root or filesystem root
+
+#### 7.1.2 Global Configuration
+
+User-level defaults stored in the home directory:
+
+```bash
+# ~/.specflow-config
+DEFAULT_PLATFORM=jira
+JIRA_BASE_URL=https://company.atlassian.net
+JIRA_API_TOKEN=xxxxx
+# ... other platform credentials
+```
+
+#### 7.1.3 Configuration Manager Implementation
+
+```python
+from pathlib import Path
+from typing import Optional
+import os
+
+class ConfigManager:
+    """Manages configuration with cascading hierarchy."""
+
+    LOCAL_CONFIG_NAME = ".specflow"
+    GLOBAL_CONFIG_NAME = ".specflow-config"
+
+    def __init__(self):
+        self._config: dict[str, str] = {}
+        self._local_config_path: Optional[Path] = None
+        self._global_config_path: Path = Path.home() / self.GLOBAL_CONFIG_NAME
+
+    def load(self) -> None:
+        """Load configuration from all sources in precedence order."""
+        # Start with built-in defaults
+        self._config = self._get_defaults()
+
+        # Load global config (lowest priority file-based config)
+        self._load_file(self._global_config_path)
+
+        # Load local config (higher priority)
+        local_path = self._find_local_config()
+        if local_path:
+            self._local_config_path = local_path
+            self._load_file(local_path)
+
+        # Environment variables override everything
+        self._load_environment()
+
+    def _find_local_config(self) -> Optional[Path]:
+        """Find local .specflow config by traversing up from CWD."""
+        current = Path.cwd()
+        while True:
+            config_path = current / self.LOCAL_CONFIG_NAME
+            if config_path.exists():
+                return config_path
+
+            # Stop at repository root
+            if (current / ".git").exists():
+                break
+
+            parent = current.parent
+            if parent == current:  # Reached filesystem root
+                break
+            current = parent
+
+        return None
+
+    def _load_file(self, path: Path) -> None:
+        """Load key=value pairs from config file."""
+        if not path.exists():
+            return
+
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    self._config[key.strip()] = value.strip()
+
+    def _load_environment(self) -> None:
+        """Override config with environment variables."""
+        # Only load known config keys from environment
+        known_keys = set(self._config.keys())
+        for key in known_keys:
+            env_value = os.environ.get(key)
+            if env_value is not None:
+                self._config[key] = env_value
+
+    def _get_defaults(self) -> dict[str, str]:
+        """Return built-in default values."""
+        return {
+            "DEFAULT_PLATFORM": "",
+            "TICKET_CACHE_DURATION": "3600",
+        }
+
+    def get(self, key: str, default: str = "") -> str:
+        """Get configuration value."""
+        return self._config.get(key, default)
+
+    def get_config_source(self, key: str) -> str:
+        """Return the source of a config value (for debugging)."""
+        if key in os.environ:
+            return "environment"
+        if self._local_config_path:
+            # Check if key exists in local config
+            with open(self._local_config_path) as f:
+                for line in f:
+                    if line.strip().startswith(f"{key}="):
+                        return f"local ({self._local_config_path})"
+        return f"global ({self._global_config_path})"
+```
+
+### 7.2 Environment Variables Structure
+
+```bash
+# ~/.specflow-config (global user configuration)
 
 # === Global Settings ===
 DEFAULT_PLATFORM=jira              # Default platform when ID is ambiguous
@@ -875,30 +1055,317 @@ def cached_fetch(ttl: timedelta = timedelta(hours=1)):
 
 ---
 
-## 9. Migration Path
+## 9. User Interaction Abstraction
 
-### 9.1 Phase 1: Create Abstractions (Non-Breaking)
+### 9.1 Design Principle
+
+Providers must **never** call `print()` or `input()` directly. This restriction:
+- Makes providers testable in isolation
+- Enables CI/CD usage without interactive prompts
+- Allows for different UI implementations (CLI, GUI, web)
+
+### 9.2 UserInteractionInterface
+
+```python
+from abc import ABC, abstractmethod
+from typing import TypeVar, Generic
+from dataclasses import dataclass
+
+T = TypeVar('T')
+
+@dataclass
+class SelectOption(Generic[T]):
+    """An option for user selection."""
+    value: T
+    label: str
+    description: str = ""
+
+
+class UserInteractionInterface(ABC):
+    """Abstract interface for user interactions.
+
+    All user-facing prompts and confirmations must go through this interface.
+    Providers receive an instance via dependency injection.
+    """
+
+    @abstractmethod
+    def select_option(
+        self,
+        options: list[SelectOption[T]],
+        prompt: str,
+        allow_cancel: bool = True
+    ) -> T | None:
+        """Present options to user and get selection.
+
+        Args:
+            options: List of options to present
+            prompt: Message to display to user
+            allow_cancel: If True, user can cancel (returns None)
+
+        Returns:
+            Selected option value, or None if cancelled
+        """
+        pass
+
+    @abstractmethod
+    def prompt_text(
+        self,
+        message: str,
+        default: str = "",
+        required: bool = True
+    ) -> str | None:
+        """Prompt user for text input.
+
+        Args:
+            message: Prompt message to display
+            default: Default value if user enters nothing
+            required: If True, empty input is not accepted
+
+        Returns:
+            User input string, or None if cancelled
+        """
+        pass
+
+    @abstractmethod
+    def confirm(
+        self,
+        message: str,
+        default: bool = False
+    ) -> bool:
+        """Ask user for yes/no confirmation.
+
+        Args:
+            message: Question to ask
+            default: Default answer if user presses Enter
+
+        Returns:
+            True for yes, False for no
+        """
+        pass
+
+    @abstractmethod
+    def display_message(
+        self,
+        message: str,
+        level: str = "info"
+    ) -> None:
+        """Display a message to the user.
+
+        Args:
+            message: Message to display
+            level: One of "info", "warning", "error", "success"
+        """
+        pass
+
+
+class CLIUserInteraction(UserInteractionInterface):
+    """Command-line implementation of user interaction."""
+
+    def select_option(
+        self,
+        options: list[SelectOption[T]],
+        prompt: str,
+        allow_cancel: bool = True
+    ) -> T | None:
+        print(f"\n{prompt}")
+        for i, opt in enumerate(options, 1):
+            desc = f" - {opt.description}" if opt.description else ""
+            print(f"  [{i}] {opt.label}{desc}")
+
+        if allow_cancel:
+            print(f"  [0] Cancel")
+
+        while True:
+            try:
+                choice = input("\nEnter selection: ").strip()
+                if not choice:
+                    continue
+
+                idx = int(choice)
+                if allow_cancel and idx == 0:
+                    return None
+                if 1 <= idx <= len(options):
+                    return options[idx - 1].value
+
+                print(f"Invalid selection. Enter 1-{len(options)}")
+            except ValueError:
+                print("Please enter a number")
+            except KeyboardInterrupt:
+                return None
+
+    def prompt_text(
+        self,
+        message: str,
+        default: str = "",
+        required: bool = True
+    ) -> str | None:
+        default_hint = f" [{default}]" if default else ""
+        try:
+            while True:
+                result = input(f"{message}{default_hint}: ").strip()
+                if not result and default:
+                    return default
+                if result or not required:
+                    return result
+                print("This field is required.")
+        except KeyboardInterrupt:
+            return None
+
+    def confirm(
+        self,
+        message: str,
+        default: bool = False
+    ) -> bool:
+        hint = "[Y/n]" if default else "[y/N]"
+        try:
+            result = input(f"{message} {hint}: ").strip().lower()
+            if not result:
+                return default
+            return result in ("y", "yes", "true", "1")
+        except KeyboardInterrupt:
+            return False
+
+    def display_message(
+        self,
+        message: str,
+        level: str = "info"
+    ) -> None:
+        prefixes = {
+            "info": "ℹ️ ",
+            "warning": "⚠️ ",
+            "error": "❌ ",
+            "success": "✅ ",
+        }
+        print(f"{prefixes.get(level, '')}{message}")
+
+
+class NonInteractiveUserInteraction(UserInteractionInterface):
+    """Non-interactive implementation for CI/CD and testing.
+
+    Returns defaults or raises errors for required interactions.
+    """
+
+    def __init__(self, fail_on_interaction: bool = True):
+        self.fail_on_interaction = fail_on_interaction
+
+    def select_option(
+        self,
+        options: list[SelectOption[T]],
+        prompt: str,
+        allow_cancel: bool = True
+    ) -> T | None:
+        if self.fail_on_interaction:
+            raise RuntimeError(
+                f"Interactive selection required but running in non-interactive mode. "
+                f"Prompt: {prompt}"
+            )
+        return options[0].value if options else None
+
+    def prompt_text(
+        self,
+        message: str,
+        default: str = "",
+        required: bool = True
+    ) -> str | None:
+        if required and not default and self.fail_on_interaction:
+            raise RuntimeError(
+                f"Required text input but running in non-interactive mode. "
+                f"Prompt: {message}"
+            )
+        return default
+
+    def confirm(
+        self,
+        message: str,
+        default: bool = False
+    ) -> bool:
+        return default
+
+    def display_message(
+        self,
+        message: str,
+        level: str = "info"
+    ) -> None:
+        # Optionally log to stderr or logging framework
+        pass
+```
+
+### 9.3 Provider Integration
+
+Providers that need user interaction receive the interface via constructor injection:
+
+```python
+class ProviderRegistry:
+    """Registry for issue tracker providers."""
+
+    _user_interaction: UserInteractionInterface = CLIUserInteraction()
+
+    @classmethod
+    def set_user_interaction(cls, ui: UserInteractionInterface) -> None:
+        """Set the user interaction implementation."""
+        cls._user_interaction = ui
+
+    @classmethod
+    def get_user_interaction(cls) -> UserInteractionInterface:
+        """Get the current user interaction implementation."""
+        return cls._user_interaction
+```
+
+### 9.4 Usage Example: Platform Disambiguation
+
+```python
+def get_provider_for_input(input_str: str) -> IssueTrackerProvider:
+    """Get appropriate provider, prompting user if ambiguous."""
+    try:
+        platform, _ = PlatformDetector.detect(input_str)
+        return ProviderRegistry.get_provider(platform)
+    except AmbiguousPlatformError as e:
+        # Input matches multiple platforms (e.g., "ABC-123" matches Jira and Linear)
+        ui = ProviderRegistry.get_user_interaction()
+
+        options = [
+            SelectOption(value=p, label=p.name, description=f"Use {p.name} to fetch {input_str}")
+            for p in e.possible_platforms
+        ]
+
+        selected = ui.select_option(
+            options=options,
+            prompt=f"The identifier '{input_str}' is ambiguous. Select platform:",
+            allow_cancel=True
+        )
+
+        if selected is None:
+            raise UserCancelledError("Platform selection cancelled")
+
+        return ProviderRegistry.get_provider(selected)
+```
+
+---
+
+## 10. Migration Path
+
+### 10.1 Phase 1: Create Abstractions (Non-Breaking)
 
 1. Create `specflow/integrations/providers/` package
 2. Define `GenericTicket`, `Platform`, `IssueTrackerProvider` in base module
 3. Create `JiraProvider` that wraps existing `jira.py` logic
 4. Add backward-compatible type aliases
 
-### 9.2 Phase 2: Parallel Support
+### 10.2 Phase 2: Parallel Support
 
 1. Update `WorkflowState.ticket` to accept `GenericTicket | JiraTicket`
 2. Add bridge functions for conversion
 3. Update `cli.py` to use `ProviderRegistry.get_provider_for_input()`
 4. Keep `parse_jira_ticket()` working for explicit Jira usage
 
-### 9.3 Phase 3: Full Migration
+### 10.3 Phase 3: Full Migration
 
 1. Replace `JiraTicket` usage with `GenericTicket` throughout
 2. Remove direct Jira dependencies from workflow modules
 3. Deprecate legacy Jira functions (keep for 1 major version)
 4. Update all tests
 
-### 9.4 Phase 4: Add New Providers
+### 10.4 Phase 4: Add New Providers
 
 1. Implement GitHub provider
 2. Implement Linear provider
@@ -908,9 +1375,9 @@ def cached_fetch(ttl: timedelta = timedelta(hours=1)):
 
 ---
 
-## 10. File Structure
+## 11. File Structure
 
-### 10.1 Proposed Directory Layout
+### 11.1 Proposed Directory Layout
 
 ```
 specflow/
@@ -926,6 +1393,7 @@ specflow/
 │       ├── registry.py          # ProviderRegistry, PlatformDetector
 │       ├── cache.py             # Caching layer
 │       ├── auth.py              # AuthenticationManager
+│       ├── user_interaction.py  # UserInteractionInterface + implementations
 │       ├── jira_provider.py     # @ProviderRegistry.register
 │       ├── github_provider.py   # @ProviderRegistry.register
 │       ├── linear_provider.py   # @ProviderRegistry.register
@@ -934,13 +1402,13 @@ specflow/
 │       └── trello_provider.py   # @ProviderRegistry.register
 ├── config/
 │   ├── settings.py              # Add new platform settings
-│   └── manager.py               # Handle new config keys
+│   └── manager.py               # ConfigManager with cascading hierarchy
 └── workflow/
     ├── state.py                 # ticket: GenericTicket
     └── runner.py                # Use provider abstraction
 ```
 
-### 10.2 Import Structure
+### 11.2 Import Structure
 
 ```python
 # After migration, imports look like:

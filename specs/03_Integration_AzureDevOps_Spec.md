@@ -184,6 +184,7 @@ Returns list of projects. Success indicates valid authentication.
 | `title` | `fields.System.Title` | Direct |
 | `description` | `fields.System.Description` | Strip HTML |
 | `status` | `fields.System.State` | Map: see 4.2 |
+| `type` | `fields.System.WorkItemType` | Map: see 4.4 |
 | `assignee` | `fields.System.AssignedTo.displayName` | Extract name |
 | `labels` | `fields.System.Tags` | Split by `;` |
 | `created_at` | `fields.System.CreatedDate` | Parse ISO 8601 |
@@ -247,6 +248,70 @@ def strip_html(html: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 ```
+
+### 4.4 Type Mapping
+
+Azure DevOps has a native `WorkItemType` field. This maps directly to `TicketType`:
+
+**Type Mapping Strategy:**
+
+```python
+WORK_ITEM_TYPE_MAP = {
+    # Agile process template
+    "bug": TicketType.BUG,
+    "user story": TicketType.FEATURE,
+    "feature": TicketType.FEATURE,
+    "task": TicketType.TASK,
+    "epic": TicketType.FEATURE,
+
+    # Scrum process template
+    "product backlog item": TicketType.FEATURE,
+    "impediment": TicketType.BUG,
+
+    # CMMI process template
+    "requirement": TicketType.FEATURE,
+    "change request": TicketType.FEATURE,
+    "issue": TicketType.BUG,
+    "risk": TicketType.MAINTENANCE,
+    "review": TicketType.TASK,
+
+    # Common custom types
+    "tech debt": TicketType.MAINTENANCE,
+    "spike": TicketType.TASK,
+    "defect": TicketType.BUG,
+}
+
+def map_work_item_type(work_item_type: str) -> TicketType:
+    """Map Azure DevOps WorkItemType to TicketType.
+
+    Args:
+        work_item_type: The System.WorkItemType field value
+
+    Returns:
+        Matched TicketType or UNKNOWN
+    """
+    if not work_item_type:
+        return TicketType.UNKNOWN
+
+    return WORK_ITEM_TYPE_MAP.get(
+        work_item_type.lower().strip(),
+        TicketType.UNKNOWN
+    )
+```
+
+**Azure DevOps WorkItemType Mappings:**
+
+| WorkItemType | TicketType |
+|--------------|------------|
+| `Bug` | `TicketType.BUG` |
+| `User Story` | `TicketType.FEATURE` |
+| `Feature` | `TicketType.FEATURE` |
+| `Epic` | `TicketType.FEATURE` |
+| `Task` | `TicketType.TASK` |
+| `Product Backlog Item` | `TicketType.FEATURE` |
+| `Impediment` | `TicketType.BUG` |
+| `Issue` | `TicketType.BUG` |
+| `Tech Debt` | `TicketType.MAINTENANCE` |
 
 ---
 

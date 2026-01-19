@@ -184,6 +184,7 @@ Returns authenticated user info.
 | `title` | `name` | Direct |
 | `description` | `desc` | Direct (markdown) |
 | `status` | `list.name` | Map: see 4.2 |
+| `type` | `labels[*].name` | Map: see 4.4 |
 | `assignee` | `members[0].fullName` | First member |
 | `labels` | `labels[*].name` | Extract names |
 | `created_at` | Derived from `id` | ObjectId timestamp |
@@ -244,6 +245,53 @@ def get_created_at_from_id(card_id: str) -> datetime:
     timestamp = int(timestamp_hex, 16)
     return datetime.utcfromtimestamp(timestamp)
 ```
+
+### 4.4 Type Mapping
+
+Trello uses labels for categorization. Type is inferred from label names:
+
+**Type Mapping Strategy:**
+
+```python
+TYPE_KEYWORDS = {
+    TicketType.BUG: ["bug", "defect", "fix", "error", "issue"],
+    TicketType.FEATURE: ["feature", "enhancement", "story", "new"],
+    TicketType.TASK: ["task", "chore", "todo", "action"],
+    TicketType.MAINTENANCE: ["maintenance", "tech debt", "refactor", "cleanup", "infra"],
+}
+
+def map_type(labels: list[str]) -> TicketType:
+    """Map Trello labels to TicketType.
+
+    Args:
+        labels: List of label names from the card
+
+    Returns:
+        Matched TicketType or UNKNOWN
+    """
+    for label in labels:
+        label_lower = label.lower().strip()
+        for ticket_type, keywords in TYPE_KEYWORDS.items():
+            if any(kw in label_lower for kw in keywords):
+                return ticket_type
+
+    return TicketType.UNKNOWN
+```
+
+**Common Trello Label Mappings:**
+
+| Trello Label | TicketType |
+|--------------|------------|
+| `Bug` | `TicketType.BUG` |
+| `bug` | `TicketType.BUG` |
+| `Feature` | `TicketType.FEATURE` |
+| `Enhancement` | `TicketType.FEATURE` |
+| `Task` | `TicketType.TASK` |
+| `Chore` | `TicketType.TASK` |
+| `Tech Debt` | `TicketType.MAINTENANCE` |
+| `Maintenance` | `TicketType.MAINTENANCE` |
+
+**Note:** Trello labels can also have colors without names. Named labels are preferred for type inference.
 
 ---
 

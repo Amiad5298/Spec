@@ -192,6 +192,7 @@ Returns authenticated user info. Use for connection verification.
 | `title` | `title` | Direct |
 | `description` | `body` | Direct (may be null) |
 | `status` | `state` | Map: see 4.2 |
+| `type` | `labels[*].name` | Map: see 4.4 |
 | `assignee` | `assignee.login` or `assignees[0].login` | First assignee |
 | `labels` | `labels[*].name` | Extract names |
 | `created_at` | `created_at` | Parse ISO 8601 |
@@ -225,6 +226,53 @@ LABEL_STATUS_MAP = {
     "done": TicketStatus.DONE,
 }
 ```
+
+### 4.4 Type Mapping
+
+GitHub Issues don't have a native "type" field. Type is inferred from labels:
+
+**Type Mapping Strategy:**
+
+```python
+TYPE_KEYWORDS = {
+    TicketType.BUG: ["bug", "defect", "fix", "error", "crash", "regression"],
+    TicketType.FEATURE: ["feature", "enhancement", "feat", "story", "request"],
+    TicketType.TASK: ["task", "chore", "todo", "housekeeping"],
+    TicketType.MAINTENANCE: ["maintenance", "tech-debt", "refactor", "cleanup", "infrastructure", "deps", "dependencies"],
+}
+
+def map_type(labels: list[str]) -> TicketType:
+    """Map GitHub labels to TicketType.
+
+    Args:
+        labels: List of label names from the issue
+
+    Returns:
+        Matched TicketType or UNKNOWN
+    """
+    for label in labels:
+        label_lower = label.lower().strip()
+        for ticket_type, keywords in TYPE_KEYWORDS.items():
+            if any(kw in label_lower for kw in keywords):
+                return ticket_type
+
+    return TicketType.UNKNOWN
+```
+
+**Common GitHub Label Mappings:**
+
+| GitHub Label | TicketType |
+|--------------|------------|
+| `bug` | `TicketType.BUG` |
+| `type: bug` | `TicketType.BUG` |
+| `kind/bug` | `TicketType.BUG` |
+| `enhancement` | `TicketType.FEATURE` |
+| `feature` | `TicketType.FEATURE` |
+| `type: feature` | `TicketType.FEATURE` |
+| `chore` | `TicketType.TASK` |
+| `maintenance` | `TicketType.MAINTENANCE` |
+| `tech-debt` | `TicketType.MAINTENANCE` |
+| `dependencies` | `TicketType.MAINTENANCE` |
 
 ---
 

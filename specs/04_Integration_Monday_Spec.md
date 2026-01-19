@@ -217,8 +217,9 @@ query { me { id name email } }
 | `platform` | - | `Platform.MONDAY` (constant) |
 | `url` | Constructed | `https://{account}.monday.com/boards/{board_id}/pulses/{item_id}` |
 | `title` | `name` | Direct |
-| `description` | Text column or `name` | Find "Description" column |
+| `description` | Text column or Updates | Cascading: Description column → First Update (see 4.4) |
 | `status` | Status column | Map: see 4.2 |
+| `type` | Tags/Labels column | Map: see 4.3 |
 | `assignee` | People column | Extract first person name |
 | `labels` | Tags column | Parse tag names |
 | `created_at` | `created_at` | Parse ISO 8601 |
@@ -259,7 +260,94 @@ def map_status(label: str) -> TicketStatus:
     return TicketStatus.UNKNOWN
 ```
 
-### 4.3 Column Value Parsing
+### 4.3 Type Mapping
+
+Monday.com doesn't have a native "issue type" field. Type is inferred from:
+1. **Tags/Labels column** - Look for type-indicating tags
+2. **Group name** - Some boards organize by type (e.g., "Bugs", "Features")
+3. **Board name** - Fallback context
+
+**Type Mapping Strategy:**
+
+```python
+TYPE_KEYWORDS = {
+    TicketType.BUG: ["bug", "defect", "issue", "fix", "error", "crash"],
+    TicketType.FEATURE: ["feature", "enhancement", "story", "user story", "new"],
+    TicketType.TASK: ["task", "chore", "todo", "action item"],
+    TicketType.MAINTENANCE: ["maintenance", "tech debt", "refactor", "cleanup", "infra"],
+}
+
+def map_type(labels: list[str], group_title: str = "") -> TicketType:
+    """Map Monday.com labels/group to TicketType."""
+    # Check labels first
+    for label in labels:
+        label_lower = label.lower().strip()
+        for ticket_type, keywords in TYPE_KEYWORDS.items():
+            if any(kw in label_lower for kw in keywords):
+                return ticket_type
+
+    # Check group title as fallback
+    if group_title:
+        group_lower = group_title.lower()
+        for ticket_type, keywords in TYPE_KEYWORDS.items():
+            if any(kw in group_lower for kw in keywords):
+                return ticket_type
+
+    return TicketType.UNKNOWN
+```
+
+### 4.4 Description Extraction (Cascading Fallback)
+
+Monday.com boards have flexible structures. Description is extracted using:
+
+1. **Primary:** Text column named "Description" (case-insensitive)
+2. **Secondary:** Long text column named "Description"
+3. **Fallback:** First Update (post) created by the item creator
+
+```python
+def extract_description(item: dict, columns: list) -> str:
+    """Extract description with cascading fallback.
+
+    Args:
+        item: Monday.com item including 'updates' and 'creator'
+        columns: The column_values from the item
+
+    Returns:
+        Description text or empty string
+    """
+    # Strategy 1 & 2: Look for Description column
+    for col in columns:
+        col_type = col.get("type", "")
+        col_title = col.get("title", "").lower()
+
+        if col_type in ["text", "long_text"] and "desc" in col_title:
+            text = col.get("text", "").strip()
+            if text:
+                return text
+
+    # Strategy 3: Fallback to Updates from item creator
+    updates = item.get("updates", [])
+    creator_id = item.get("creator", {}).get("id")
+
+    if creator_id and updates:
+        # Find updates from the creator (API returns newest first)
+        creator_updates = [
+            u for u in updates
+            if u.get("creator", {}).get("id") == creator_id
+        ]
+        if creator_updates:
+            # Use oldest update (last in list)
+            first_update = creator_updates[-1]
+            return first_update.get("text_body", "") or first_update.get("body", "")
+
+    # Last resort: oldest update from anyone
+    if updates:
+        return updates[-1].get("text_body", "") or updates[-1].get("body", "")
+
+    return ""
+```
+
+### 4.5 Column Value Parsing
 
 Column values are JSON strings. Parse based on type:
 
@@ -369,8 +457,19 @@ class MondayProvider(IssueTrackerProvider):
           value
         }
         creator {
+          id
           name
           email
+        }
+        updates(limit: 10) {
+          id
+          body
+          text_body
+          created_at
+          creator {
+            id
+            name
+          }
         }
       }
     }
@@ -496,6 +595,62 @@ class MondayProvider(IssueTrackerProvider):
                 return status
         return TicketStatus.UNKNOWN
 
+    def _extract_description(self, item: dict, columns: list) -> str:
+        """Extract description using cascading fallback strategy.
+
+        Strategy:
+        1. Look for a text column named "Description" (case-insensitive)
+        2. Look for a long_text column named "Description" (case-insensitive)
+        3. Fallback: Use the body of the first Update created by the item creator
+
+        Args:
+            item: The Monday.com item data including updates
+            columns: The column_values from the item
+
+        Returns:
+            Description text, or empty string if none found
+        """
+        # Strategy 1 & 2: Look for Description column (text or long_text type)
+        description_column_types = ["text", "long_text"]
+        for col in columns:
+            col_type = col.get("type", "")
+            col_title = col.get("title", "").lower()
+
+            if col_type in description_column_types and "desc" in col_title:
+                text = col.get("text", "").strip()
+                if text:
+                    return text
+
+        # Strategy 3: Fallback to Updates from item creator
+        updates = item.get("updates", [])
+        if not updates:
+            return ""
+
+        # Get the item creator's ID
+        creator = item.get("creator", {})
+        creator_id = creator.get("id")
+
+        if creator_id:
+            # Find the first (oldest) update from the creator
+            # Updates are returned newest-first, so we reverse to find the first
+            creator_updates = [
+                u for u in updates
+                if u.get("creator", {}).get("id") == creator_id
+            ]
+
+            if creator_updates:
+                # Get the oldest update (last in the list since API returns newest first)
+                first_update = creator_updates[-1]
+                # Prefer text_body (plain text) over body (HTML)
+                return first_update.get("text_body", "") or first_update.get("body", "")
+
+        # If no creator match, use the oldest update as last resort
+        if updates:
+            oldest_update = updates[-1]
+            return oldest_update.get("text_body", "") or oldest_update.get("body", "")
+
+        return ""
+
     def _map_to_generic(self, item: dict) -> GenericTicket:
         """Map Monday.com API response to GenericTicket."""
         columns = item.get("column_values", [])
@@ -516,12 +671,8 @@ class MondayProvider(IssueTrackerProvider):
         if tags_col and tags_col.get("text"):
             labels = [t.strip() for t in tags_col["text"].split(",")]
 
-        # Find description (text column named "Description" or similar)
-        description = ""
-        for col in columns:
-            if col.get("type") == "text" and "desc" in col.get("title", "").lower():
-                description = col.get("text", "")
-                break
+        # Find description using cascading fallback strategy
+        description = self._extract_description(item, columns)
 
         # Construct URL
         board_id = board.get("id", "")

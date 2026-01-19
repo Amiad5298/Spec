@@ -232,6 +232,7 @@ query Viewer {
 | `title` | `title` | Direct |
 | `description` | `description` | Direct (markdown) |
 | `status` | `state.type` | Map: see 4.2 |
+| `type` | `labels.nodes[*].name` | Map: see 4.4 |
 | `assignee` | `assignee.name` or `assignee.email` | Prefer name |
 | `labels` | `labels.nodes[*].name` | Extract names |
 | `created_at` | `createdAt` | Parse ISO 8601 |
@@ -264,6 +265,52 @@ Linear has workflow states with a `type` field:
 | 2 | High |
 | 3 | Medium |
 | 4 | Low |
+
+### 4.4 Type Mapping
+
+Linear uses labels for categorization. Type is inferred from label names:
+
+**Type Mapping Strategy:**
+
+```python
+TYPE_KEYWORDS = {
+    TicketType.BUG: ["bug", "defect", "fix", "error", "crash", "regression"],
+    TicketType.FEATURE: ["feature", "enhancement", "story", "improvement"],
+    TicketType.TASK: ["task", "chore", "todo", "spike"],
+    TicketType.MAINTENANCE: ["maintenance", "tech-debt", "refactor", "cleanup", "infrastructure"],
+}
+
+def map_type(labels: list[str]) -> TicketType:
+    """Map Linear labels to TicketType.
+
+    Args:
+        labels: List of label names from the issue
+
+    Returns:
+        Matched TicketType or UNKNOWN
+    """
+    for label in labels:
+        label_lower = label.lower().strip()
+        for ticket_type, keywords in TYPE_KEYWORDS.items():
+            if any(kw in label_lower for kw in keywords):
+                return ticket_type
+
+    return TicketType.UNKNOWN
+```
+
+**Common Linear Label Mappings:**
+
+| Linear Label | TicketType |
+|--------------|------------|
+| `Bug` | `TicketType.BUG` |
+| `bug` | `TicketType.BUG` |
+| `Feature` | `TicketType.FEATURE` |
+| `feature` | `TicketType.FEATURE` |
+| `Improvement` | `TicketType.FEATURE` |
+| `Task` | `TicketType.TASK` |
+| `Chore` | `TicketType.TASK` |
+| `Tech Debt` | `TicketType.MAINTENANCE` |
+| `Infrastructure` | `TicketType.MAINTENANCE` |
 
 ---
 

@@ -163,6 +163,159 @@ class TestCheckDirtyWorkingTree:
             check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
 
 
+class TestWorkflowArtifactFiltering:
+    """Tests for workflow artifact exclusion from dirty tree checks.
+
+    Workflow artifacts (.specflow/, .augment/, specs/, .DS_Store) are
+    excluded from dirty tree checks because they are created by Steps 1-2
+    and should not block Step 3 execution.
+    """
+
+    def test_is_workflow_artifact_specflow_dir(self):
+        """Recognizes .specflow/ directory as workflow artifact."""
+        from specflow.workflow.git_utils import _is_workflow_artifact
+
+        assert _is_workflow_artifact(".specflow/") is True
+        assert _is_workflow_artifact(".specflow/runs/log.txt") is True
+        assert _is_workflow_artifact(".specflow") is True
+
+    def test_is_workflow_artifact_augment_dir(self):
+        """Recognizes .augment/ directory as workflow artifact."""
+        from specflow.workflow.git_utils import _is_workflow_artifact
+
+        assert _is_workflow_artifact(".augment/") is True
+        assert _is_workflow_artifact(".augment/agents/spec-planner.md") is True
+        assert _is_workflow_artifact(".augment") is True
+
+    def test_is_workflow_artifact_specs_dir(self):
+        """Recognizes specs/ directory as workflow artifact."""
+        from specflow.workflow.git_utils import _is_workflow_artifact
+
+        assert _is_workflow_artifact("specs/") is True
+        assert _is_workflow_artifact("specs/TICKET-123-plan.md") is True
+        assert _is_workflow_artifact("specs") is True
+
+    def test_is_workflow_artifact_ds_store(self):
+        """Recognizes .DS_Store as workflow artifact."""
+        from specflow.workflow.git_utils import _is_workflow_artifact
+
+        assert _is_workflow_artifact(".DS_Store") is True
+
+    def test_is_workflow_artifact_non_artifact(self):
+        """Correctly identifies non-artifact paths."""
+        from specflow.workflow.git_utils import _is_workflow_artifact
+
+        assert _is_workflow_artifact("src/main.py") is False
+        assert _is_workflow_artifact("README.md") is False
+        assert _is_workflow_artifact("tests/test_foo.py") is False
+        assert _is_workflow_artifact("config.yaml") is False
+
+    def test_untracked_specflow_dir_ignored(self, temp_git_repo):
+        """Untracked .specflow/ files do not trigger dirty tree error."""
+        specflow_dir = temp_git_repo.path / ".specflow" / "runs"
+        specflow_dir.mkdir(parents=True)
+        (specflow_dir / "log.txt").write_text("log content")
+
+        # Should not raise - .specflow/ is excluded
+        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        assert result is True
+
+    def test_untracked_augment_dir_ignored(self, temp_git_repo):
+        """Untracked .augment/ files do not trigger dirty tree error."""
+        augment_dir = temp_git_repo.path / ".augment" / "agents"
+        augment_dir.mkdir(parents=True)
+        (augment_dir / "spec-planner.md").write_text("agent content")
+
+        # Should not raise - .augment/ is excluded
+        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        assert result is True
+
+    def test_untracked_specs_dir_ignored(self, temp_git_repo):
+        """Untracked specs/ files do not trigger dirty tree error."""
+        specs_dir = temp_git_repo.path / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "TICKET-123-plan.md").write_text("plan content")
+        (specs_dir / "TICKET-123-tasklist.md").write_text("tasklist content")
+
+        # Should not raise - specs/ is excluded
+        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        assert result is True
+
+    def test_untracked_ds_store_ignored(self, temp_git_repo):
+        """Untracked .DS_Store does not trigger dirty tree error."""
+        (temp_git_repo.path / ".DS_Store").write_text("ds store content")
+
+        # Should not raise - .DS_Store is excluded
+        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        assert result is True
+
+    def test_mixed_artifacts_and_real_changes_detected(self, temp_git_repo):
+        """Real changes are detected even when artifacts are present."""
+        # Create workflow artifacts (should be ignored)
+        specs_dir = temp_git_repo.path / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "plan.md").write_text("plan")
+
+        augment_dir = temp_git_repo.path / ".augment"
+        augment_dir.mkdir(parents=True)
+        (augment_dir / "agent.md").write_text("agent")
+
+        # Create a real change (should be detected)
+        temp_git_repo.create_file("real_change.py", "code")
+
+        with pytest.raises(DirtyWorkingTreeError) as exc_info:
+            check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+
+        # Should mention real change but not artifacts
+        error_msg = str(exc_info.value)
+        assert "real_change.py" in error_msg
+        assert "specs/" not in error_msg
+        assert ".augment/" not in error_msg
+
+    def test_only_artifacts_present_is_clean(self, temp_git_repo):
+        """Tree with only workflow artifacts is considered clean."""
+        # Create multiple workflow artifacts
+        (temp_git_repo.path / ".DS_Store").write_text("ds")
+
+        specs_dir = temp_git_repo.path / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "plan.md").write_text("plan")
+
+        specflow_dir = temp_git_repo.path / ".specflow" / "runs"
+        specflow_dir.mkdir(parents=True)
+        (specflow_dir / "log.txt").write_text("log")
+
+        augment_dir = temp_git_repo.path / ".augment" / "agents"
+        augment_dir.mkdir(parents=True)
+        (augment_dir / "spec-planner.md").write_text("agent")
+
+        # Should be clean - only artifacts present
+        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        assert result is True
+
+    def test_staged_artifact_ignored(self, temp_git_repo):
+        """Staged workflow artifacts do not trigger dirty tree error."""
+        specs_dir = temp_git_repo.path / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "plan.md").write_text("plan content")
+
+        # Stage the artifact
+        subprocess.run(["git", "add", "specs/plan.md"], check=True, capture_output=True)
+
+        # Should not raise - staged artifact is excluded
+        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
+        assert result is True
+
+    def test_workflow_artifact_paths_constant_exported(self):
+        """WORKFLOW_ARTIFACT_PATHS constant is exported."""
+        from specflow.workflow.git_utils import WORKFLOW_ARTIFACT_PATHS
+
+        assert ".specflow/" in WORKFLOW_ARTIFACT_PATHS
+        assert ".augment/" in WORKFLOW_ARTIFACT_PATHS
+        assert "specs/" in WORKFLOW_ARTIFACT_PATHS
+        assert ".DS_Store" in WORKFLOW_ARTIFACT_PATHS
+
+
 class TestGetDiffFromBaseline:
     """Tests for get_diff_from_baseline function."""
 

@@ -33,6 +33,31 @@ class DirtyWorkingTreeError(Exception):
     pass
 
 
+# Paths to exclude from dirty tree checks - these are workflow artifacts
+# that the tool itself creates during Steps 1-2 and should not block Step 3.
+WORKFLOW_ARTIFACT_PATHS = frozenset({
+    ".specflow/",   # Run logs and workflow state
+    ".augment/",    # Agent definition files
+    "specs/",       # Generated specs and task lists
+    ".DS_Store",    # macOS system file
+})
+
+
+def _is_workflow_artifact(path: str) -> bool:
+    """Check if a path is a workflow artifact that should be excluded from dirty checks.
+
+    Args:
+        path: File path from git status output.
+
+    Returns:
+        True if the path is a workflow artifact.
+    """
+    for artifact_path in WORKFLOW_ARTIFACT_PATHS:
+        if path == artifact_path.rstrip("/") or path.startswith(artifact_path):
+            return True
+    return False
+
+
 def capture_baseline() -> str:
     """Capture the current HEAD as the baseline for diff operations.
 
@@ -62,9 +87,13 @@ def check_dirty_working_tree(
 
     This is used to detect pre-existing dirty state before the workflow
     begins modifications. Checks for:
-    - Unstaged changes to tracked files
-    - Staged changes (index vs HEAD)
-    - Untracked files
+    - Unstaged changes to tracked files (excluding workflow artifacts)
+    - Staged changes (index vs HEAD, excluding workflow artifacts)
+    - Untracked files (excluding workflow artifacts)
+
+    Workflow artifacts (specs/, .specflow/, .augment/, .DS_Store) are
+    excluded from this check since they are created by Steps 1-2 and
+    should not block Step 3 execution.
 
     Args:
         policy: How to handle a dirty working tree.
@@ -77,40 +106,52 @@ def check_dirty_working_tree(
         DirtyWorkingTreeError: If working tree is dirty and policy is FAIL_FAST.
     """
     # Check for unstaged changes (working tree vs index)
+    # Use --name-only to get file list for filtering
     result_unstaged = subprocess.run(
-        ["git", "diff", "--quiet"],
+        ["git", "diff", "--name-only"],
         capture_output=True,
+        text=True,
     )
+    unstaged_files = [
+        f for f in result_unstaged.stdout.strip().split("\n")
+        if f and not _is_workflow_artifact(f)
+    ]
 
     # Check for staged changes (index vs HEAD)
     result_staged = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
+        ["git", "diff", "--cached", "--name-only"],
         capture_output=True,
+        text=True,
     )
+    staged_files = [
+        f for f in result_staged.stdout.strip().split("\n")
+        if f and not _is_workflow_artifact(f)
+    ]
 
-    # Check for untracked files
+    # Check for untracked files (excluding workflow artifacts)
     result_untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard"],
         capture_output=True,
         text=True,
     )
-    has_untracked = bool(result_untracked.stdout.strip())
+    untracked_files = [
+        f for f in result_untracked.stdout.strip().split("\n")
+        if f and not _is_workflow_artifact(f)
+    ]
 
-    is_dirty = (
-        result_unstaged.returncode != 0
-        or result_staged.returncode != 0
-        or has_untracked
-    )
+    is_dirty = bool(unstaged_files or staged_files or untracked_files)
 
     if is_dirty:
         if policy == DirtyTreePolicy.FAIL_FAST:
-            # Get status for error message
-            status_result = subprocess.run(
-                ["git", "status", "--short"],
-                capture_output=True,
-                text=True,
-            )
-            status_output = status_result.stdout.strip() if status_result.returncode == 0 else ""
+            # Build status output from filtered files
+            status_lines = []
+            for f in staged_files:
+                status_lines.append(f"M  {f}")  # Staged modification
+            for f in unstaged_files:
+                status_lines.append(f" M {f}")  # Unstaged modification
+            for f in untracked_files:
+                status_lines.append(f"?? {f}")  # Untracked
+            status_output = "\n".join(status_lines)
 
             raise DirtyWorkingTreeError(
                 "Working tree has uncommitted changes that would pollute diffs.\n"
@@ -623,6 +664,7 @@ __all__ = [
     # Baseline-anchored diff functions
     "DirtyTreePolicy",
     "DirtyWorkingTreeError",
+    "WORKFLOW_ARTIFACT_PATHS",
     "capture_baseline",
     "check_dirty_working_tree",
     "get_diff_from_baseline",

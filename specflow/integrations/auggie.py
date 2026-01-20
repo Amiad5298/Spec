@@ -10,6 +10,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from packaging import version
 
@@ -503,7 +504,7 @@ class AuggieClient:
 
         return result
 
-    def run_print(self, prompt: str, **kwargs) -> bool:
+    def run_print(self, prompt: str, **kwargs: Any) -> bool:
         """Run with --print flag, return success status.
 
         Args:
@@ -516,7 +517,7 @@ class AuggieClient:
         result = self.run(prompt, print_mode=True, **kwargs)
         return result.returncode == 0
 
-    def run_print_quiet(self, prompt: str, **kwargs) -> str:
+    def run_print_quiet(self, prompt: str, **kwargs: Any) -> str:
         """Run with --print --quiet, return output.
 
         Args:
@@ -527,7 +528,7 @@ class AuggieClient:
             Command stdout
         """
         result = self.run(prompt, print_mode=True, quiet=True, **kwargs)
-        return result.stdout
+        return str(result.stdout) if result.stdout else ""
 
     def run_print_with_output(
         self,
@@ -609,10 +610,11 @@ class AuggieClient:
         )
 
         output_lines = []
-        for line in process.stdout:
-            stripped = line.rstrip("\n")
-            output_callback(stripped)
-            output_lines.append(line)
+        if process.stdout is not None:
+            for line in process.stdout:
+                stripped = line.rstrip("\n")
+                output_callback(stripped)
+                output_lines.append(line)
 
         process.wait()
         log_command(" ".join(cmd), process.returncode)

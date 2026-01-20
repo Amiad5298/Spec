@@ -57,8 +57,77 @@ Example:
 
 - Target 3-8 tasks for a typical feature
 - Each task should be completable in one AI agent session
-- Include tests WITH implementation, not as separate tasks
 - Keep tasks atomic - can be completed independently
+
+## CRITICAL: Dependency-Based Task Categorization
+
+The distinction between FUNDAMENTAL and INDEPENDENT is based on **dependency relationships**, NOT activity type.
+
+### FUNDAMENTAL Tasks = Enabling Code (Creates Dependencies)
+FUNDAMENTAL tasks create interfaces, contracts, or shared resources that OTHER tasks depend on.
+
+FUNDAMENTAL tasks include:
+- Interface definitions (APIs, contracts, protocols) that other layers consume
+- Core service implementations that define the contract behavior
+- DTOs, models, and type definitions used across layers
+- Database schemas and configuration required by other code
+- Shared utilities that multiple tasks depend on
+- Compilation/build fixes to make code functional
+
+FUNDAMENTAL tasks must **NOT** include:
+- Comprehensive unit test suites (extract to INDEPENDENT)
+- Integration test implementations (extract to INDEPENDENT)
+- Test fixtures or test utilities (extract to INDEPENDENT)
+
+**Minimal smoke tests** are allowed ONLY if absolutely required for task validation.
+
+### INDEPENDENT Tasks = Non-Blocking Work (Consumes Dependencies)
+INDEPENDENT tasks depend on FUNDAMENTAL tasks but do NOT block each other.
+
+INDEPENDENT tasks include:
+- **Comprehensive Test Suites**: Unit tests, integration tests, test fixtures (group: testing)
+- **Dependent Implementation Layers**: Activity/Controller/Wrapper implementations that consume interfaces from FUNDAMENTAL tasks (group: implementation)
+- **Documentation**: API docs, README updates (group: docs)
+- **UI Components**: Frontend code that uses backend services (group: ui)
+
+### Why This Matters: The Parallel Execution Pattern
+
+Once FUNDAMENTAL tasks complete (e.g., "Implement DasService Interface and DasServiceImpl"):
+- Unit tests for DasServiceImpl → can run in parallel (group: testing)
+- DasActivityImpl that calls DasService → can run in parallel (group: implementation)
+- Integration tests → can run in parallel (group: testing)
+
+All INDEPENDENT tasks run concurrently because they only depend on the FUNDAMENTAL interfaces, NOT on each other.
+
+### Key Rule: Extract Comprehensive Tests from FUNDAMENTAL
+**NEVER bundle comprehensive test writing into FUNDAMENTAL tasks.**
+If a FUNDAMENTAL task would take >5 minutes due to test writing, extract the tests to a separate INDEPENDENT task.
+
+Example - WRONG:
+```
+<!-- category: fundamental, order: 4 -->
+- [ ] Implement DasService Interface and Implementation
+  - Add method to interface
+  - Implement in DasServiceImpl
+  - Add comprehensive unit tests  <-- PROBLEM: Blocks parallel execution
+```
+
+Example - CORRECT:
+```
+<!-- category: fundamental, order: 4 -->
+- [ ] Implement DasService Interface and Implementation
+  - Add method to interface
+  - Implement in DasServiceImpl (minimal validation only)
+
+<!-- category: independent, group: testing -->
+- [ ] Unit Tests: DasServiceImpl
+  - Comprehensive test coverage for DasServiceImpl
+
+<!-- category: independent, group: implementation -->
+- [ ] Implement DasActivityImpl
+  - Add @ActivityMethod to DasActivity interface
+  - Implement delegation to DasService
+```
 
 ## Output Format
 
@@ -76,16 +145,32 @@ For each task, include a `files:` metadata comment listing the files that task s
 
 <!-- category: fundamental, order: 2 -->
 <!-- files: src/services/auth_service.py, src/utils/password.py -->
-- [ ] Implement authentication service with password hashing
+- [ ] Implement AuthService interface and implementation (core logic only)
 
 ## Independent Tasks (Parallel)
-<!-- category: independent, group: api -->
-<!-- files: src/api/endpoints/login.py, tests/api/test_login.py -->
-- [ ] Create login API endpoint with tests
+<!-- category: independent, group: implementation -->
+<!-- files: src/activities/auth_activity.py -->
+- [ ] Implement AuthActivity (delegates to AuthService)
 
-<!-- category: independent, group: api -->
-<!-- files: src/api/endpoints/register.py, tests/api/test_register.py -->
-- [ ] Create registration API endpoint with tests
+<!-- category: independent, group: implementation -->
+<!-- files: src/api/endpoints/login.py, src/api/endpoints/register.py -->
+- [ ] Create login and registration API endpoints
+
+<!-- category: independent, group: testing -->
+<!-- files: tests/models/test_user.py -->
+- [ ] Unit Tests: User model
+
+<!-- category: independent, group: testing -->
+<!-- files: tests/services/test_auth_service.py -->
+- [ ] Unit Tests: AuthService
+
+<!-- category: independent, group: testing -->
+<!-- files: tests/api/test_login.py, tests/api/test_register.py -->
+- [ ] Integration Tests: Login and registration endpoints
+
+<!-- category: independent, group: docs -->
+<!-- files: docs/api/authentication.md -->
+- [ ] Documentation: Authentication API
 ```
 
 ## File Prediction Requirements
@@ -118,11 +203,13 @@ For each task, you MUST include a `<!-- files: ... -->` comment listing ALL file
 ## Categorization Heuristics
 
 1. **If unsure, mark as FUNDAMENTAL** - Sequential is always safe
-2. **Data/Schema tasks are ALWAYS FUNDAMENTAL** - Order 1
-3. **Service/Logic tasks are USUALLY FUNDAMENTAL** - Order 2+
-4. **UI/Docs/Utils are USUALLY INDEPENDENT** - Can parallelize
-5. **Tests with their implementation are FUNDAMENTAL** - Part of that task
-6. **Shared file edits require EXTRACTION** - Extract to FUNDAMENTAL setup task
+2. **Data/Schema/Config tasks are ALWAYS FUNDAMENTAL** - Order 1
+3. **Interface + Core Implementation tasks are FUNDAMENTAL** - Order 2+ (defines contracts others consume)
+4. **Dependent Implementation Layers are INDEPENDENT** - Activity/Controller/Wrapper layers (group: implementation)
+5. **ALL testing tasks are INDEPENDENT** - Unit/Integration tests (group: testing)
+6. **UI/Docs are INDEPENDENT** - Can parallelize (group: ui, group: docs)
+7. **Shared file edits require EXTRACTION** - Extract to FUNDAMENTAL setup task
+8. **Extract comprehensive tests from FUNDAMENTAL** - If a task would take >5 min due to tests, split them out
 
 Order tasks by dependency (prerequisites first). Keep descriptions concise but specific.
 

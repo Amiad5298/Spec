@@ -140,10 +140,107 @@ Just some regular text.
 * [ ] Another asterisk task
 """
         result = _extract_tasklist_from_output(output, "TEST-123")
-        
+
         assert result is not None
         tasks = parse_task_list(result)
         assert len(tasks) == 2
+
+    def test_extracts_tasks_from_add_tasks_tool_output(self):
+        """Extracts tasks from Augment add_tasks tool output format.
+
+        Reproduction test for bug where FUNDAMENTAL/INDEPENDENT prefixes
+        in task names were not being converted to category metadata.
+        The add_tasks tool outputs tasks in this format:
+        [ ] UUID:xxx NAME:CATEGORY: Task Name DESCRIPTION:...
+        """
+        # This is the exact format from the bug report log
+        output = """🔧 Tool call: add_tasks
+   tasks: [{"name":"FUNDAMENTAL: Core Domain Models","description":"Create models","state":"NOT_STARTED"}]
+
+📋 Tool result: add_tasks
+Task list updated successfully. Created: 13, Updated: 1, Deleted: 0.
+
+# Task Changes
+
+## Created Tasks
+
+[ ] UUID:4pApZJ9L8PbqRF4KK9DqUP NAME:INDEPENDENT: Integration Tests DESCRIPTION:Add integration tests
+[ ] UUID:3Hi56SkevBNQqxsEZ6yVJS NAME:INDEPENDENT: Test Fixtures DESCRIPTION:Add helper methods
+[ ] UUID:4Z52PLS5YetsmJ3nWS53ZP NAME:INDEPENDENT: Unit Tests - DasActivityImpl DESCRIPTION:Create unit tests
+[ ] UUID:41ErRNs1tPunY7fnfpy47v NAME:INDEPENDENT: Unit Tests - DasServiceImpl DESCRIPTION:Create unit tests
+[ ] UUID:dRaGhR21KreuXQVmt1X1vJ NAME:INDEPENDENT: DasActivityImpl Implementation DESCRIPTION:Implement method
+[ ] UUID:sBRaeuUa1JGsaCEa2KY8Pg NAME:INDEPENDENT: DasServiceImpl Implementation DESCRIPTION:Implement method
+[ ] UUID:2EGNT9cKUyqaNLBGU3HMbp NAME:INDEPENDENT: DasResponseConverter Update DESCRIPTION:Add parsing methods
+[ ] UUID:iKiHYvi9H9kyAwkujq4DtR NAME:INDEPENDENT: DAS Operations Enum Update DESCRIPTION:Add operation
+[ ] UUID:5dNuiYQddu3GfM5UNFNAyh NAME:INDEPENDENT: Response DTOs DESCRIPTION:Create response models
+[ ] UUID:6xNuiYQddu3GfM5UNFNAyh NAME:INDEPENDENT: GraphQL Query Definition DESCRIPTION:Create query file
+[ ] UUID:7yNuiYQddu3GfM5UNFNAyz NAME:FUNDAMENTAL: Core Domain Models and Enums DESCRIPTION:Create all domain models
+[ ] UUID:8zNuiYQddu3GfM5UNFNAzz NAME:FUNDAMENTAL: DAS Service Interface Update DESCRIPTION:Add method to interface
+[ ] UUID:9aNuiYQddu3GfM5UNFNBaa NAME:FUNDAMENTAL: DAS Activity Interface Update DESCRIPTION:Add method to interface
+"""
+        result = _extract_tasklist_from_output(output, "RED-176579")
+
+        assert result is not None
+        tasks = parse_task_list(result)
+
+        # Should extract all 13 tasks
+        assert len(tasks) == 13, f"Expected 13 tasks, got {len(tasks)}"
+
+        # Count tasks by category
+        from specflow.workflow.tasks import TaskCategory
+        fundamental_tasks = [t for t in tasks if t.category == TaskCategory.FUNDAMENTAL]
+        independent_tasks = [t for t in tasks if t.category == TaskCategory.INDEPENDENT]
+
+        # Should have 3 FUNDAMENTAL and 10 INDEPENDENT tasks
+        assert len(fundamental_tasks) == 3, (
+            f"Expected 3 FUNDAMENTAL tasks, got {len(fundamental_tasks)}. "
+            f"Task categories: {[(t.name, t.category.value) for t in tasks]}"
+        )
+        assert len(independent_tasks) == 10, (
+            f"Expected 10 INDEPENDENT tasks, got {len(independent_tasks)}. "
+            f"Task categories: {[(t.name, t.category.value) for t in tasks]}"
+        )
+
+        # Verify task names don't have the prefix anymore (it's in metadata)
+        for task in tasks:
+            assert not task.name.startswith("FUNDAMENTAL:"), (
+                f"Task name should not start with 'FUNDAMENTAL:': {task.name}"
+            )
+            assert not task.name.startswith("INDEPENDENT:"), (
+                f"Task name should not start with 'INDEPENDENT:': {task.name}"
+            )
+
+    def test_extracts_category_from_name_prefix_simple(self):
+        """Extracts category metadata from FUNDAMENTAL/INDEPENDENT prefixes.
+
+        Simpler test case for category prefix parsing.
+        """
+        output = """Here is the task list:
+- [ ] FUNDAMENTAL: Setup database schema
+- [ ] FUNDAMENTAL: Create base models
+- [ ] INDEPENDENT: Add API endpoints
+- [ ] INDEPENDENT: Write unit tests
+"""
+        result = _extract_tasklist_from_output(output, "TEST-456")
+
+        assert result is not None
+        tasks = parse_task_list(result)
+
+        assert len(tasks) == 4
+
+        from specflow.workflow.tasks import TaskCategory
+
+        # First two should be FUNDAMENTAL
+        assert tasks[0].category == TaskCategory.FUNDAMENTAL
+        assert tasks[1].category == TaskCategory.FUNDAMENTAL
+
+        # Last two should be INDEPENDENT
+        assert tasks[2].category == TaskCategory.INDEPENDENT
+        assert tasks[3].category == TaskCategory.INDEPENDENT
+
+        # Names should not include the prefix
+        assert tasks[0].name == "Setup database schema"
+        assert tasks[2].name == "Add API endpoints"
 
 
 class TestGenerateTasklist:

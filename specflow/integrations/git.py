@@ -8,7 +8,6 @@ import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from specflow.utils.console import print_error, print_info, print_success, print_warning
 from specflow.utils.logging import log_command
@@ -769,7 +768,7 @@ def _generate_untracked_file_diff(
                     f"new file mode 100644\n"
                     f"[BINARY FILE: {filepath}]\n"
                 )
-        except (OSError, IOError):
+        except OSError:
             pass
 
         # Read and format text file (doc files only)
@@ -792,7 +791,7 @@ def _generate_untracked_file_diff(
 
         return "".join(diff_lines)
 
-    except (OSError, IOError) as e:
+    except OSError as e:
         return (
             f"diff --git a/{filepath} b/{filepath}\n"
             f"new file mode 100644\n"

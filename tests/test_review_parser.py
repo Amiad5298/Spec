@@ -8,9 +8,8 @@ Tests cover:
 - False positive prevention (PASS in normal prose)
 """
 
-import pytest
 
-from specflow.workflow.review import parse_review_status, ReviewStatus
+from specflow.workflow.review import ReviewStatus, parse_review_status
 
 
 class TestParseReviewStatusCanonical:
@@ -287,16 +286,6 @@ Some review text without a clear status marker.
         assert parse_review_status(output) == ReviewStatus.PASS
 
 
-# Backwards compatibility test - ensure the re-exported alias works
-class TestBackwardsCompatibility:
-    """Tests for backwards compatibility with underscore-prefixed alias."""
-
-    def test_underscore_alias_works(self):
-        """The _parse_review_status alias works for backwards compat."""
-        from specflow.workflow.step3_execute import _parse_review_status
-        assert _parse_review_status("**Status**: PASS\n") == ReviewStatus.PASS
-        assert _parse_review_status("Status: NEEDS_ATTENTION") == ReviewStatus.NEEDS_ATTENTION
-
 
 class TestBuildReviewPrompt:
     """Tests for build_review_prompt function."""
@@ -304,6 +293,7 @@ class TestBuildReviewPrompt:
     def test_builds_prompt_with_phase_and_diff(self):
         """Builds a prompt with the phase and diff output."""
         from unittest.mock import MagicMock
+
         from specflow.workflow.review import build_review_prompt
 
         state = MagicMock()
@@ -325,6 +315,7 @@ class TestBuildReviewPrompt:
     def test_includes_large_changeset_instructions_when_truncated(self):
         """Includes large changeset instructions when diff is truncated."""
         from unittest.mock import MagicMock
+
         from specflow.workflow.review import build_review_prompt
 
         state = MagicMock()
@@ -344,6 +335,7 @@ class TestBuildReviewPrompt:
     def test_includes_review_instructions(self):
         """Includes review instructions in the prompt."""
         from unittest.mock import MagicMock
+
         from specflow.workflow.review import build_review_prompt
 
         state = MagicMock()
@@ -367,6 +359,7 @@ class TestGetDiffForReview:
     def test_uses_baseline_when_available(self):
         """Uses baseline-anchored diff when diff_baseline_ref is set."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _get_diff_for_review
 
         state = MagicMock()
@@ -382,6 +375,7 @@ class TestGetDiffForReview:
     def test_falls_back_to_smart_diff_when_no_baseline(self):
         """Falls back to legacy get_smart_diff when no baseline."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _get_diff_for_review
 
         state = MagicMock()
@@ -401,6 +395,7 @@ class TestRunPhaseReview:
     def test_returns_true_when_no_changes(self):
         """Returns True when there are no changes to review."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -416,6 +411,7 @@ class TestRunPhaseReview:
     def test_returns_true_when_review_passes(self):
         """Returns True when review status is PASS."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -437,6 +433,7 @@ class TestRunPhaseReview:
     def test_prompts_for_git_error(self):
         """Prompts user when git diff fails."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -457,6 +454,7 @@ class TestRunPhaseReview:
     def test_returns_false_when_user_stops_after_git_error(self):
         """Returns False when user chooses to stop after git error."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -476,6 +474,7 @@ class TestRunPhaseReview:
     def test_offers_autofix_on_needs_attention(self):
         """Offers auto-fix when review returns NEEDS_ATTENTION."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -505,6 +504,7 @@ class TestRunPhaseReview:
     def test_runs_autofix_when_user_accepts(self):
         """Runs auto-fix when user accepts."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -536,6 +536,7 @@ class TestRunPhaseReview:
     def test_handles_review_execution_exception(self):
         """Handles exception during review execution gracefully."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -559,6 +560,7 @@ class TestRunPhaseReview:
     def test_prompts_user_on_execution_failure(self):
         """Prompts user when review execution returns failure."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -588,6 +590,7 @@ class TestRunRereviewAfterFix:
     def test_returns_none_when_user_skips(self):
         """Returns None when user skips re-review."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()
@@ -602,6 +605,7 @@ class TestRunRereviewAfterFix:
     def test_returns_true_when_no_changes_after_fix(self):
         """Returns True when no changes remain after fix."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()
@@ -623,6 +627,7 @@ class TestRunRereviewAfterFix:
     def test_returns_true_when_rereview_passes(self):
         """Returns True when re-review passes."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()
@@ -646,6 +651,7 @@ class TestRunRereviewAfterFix:
     def test_returns_none_when_rereview_fails(self):
         """Returns None when re-review still shows issues."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()
@@ -670,6 +676,7 @@ class TestRunRereviewAfterFix:
     def test_returns_none_on_git_error(self):
         """Returns None when git diff fails during re-review."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()
@@ -691,6 +698,7 @@ class TestRunRereviewAfterFix:
     def test_returns_none_on_execution_failure(self):
         """Returns None when auggie execution fails."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()
@@ -714,6 +722,7 @@ class TestRunRereviewAfterFix:
     def test_returns_none_on_exception(self):
         """Returns None when exception occurs during re-review."""
         from unittest.mock import MagicMock, patch
+
         from specflow.workflow.review import _run_rereview_after_fix
 
         state = MagicMock()

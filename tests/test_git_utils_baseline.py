@@ -8,7 +8,6 @@ These tests use a temporary git repository fixture to validate:
 - Binary file handling in diffs
 """
 
-import os
 import subprocess
 from pathlib import Path
 

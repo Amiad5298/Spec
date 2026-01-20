@@ -1,22 +1,20 @@
 """Tests for spec.workflow.task_memory module."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 import subprocess
+from unittest.mock import MagicMock, patch
 
+from specflow.integrations.jira import JiraTicket
+from specflow.workflow.state import WorkflowState
 from specflow.workflow.task_memory import (
     TaskMemory,
-    capture_task_memory,
-    find_related_task_memories,
-    build_pattern_context,
+    _extract_test_commands,
     _get_modified_files,
     _identify_patterns_in_changes,
-    _extract_test_commands,
+    build_pattern_context,
+    capture_task_memory,
+    find_related_task_memories,
 )
-from specflow.workflow.tasks import Task, TaskStatus
-from specflow.workflow.state import WorkflowState
-from specflow.integrations.jira import JiraTicket
+from specflow.workflow.tasks import Task
 
 
 class TestTaskMemory:

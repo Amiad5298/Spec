@@ -1,23 +1,22 @@
 """Tests for spec.workflow.step2_tasklist module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
-from specflow.workflow.step2_tasklist import (
-    step_2_create_tasklist,
-    _generate_tasklist,
-    _extract_tasklist_from_output,
-    _display_tasklist,
-    _edit_tasklist,
-    _create_default_tasklist,
-    _parse_add_tasks_line,
-)
-
-from specflow.workflow.state import WorkflowState
-from specflow.workflow.tasks import parse_task_list
 from specflow.integrations.jira import JiraTicket
 from specflow.ui.menus import TaskReviewChoice
+from specflow.workflow.state import WorkflowState
+from specflow.workflow.step2_tasklist import (
+    _create_default_tasklist,
+    _display_tasklist,
+    _edit_tasklist,
+    _extract_tasklist_from_output,
+    _generate_tasklist,
+    _parse_add_tasks_line,
+    step_2_create_tasklist,
+)
+from specflow.workflow.tasks import parse_task_list
 
 
 @pytest.fixture
@@ -31,11 +30,11 @@ def workflow_state(tmp_path):
         description="Test description"
     )
     state = WorkflowState(ticket=ticket)
-    
+
     # Create specs directory
     specs_dir = tmp_path / "specs"
     specs_dir.mkdir(parents=True)
-    
+
     # Create plan file
     plan_file = specs_dir / "TEST-123-plan.md"
     plan_file.write_text("""# Implementation Plan: TEST-123
@@ -48,10 +47,10 @@ Test implementation plan.
 2. Add tests
 """)
     state.plan_file = plan_file
-    
+
     # Patch the paths to use tmp_path
     state._specs_dir = specs_dir
-    
+
     return state
 
 
@@ -74,7 +73,7 @@ class TestExtractTasklistFromOutput:
 - [ ] Add unit tests
 """
         result = _extract_tasklist_from_output(output, "TEST-123")
-        
+
         assert result is not None
         assert "# Task List: TEST-123" in result
         assert "- [ ] Create module file" in result
@@ -94,7 +93,7 @@ Here are the tasks:
 Let me know if you need any changes!
 """
         result = _extract_tasklist_from_output(output, "PROJ-456")
-        
+
         assert result is not None
         tasks = parse_task_list(result)
         assert len(tasks) == 3
@@ -107,7 +106,7 @@ Let me know if you need any changes!
   - [ ] Subtask 2
 """
         result = _extract_tasklist_from_output(output, "TEST-123")
-        
+
         assert result is not None
         assert "- [ ] Main task" in result
         assert "  - [ ] Subtask 1" in result
@@ -119,7 +118,7 @@ Let me know if you need any changes!
 - [X] Also completed
 """
         result = _extract_tasklist_from_output(output, "TEST-123")
-        
+
         assert result is not None
         assert "- [x] Completed task" in result
         assert "- [ ] Pending task" in result
@@ -132,7 +131,7 @@ Let me know if you need any changes!
 Just some regular text.
 """
         result = _extract_tasklist_from_output(output, "TEST-123")
-        
+
         assert result is None
 
     def test_handles_asterisk_bullets(self):

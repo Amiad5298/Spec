@@ -1,18 +1,15 @@
 """Tests for spec.utils.console module."""
 
-import pytest
-from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from specflow.utils.console import (
-    console,
     custom_theme,
     print_error,
+    print_header,
+    print_info,
+    print_step,
     print_success,
     print_warning,
-    print_info,
-    print_header,
-    print_step,
     show_banner,
     show_version,
 )
@@ -90,7 +87,7 @@ class TestPrintFunctions:
     def test_print_info(self, mock_log, mock_console):
         """print_info outputs info message."""
         print_info("Test info")
-        
+
         mock_console.print.assert_called_once()
         call_args = mock_console.print.call_args
         assert "[INFO]" in call_args[0][0]
@@ -101,7 +98,7 @@ class TestPrintFunctions:
     def test_print_header(self, mock_console):
         """print_header outputs header with formatting."""
         print_header("Test Header")
-        
+
         # Should print empty line, header, empty line
         assert mock_console.print.call_count == 3
         calls = mock_console.print.call_args_list
@@ -111,7 +108,7 @@ class TestPrintFunctions:
     def test_print_step(self, mock_console):
         """print_step outputs step with arrow."""
         print_step("Test step")
-        
+
         mock_console.print.assert_called_once()
         call_args = mock_console.print.call_args
         assert "➜" in call_args[0][0]
@@ -125,7 +122,7 @@ class TestBanner:
     def test_show_banner(self, mock_console):
         """show_banner displays ASCII art."""
         show_banner()
-        
+
         mock_console.print.assert_called_once()
         call_args = mock_console.print.call_args
         banner_text = call_args[0][0]
@@ -140,10 +137,10 @@ class TestVersion:
     def test_show_version(self, mock_console):
         """show_version displays version info."""
         show_version()
-        
+
         # Should print multiple lines
         assert mock_console.print.call_count >= 4
-        
+
         # Check version is displayed
         calls = [str(c) for c in mock_console.print.call_args_list]
         version_shown = any("2.0.0" in c for c in calls)

@@ -7,12 +7,12 @@ This package contains:
 """
 
 from specflow.integrations.auggie import (
-    AuggieClient,
-    AuggieModel,
     SPECFLOW_AGENT_IMPLEMENTER,
     SPECFLOW_AGENT_PLANNER,
     SPECFLOW_AGENT_REVIEWER,
     SPECFLOW_AGENT_TASKLIST,
+    AuggieClient,
+    AuggieModel,
     check_auggie_installed,
     get_auggie_version,
     install_auggie,

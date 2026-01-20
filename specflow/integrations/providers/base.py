@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 
 # Pre-compiled regex patterns for performance optimization
 # These are compiled once at module load time instead of on each function call
@@ -231,14 +231,14 @@ class GenericTicket:
     type: TicketType = TicketType.UNKNOWN
 
     # Assignment
-    assignee: Optional[str] = None
+    assignee: str | None = None
 
     # Categorization
     labels: list[str] = field(default_factory=list)
 
     # Timestamps
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     # Workflow fields
     branch_summary: str = ""

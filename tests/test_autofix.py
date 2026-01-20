@@ -7,12 +7,12 @@ Tests cover:
 - Backwards compatibility alias
 """
 
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from specflow.integrations.jira import JiraTicket
-from specflow.workflow.autofix import run_auto_fix, _run_auto_fix
+from specflow.workflow.autofix import _run_auto_fix, run_auto_fix
 from specflow.workflow.state import WorkflowState
 
 

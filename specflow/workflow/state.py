@@ -6,10 +6,7 @@ current state of the workflow execution.
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
-
-from specflow.integrations.jira import JiraTicket
-from specflow.workflow.git_utils import DirtyTreePolicy
+from typing import TYPE_CHECKING
 
 # Import subagent constants as single source of truth
 from specflow.integrations.auggie import (
@@ -19,6 +16,8 @@ from specflow.integrations.auggie import (
     SPECFLOW_AGENT_REVIEWER,
     SPECFLOW_AGENT_TASKLIST,
 )
+from specflow.integrations.jira import JiraTicket
+from specflow.workflow.git_utils import DirtyTreePolicy
 
 if TYPE_CHECKING:
     from specflow.workflow.task_memory import TaskMemory
@@ -106,8 +105,8 @@ class WorkflowState:
     user_context: str = ""
 
     # File paths
-    plan_file: Optional[Path] = None
-    tasklist_file: Optional[Path] = None
+    plan_file: Path | None = None
+    tasklist_file: Path | None = None
 
     # Progress tracking
     completed_tasks: list[str] = field(default_factory=list)

@@ -11,7 +11,6 @@ Supports versioned agent files with automatic update detection:
 
 import hashlib
 from pathlib import Path
-from typing import Optional
 
 from specflow import __version__
 from specflow.integrations.auggie import (
@@ -25,7 +24,7 @@ from specflow.utils.console import print_info, print_step, print_success, print_
 from specflow.utils.logging import log_message
 
 
-def _find_repo_root() -> Optional[Path]:
+def _find_repo_root() -> Path | None:
     """Find the git repository root by looking for .git directory.
 
     Traverses from current working directory upward until:

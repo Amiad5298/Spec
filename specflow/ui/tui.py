@@ -21,10 +21,9 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING
 
 from rich.console import Group
-from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.spinner import Spinner
@@ -276,10 +275,10 @@ class TaskRunnerUI:
     _log_dir: Path | None = field(default=None, init=False, repr=False)
     # Keyboard input handling
     _keyboard_reader: KeyboardReader = field(default_factory=KeyboardReader, init=False, repr=False)
-    _input_thread: Optional[threading.Thread] = field(default=None, init=False, repr=False)
+    _input_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _stop_input_thread: bool = field(default=False, init=False, repr=False)
     # Background refresh thread for parallel mode spinner animation
-    _refresh_thread: Optional[threading.Thread] = field(default=None, init=False, repr=False)
+    _refresh_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _stop_refresh_thread: bool = field(default=False, init=False, repr=False)
     # Quit signal for execution loop
     quit_requested: bool = field(default=False, init=False, repr=False)
@@ -777,7 +776,7 @@ class TaskRunnerUI:
         skipped_count = sum(1 for r in self.records if r.status == TaskRunStatus.SKIPPED)
 
         console.print()
-        console.print(f"[bold]Execution Complete[/bold]")
+        console.print("[bold]Execution Complete[/bold]")
         console.print(f"  [green]✓ Succeeded:[/green] {success_count}")
         if failed_count > 0:
             console.print(f"  [red]✗ Failed:[/red] {failed_count}")

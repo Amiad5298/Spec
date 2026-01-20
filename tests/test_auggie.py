@@ -1,26 +1,23 @@
 """Tests for spec.integrations.auggie module."""
 
-import pytest
-from unittest.mock import MagicMock, patch
 import subprocess
+from unittest.mock import MagicMock, patch
 
 from specflow.integrations.auggie import (
-    AgentDefinition,
-    AuggieModel,
-    AuggieClient,
-    AuggieRateLimitError,
     SPECFLOW_AGENT_IMPLEMENTER,
     SPECFLOW_AGENT_PLANNER,
     SPECFLOW_AGENT_REVIEWER,
     SPECFLOW_AGENT_TASKLIST,
-    version_gte,
+    AgentDefinition,
+    AuggieClient,
+    AuggieRateLimitError,
+    _looks_like_rate_limit,
+    _parse_model_list,
+    check_auggie_installed,
     extract_model_id,
     get_auggie_version,
     get_node_version,
-    check_auggie_installed,
-    list_models,
-    _parse_model_list,
-    _looks_like_rate_limit,
+    version_gte,
 )
 
 
@@ -69,18 +66,18 @@ class TestGetAuggieVersion:
             returncode=0,
             stdout="auggie version 0.12.0\n",
         )
-        
+
         result = get_auggie_version()
-        
+
         assert result == "0.12.0"
 
     @patch("shutil.which")
     def test_returns_none_when_not_installed(self, mock_which):
         """Returns None when auggie not in PATH."""
         mock_which.return_value = None
-        
+
         result = get_auggie_version()
-        
+
         assert result is None
 
 
@@ -96,18 +93,18 @@ class TestGetNodeVersion:
             returncode=0,
             stdout="v22.0.0\n",
         )
-        
+
         result = get_node_version()
-        
+
         assert result == "22.0.0"
 
     @patch("shutil.which")
     def test_returns_none_when_not_installed(self, mock_which):
         """Returns None when node not in PATH."""
         mock_which.return_value = None
-        
+
         result = get_node_version()
-        
+
         assert result is None
 
 
@@ -121,9 +118,9 @@ class TestCheckAuggieInstalled:
     def test_returns_true_when_valid(self, mock_success, mock_info, mock_step, mock_version):
         """Returns True when version meets requirements."""
         mock_version.return_value = "0.13.0"
-        
+
         is_valid, message = check_auggie_installed()
-        
+
         assert is_valid is True
         assert message == ""
 
@@ -132,9 +129,9 @@ class TestCheckAuggieInstalled:
     def test_returns_false_when_not_installed(self, mock_step, mock_version):
         """Returns False when not installed."""
         mock_version.return_value = None
-        
+
         is_valid, message = check_auggie_installed()
-        
+
         assert is_valid is False
         assert "not installed" in message
 
@@ -144,9 +141,9 @@ class TestCheckAuggieInstalled:
     def test_returns_false_when_old_version(self, mock_info, mock_step, mock_version):
         """Returns False when version is too old."""
         mock_version.return_value = "0.10.0"
-        
+
         is_valid, message = check_auggie_installed()
-        
+
         assert is_valid is False
         assert "older than" in message
 
@@ -177,9 +174,9 @@ class TestAuggieClient:
         """Runs basic command."""
         mock_run.return_value = MagicMock(returncode=0, stdout="output")
         client = AuggieClient()
-        
-        result = client.run("test prompt")
-        
+
+        client.run("test prompt")
+
         mock_run.assert_called_once()
         assert "auggie" in mock_run.call_args[0][0]
 
@@ -188,9 +185,9 @@ class TestAuggieClient:
         """Includes model flag when set."""
         mock_run.return_value = MagicMock(returncode=0, stdout="output")
         client = AuggieClient(model="claude-3")
-        
+
         client.run("test prompt")
-        
+
         cmd = mock_run.call_args[0][0]
         assert "--model" in cmd
         assert "claude-3" in cmd
@@ -200,9 +197,9 @@ class TestAuggieClient:
         """run_print returns True on success."""
         mock_run.return_value = MagicMock(returncode=0)
         client = AuggieClient()
-        
+
         result = client.run_print("test prompt")
-        
+
         assert result is True
 
     @patch("subprocess.run")

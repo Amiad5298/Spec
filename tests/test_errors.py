@@ -1,13 +1,12 @@
 """Tests for spec.utils.errors module."""
 
-import pytest
 
 from specflow.utils.errors import (
-    SpecError,
     AuggieNotInstalledError,
     ExitCode,
     GitOperationError,
     JiraNotConfiguredError,
+    SpecError,
     UserCancelledError,
 )
 

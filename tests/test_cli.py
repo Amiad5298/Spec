@@ -1,12 +1,12 @@
 """Tests for spec.cli module."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
 from specflow.cli import app
 from specflow.utils.errors import ExitCode
-
 
 runner = CliRunner()
 
@@ -17,14 +17,14 @@ class TestCLIVersion:
     def test_version_flag(self):
         """--version shows version and exits."""
         result = runner.invoke(app, ["--version"])
-        
+
         assert result.exit_code == 0
         assert "2.0.0" in result.stdout
 
     def test_short_version_flag(self):
         """-v shows version and exits."""
         result = runner.invoke(app, ["-v"])
-        
+
         assert result.exit_code == 0
         assert "2.0.0" in result.stdout
 
@@ -38,9 +38,9 @@ class TestCLIConfig:
         """--config shows configuration and exits."""
         mock_config = MagicMock()
         mock_config_class.return_value = mock_config
-        
-        result = runner.invoke(app, ["--config"])
-        
+
+        runner.invoke(app, ["--config"])
+
         mock_config.show.assert_called_once()
 
 
@@ -55,9 +55,9 @@ class TestCLIPrerequisites:
         mock_git.return_value = False
         mock_config = MagicMock()
         mock_config_class.return_value = mock_config
-        
+
         result = runner.invoke(app, ["TEST-123"])
-        
+
         assert result.exit_code == ExitCode.GENERAL_ERROR
 
     @patch("specflow.cli.show_banner")
@@ -95,9 +95,9 @@ class TestCLIWorkflow:
         mock_config = MagicMock()
         mock_config.settings.default_jira_project = "PROJ"
         mock_config_class.return_value = mock_config
-        
-        result = runner.invoke(app, ["TEST-123"])
-        
+
+        runner.invoke(app, ["TEST-123"])
+
         mock_run.assert_called_once()
 
     @patch("specflow.cli.show_banner")
@@ -111,9 +111,9 @@ class TestCLIWorkflow:
         mock_prereq.return_value = True
         mock_config = MagicMock()
         mock_config_class.return_value = mock_config
-        
-        result = runner.invoke(app, [])
-        
+
+        runner.invoke(app, [])
+
         mock_menu.assert_called_once()
 
 
@@ -130,9 +130,9 @@ class TestCLIFlags:
         mock_config = MagicMock()
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
-        
-        result = runner.invoke(app, ["--model", "claude-3", "TEST-123"])
-        
+
+        runner.invoke(app, ["--model", "claude-3", "TEST-123"])
+
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["model"] == "claude-3"
 
@@ -148,9 +148,9 @@ class TestCLIFlags:
         mock_config = MagicMock()
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
-        
-        result = runner.invoke(app, ["--skip-clarification", "TEST-123"])
-        
+
+        runner.invoke(app, ["--skip-clarification", "TEST-123"])
+
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["skip_clarification"] is True
 
@@ -165,7 +165,7 @@ class TestCLIFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--no-squash", "TEST-123"])
+        runner.invoke(app, ["--no-squash", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["squash_at_end"] is False
@@ -187,7 +187,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--parallel", "TEST-123"])
+        runner.invoke(app, ["--parallel", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parallel"] is True
@@ -205,7 +205,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--no-parallel", "TEST-123"])
+        runner.invoke(app, ["--no-parallel", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parallel"] is False
@@ -223,7 +223,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--max-parallel", "4", "TEST-123"])
+        runner.invoke(app, ["--max-parallel", "4", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_parallel"] == 4
@@ -252,7 +252,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--fail-fast", "TEST-123"])
+        runner.invoke(app, ["--fail-fast", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["fail_fast"] is True
@@ -270,7 +270,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--no-fail-fast", "TEST-123"])
+        runner.invoke(app, ["--no-fail-fast", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["fail_fast"] is False
@@ -288,7 +288,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["TEST-123"])
+        runner.invoke(app, ["TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_parallel"] is None
@@ -306,7 +306,7 @@ class TestParallelFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["TEST-123"])
+        runner.invoke(app, ["TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["fail_fast"] is None
@@ -328,7 +328,7 @@ class TestRetryFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--max-retries", "10", "TEST-123"])
+        runner.invoke(app, ["--max-retries", "10", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_retries"] == 10
@@ -346,7 +346,7 @@ class TestRetryFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--max-retries", "0", "TEST-123"])
+        runner.invoke(app, ["--max-retries", "0", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_retries"] == 0
@@ -364,7 +364,7 @@ class TestRetryFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--retry-base-delay", "5.0", "TEST-123"])
+        runner.invoke(app, ["--retry-base-delay", "5.0", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["retry_base_delay"] == 5.0
@@ -386,7 +386,7 @@ class TestAutoUpdateDocsFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--auto-update-docs", "TEST-123"])
+        runner.invoke(app, ["--auto-update-docs", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["auto_update_docs"] is True
@@ -404,7 +404,7 @@ class TestAutoUpdateDocsFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["--no-auto-update-docs", "TEST-123"])
+        runner.invoke(app, ["--no-auto-update-docs", "TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["auto_update_docs"] is False
@@ -422,7 +422,7 @@ class TestAutoUpdateDocsFlags:
         mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
-        result = runner.invoke(app, ["TEST-123"])
+        runner.invoke(app, ["TEST-123"])
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["auto_update_docs"] is None
@@ -550,6 +550,7 @@ class TestDirtyTreePolicy:
     def test_dirty_tree_policy_invalid_rejected(self, mock_parse):
         """Invalid --dirty-tree-policy value is rejected."""
         import click
+
         from specflow.cli import _run_workflow
 
         mock_parse.return_value = MagicMock()
@@ -727,6 +728,7 @@ class TestEffectiveValueOverrides:
     def test_invalid_config_max_parallel_rejected(self, mock_parse):
         """Invalid config max_parallel_tasks (e.g., 10) is rejected via effective validation."""
         import click
+
         from specflow.cli import _run_workflow
         from specflow.utils.errors import ExitCode
 

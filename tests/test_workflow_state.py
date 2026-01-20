@@ -1,10 +1,11 @@
 """Tests for spec.workflow.state module."""
 
-import pytest
 from pathlib import Path
 
-from specflow.workflow.state import WorkflowState, RateLimitConfig
+import pytest
+
 from specflow.integrations.jira import JiraTicket
+from specflow.workflow.state import RateLimitConfig, WorkflowState
 
 
 @pytest.fixture

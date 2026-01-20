@@ -1,29 +1,25 @@
 """Tests for spec.integrations.git module."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 import subprocess
+from unittest.mock import MagicMock, patch
 
 from specflow.integrations.git import (
-    DiffResult,
-    DirtyStateAction,
-    is_git_repo,
-    is_dirty,
-    has_untracked_files,
-    has_any_changes,
+    add_to_gitignore,
+    branch_exists,
+    checkout_branch,
+    create_branch,
+    create_checkpoint_commit,
     get_current_branch,
     get_current_commit,
-    get_status_short,
-    branch_exists,
-    create_branch,
-    checkout_branch,
-    add_to_gitignore,
-    create_checkpoint_commit,
-    squash_commits,
-    has_changes,
-    revert_changes,
     get_diff_from_baseline,
+    get_status_short,
+    has_any_changes,
+    has_changes,
+    has_untracked_files,
+    is_dirty,
+    is_git_repo,
+    revert_changes,
+    squash_commits,
 )
 
 

@@ -8,9 +8,10 @@ Tests cover:
 - Abstract interface contract
 """
 
-import pytest
-from unittest.mock import patch, call
 from abc import ABC
+from unittest.mock import patch
+
+import pytest
 
 from specflow.integrations.providers.user_interaction import (
     CLIUserInteraction,

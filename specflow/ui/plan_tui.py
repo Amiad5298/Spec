@@ -25,7 +25,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from rich.console import Group
 from rich.live import Live
@@ -91,7 +91,7 @@ class StreamingOperationUI:
     _keyboard_reader: KeyboardReader = field(
         default_factory=KeyboardReader, init=False, repr=False
     )
-    _input_thread: Optional[threading.Thread] = field(
+    _input_thread: threading.Thread | None = field(
         default=None, init=False, repr=False
     )
     _stop_input_thread: bool = field(default=False, init=False, repr=False)
@@ -169,7 +169,7 @@ class StreamingOperationUI:
         if self._log_buffer is not None:
             self._log_buffer.close()
 
-    def __enter__(self) -> "StreamingOperationUI":
+    def __enter__(self) -> StreamingOperationUI:
         """Context manager entry - starts the TUI display.
 
         Returns:

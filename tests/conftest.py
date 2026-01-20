@@ -1,8 +1,9 @@
 """Shared pytest fixtures for SPEC tests."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -102,7 +103,7 @@ def mock_console(monkeypatch):
 @pytest.fixture
 def sample_tasks_with_categories():
     """Create sample tasks with category metadata for parallel execution tests."""
-    from specflow.workflow.tasks import Task, TaskStatus, TaskCategory
+    from specflow.workflow.tasks import Task, TaskCategory, TaskStatus
 
     return [
         Task(

@@ -4,15 +4,13 @@ Tests the ensure_gitignore_configured() function and related utilities
 that manage the target project's .gitignore file.
 """
 
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
 from specflow.integrations.agents import (
+    SPECFLOW_GITIGNORE_MARKER,
+    SPECFLOW_GITIGNORE_PATTERNS,
     _check_gitignore_has_pattern,
     ensure_gitignore_configured,
-    SPECFLOW_GITIGNORE_PATTERNS,
-    SPECFLOW_GITIGNORE_MARKER,
 )
 
 
@@ -292,7 +290,7 @@ __pycache__/
         content = gitignore_path.read_text()
 
         # All patterns should be added as actual rules (not just comments)
-        lines = [l.strip() for l in content.split("\n") if not l.strip().startswith("#")]
+        lines = [line.strip() for line in content.split("\n") if not line.strip().startswith("#")]
         assert ".specflow/" in lines
         assert "*.log" in lines
 

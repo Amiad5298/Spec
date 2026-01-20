@@ -6,7 +6,6 @@ a task list from the implementation plan with user approval.
 
 import re
 from pathlib import Path
-from typing import Optional
 
 from specflow.integrations.auggie import AuggieClient
 from specflow.ui.menus import TaskReviewChoice, show_task_review_menu
@@ -22,7 +21,7 @@ from specflow.utils.console import (
 )
 from specflow.utils.logging import log_message
 from specflow.workflow.state import WorkflowState
-from specflow.workflow.tasks import parse_task_list, format_task_list
+from specflow.workflow.tasks import parse_task_list
 
 
 def step_2_create_tasklist(state: WorkflowState, auggie: AuggieClient) -> bool:
@@ -123,7 +122,7 @@ CATEGORY_PREFIX_PATTERN = re.compile(
 )
 
 
-def _parse_add_tasks_line(raw_task_text: str) -> tuple[Optional[str], str]:
+def _parse_add_tasks_line(raw_task_text: str) -> tuple[str | None, str]:
     """Parse a line from add_tasks tool output format.
 
     Strictly parses the format: UUID:<id> NAME:[CATEGORY: ]<name> DESCRIPTION:<desc>
@@ -160,7 +159,7 @@ def _parse_add_tasks_line(raw_task_text: str) -> tuple[Optional[str], str]:
     return (None, name_field)
 
 
-def _extract_tasklist_from_output(output: str, ticket_id: str) -> Optional[str]:
+def _extract_tasklist_from_output(output: str, ticket_id: str) -> str | None:
     """Extract markdown checkbox task list from AI output.
 
     Parses checkbox tasks from AI output, supporting:

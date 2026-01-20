@@ -7,7 +7,7 @@ the AI agent better feedback when tasks fail.
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from specflow.workflow.tasks import Task
@@ -17,13 +17,13 @@ if TYPE_CHECKING:
 class ErrorAnalysis:
     """Structured error analysis."""
     error_type: str  # "syntax", "import", "runtime", "test_failure", "unknown"
-    file_path: Optional[str]
-    line_number: Optional[int]
+    file_path: str | None
+    line_number: int | None
     error_message: str
     stack_trace: list[str]
     root_cause: str
     suggested_fix: str
-    
+
     def to_markdown(self) -> str:
         """Format as markdown for prompt."""
         return f"""
@@ -51,36 +51,36 @@ class ErrorAnalysis:
 
 def analyze_error_output(output: str, task: "Task") -> ErrorAnalysis:
     """Parse and analyze error output to provide structured feedback.
-    
+
     Args:
         output: Raw stdout/stderr from failed execution
         task: Task that failed
-    
+
     Returns:
         Structured error analysis
     """
     # Try different parsers in order of specificity
-    
+
     # Python traceback
     if "Traceback" in output:
         return _parse_python_traceback(output)
-    
+
     # TypeScript error
     if "error TS" in output or ".ts(" in output:
         return _parse_typescript_error(output)
-    
+
     # Jest/pytest test failure
     if "FAILED" in output or "AssertionError" in output:
         return _parse_test_failure(output)
-    
+
     # Import error
     if "ModuleNotFoundError" in output or "Cannot find module" in output:
         return _parse_import_error(output)
-    
+
     # Syntax error
     if "SyntaxError" in output or "Unexpected token" in output:
         return _parse_syntax_error(output)
-    
+
     # Generic error
     return ErrorAnalysis(
         error_type="unknown",
@@ -96,26 +96,26 @@ def analyze_error_output(output: str, task: "Task") -> ErrorAnalysis:
 def _parse_python_traceback(output: str) -> ErrorAnalysis:
     """Parse Python traceback."""
     lines = output.split('\n')
-    
+
     # Find the traceback section
     traceback_start = -1
     for i, line in enumerate(lines):
         if "Traceback" in line:
             traceback_start = i
             break
-    
+
     if traceback_start == -1:
         return _generic_error(output)
-    
+
     # Extract stack trace
     stack_trace = []
     error_line = ""
     file_path = None
     line_number = None
-    
+
     for i in range(traceback_start + 1, len(lines)):
         line = lines[i]
-        
+
         # File reference: '  File "/path/to/file.py", line 42, in function_name'
         file_match = re.match(r'\s*File "([^"]+)", line (\d+)', line)
         if file_match:
@@ -123,20 +123,20 @@ def _parse_python_traceback(output: str) -> ErrorAnalysis:
             line_number = int(file_match.group(2))
             stack_trace.append(line)
             continue
-        
+
         # Error message (last line)
         if line and not line.startswith(' '):
             error_line = line
             break
-        
+
         if line.strip():
             stack_trace.append(line)
-    
+
     # Determine error type and suggestions
     error_type = "runtime"
     root_cause = error_line
     suggested_fix = "Fix the error in the indicated file and line"
-    
+
     if "NameError" in error_line:
         error_type = "name_error"
         root_cause = "Variable or function not defined"
@@ -254,7 +254,7 @@ def _parse_import_error(output: str) -> ErrorAnalysis:
         error_message=f"Module '{module_name}' not found",
         stack_trace=[],
         root_cause=f"Package '{module_name}' is not installed or import path is incorrect",
-        suggested_fix=f"Install the package or fix the import path. Use codebase-retrieval to find correct import patterns."
+        suggested_fix="Install the package or fix the import path. Use codebase-retrieval to find correct import patterns."
     )
 
 

@@ -5,13 +5,12 @@ git dirty state handling, and model selection.
 """
 
 from enum import Enum
-from typing import Optional
 
 import questionary
 
-from specflow.integrations.auggie import AuggieModel, list_models
+from specflow.integrations.auggie import list_models
 from specflow.integrations.git import DirtyStateAction
-from specflow.ui.prompts import custom_style, prompt_select
+from specflow.ui.prompts import custom_style
 from specflow.utils.console import console, print_header, print_info
 from specflow.utils.errors import UserCancelledError
 from specflow.utils.logging import log_message
@@ -59,8 +58,8 @@ def show_main_menu() -> MainMenuChoice:
         log_message(f"Main menu selection: {result.value}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 class TaskReviewChoice(Enum):
@@ -101,8 +100,8 @@ def show_task_review_menu() -> TaskReviewChoice:
         log_message(f"Task review selection: {result.value}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def show_git_dirty_menu(context: str) -> DirtyStateAction:
@@ -141,14 +140,14 @@ def show_git_dirty_menu(context: str) -> DirtyStateAction:
         log_message(f"Dirty state selection: {result.value}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def show_model_selection(
     current_model: str = "",
     purpose: str = "default",
-) -> Optional[str]:
+) -> str | None:
     """Display model selection menu.
 
     Args:
@@ -193,13 +192,13 @@ def show_model_selection(
         log_message(f"Model selection for {purpose}: {result}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def show_task_checkboxes(
     tasks: list[str],
-    completed: Optional[list[str]] = None,
+    completed: list[str] | None = None,
 ) -> list[str]:
     """Display task checkboxes for selection.
 
@@ -239,8 +238,8 @@ def show_task_checkboxes(
         log_message(f"Tasks selected: {result}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 __all__ = [

@@ -26,7 +26,7 @@ class TestErrorAnalysis:
             root_cause="Missing colon",
             suggested_fix="Add colon at end of line"
         )
-        
+
         markdown = error.to_markdown()
         assert "**Type:** syntax" in markdown
         assert "**File:** test.py" in markdown
@@ -149,7 +149,7 @@ Traceback (most recent call last):
 ModuleNotFoundError: No module named 'missing_module'
 """
         result = analyze_error_output(output, sample_task)
-        
+
         assert result.error_type == "import"
         assert "missing_module" in result.error_message
 
@@ -166,7 +166,7 @@ class TestParseSyntaxError:
 SyntaxError: invalid syntax
 """
         result = analyze_error_output(output, sample_task)
-        
+
         assert result.error_type == "syntax"
         assert "SyntaxError" in result.error_message
 
@@ -177,9 +177,9 @@ class TestGenericError:
     def test_unknown_error_type(self, sample_task: Task) -> None:
         """Test handling unknown error types."""
         output = "Some random error message that doesn't match any pattern"
-        
+
         result = analyze_error_output(output, sample_task)
-        
+
         assert result.error_type == "unknown"
         assert result.file_path is None
         assert result.line_number is None

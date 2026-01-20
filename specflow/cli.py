@@ -4,12 +4,10 @@ This module provides the Typer-based command-line interface with all
 flags and commands matching the original Bash script.
 """
 
-import sys
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
-from specflow import __version__
 from specflow.config.manager import ConfigManager
 from specflow.integrations.auggie import check_auggie_installed, install_auggie
 from specflow.integrations.git import is_git_repo
@@ -22,7 +20,7 @@ from specflow.utils.console import (
     show_banner,
     show_version,
 )
-from specflow.utils.errors import SpecError, ExitCode, UserCancelledError
+from specflow.utils.errors import ExitCode, SpecError, UserCancelledError
 from specflow.utils.logging import setup_logging
 
 # Create Typer app
@@ -76,13 +74,13 @@ def show_help() -> None:
 @app.command()
 def main(
     ticket: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(
             help="Jira ticket ID or URL (e.g., PROJECT-123)",
         ),
     ] = None,
     model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--model",
             "-m",
@@ -90,14 +88,14 @@ def main(
         ),
     ] = None,
     planning_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--planning-model",
             help="AI model for planning phases (Steps 1-2)",
         ),
     ] = None,
     impl_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--impl-model",
             help="AI model for implementation phase (Step 3)",
@@ -125,7 +123,7 @@ def main(
         ),
     ] = False,
     tui: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--tui/--no-tui",
             help="Enable/disable TUI mode (default: auto-detect TTY)",
@@ -140,21 +138,21 @@ def main(
         ),
     ] = False,
     parallel: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--parallel/--no-parallel",
             help="Enable parallel execution of independent tasks (default: enabled)",
         ),
     ] = None,
     max_parallel: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--max-parallel",
             help="Maximum number of parallel tasks (1-5, default: from config)",
         ),
     ] = None,
     fail_fast: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--fail-fast/--no-fail-fast",
             help="Stop on first task failure (default: from config)",
@@ -182,14 +180,14 @@ def main(
         ),
     ] = False,
     dirty_tree_policy: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--dirty-tree-policy",
             help="Policy for dirty working tree: 'fail-fast' (default) or 'warn'",
         ),
     ] = None,
     auto_update_docs: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--auto-update-docs/--no-auto-update-docs",
             help="Enable automatic documentation updates (default: from config)",
@@ -203,7 +201,7 @@ def main(
         ),
     ] = False,
     version: Annotated[
-        Optional[bool],
+        bool | None,
         typer.Option(
             "--version",
             "-v",
@@ -269,15 +267,15 @@ def main(
 
     except UserCancelledError as e:
         print_info(f"\n{e}")
-        raise typer.Exit(ExitCode.USER_CANCELLED)
+        raise typer.Exit(ExitCode.USER_CANCELLED) from e
 
     except SpecError as e:
         print_error(str(e))
-        raise typer.Exit(e.exit_code)
+        raise typer.Exit(e.exit_code) from e
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as e:
         print_info("\nOperation cancelled by user")
-        raise typer.Exit(ExitCode.USER_CANCELLED)
+        raise typer.Exit(ExitCode.USER_CANCELLED) from e
 
 
 def _check_prerequisites(config: ConfigManager, force_jira_check: bool) -> bool:
@@ -421,21 +419,21 @@ def _configure_settings(config: ConfigManager) -> None:
 def _run_workflow(
     ticket: str,
     config: ConfigManager,
-    model: Optional[str] = None,
-    planning_model: Optional[str] = None,
-    impl_model: Optional[str] = None,
+    model: str | None = None,
+    planning_model: str | None = None,
+    impl_model: str | None = None,
     skip_clarification: bool = False,
     squash_at_end: bool = True,
-    use_tui: Optional[bool] = None,
+    use_tui: bool | None = None,
     verbose: bool = False,
-    parallel: Optional[bool] = None,
-    max_parallel: Optional[int] = None,
-    fail_fast: Optional[bool] = None,
+    parallel: bool | None = None,
+    max_parallel: int | None = None,
+    fail_fast: bool | None = None,
     max_retries: int = 5,
     retry_base_delay: float = 2.0,
     enable_review: bool = False,
-    dirty_tree_policy: Optional[str] = None,
-    auto_update_docs: Optional[bool] = None,
+    dirty_tree_policy: str | None = None,
+    auto_update_docs: bool | None = None,
 ) -> None:
     """Run the AI-assisted workflow.
 

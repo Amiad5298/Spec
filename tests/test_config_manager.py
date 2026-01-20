@@ -11,13 +11,11 @@ Tests cover:
 - Config source tracking (get_config_source)
 """
 
-import os
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from specflow.config.manager import ConfigManager
-from specflow.config.settings import Settings
 
 
 class TestConfigManagerLoad:
@@ -27,18 +25,18 @@ class TestConfigManagerLoad:
         """Returns defaults when config file doesn't exist."""
         config_path = tmp_path / "missing-config"
         manager = ConfigManager(config_path)
-        
+
         settings = manager.load()
-        
+
         assert settings.default_model == ""
         assert settings.auto_open_files is True
 
     def test_load_valid_file(self, temp_config_file):
         """Parses KEY=VALUE and KEY="VALUE" formats."""
         manager = ConfigManager(temp_config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.default_model == "claude-3"
         assert settings.planning_model == "claude-3-opus"
         assert settings.implementation_model == "claude-3-sonnet"
@@ -53,9 +51,9 @@ DEFAULT_MODEL="test"
 PLANNING_MODEL="test2"
 ''')
         manager = ConfigManager(config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.default_model == "test"
         assert settings.planning_model == "test2"
 
@@ -68,9 +66,9 @@ PLANNING_MODEL="test2"
 
 ''')
         manager = ConfigManager(config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.default_model == "test"
         assert settings.planning_model == "test2"
 
@@ -79,9 +77,9 @@ PLANNING_MODEL="test2"
         config_file = tmp_path / "config"
         config_file.write_text('AUTO_OPEN_FILES="true"\n')
         manager = ConfigManager(config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.auto_open_files is True
 
     def test_load_parses_boolean_false(self, tmp_path):
@@ -89,9 +87,9 @@ PLANNING_MODEL="test2"
         config_file = tmp_path / "config"
         config_file.write_text('AUTO_OPEN_FILES="false"\n')
         manager = ConfigManager(config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.auto_open_files is False
 
     def test_load_parses_integer(self, tmp_path):
@@ -99,9 +97,9 @@ PLANNING_MODEL="test2"
         config_file = tmp_path / "config"
         config_file.write_text('JIRA_CHECK_TIMESTAMP="1234567890"\n')
         manager = ConfigManager(config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.jira_check_timestamp == 1234567890
 
     def test_load_handles_unquoted_values(self, tmp_path):
@@ -109,9 +107,9 @@ PLANNING_MODEL="test2"
         config_file = tmp_path / "config"
         config_file.write_text('DEFAULT_MODEL=test-model\n')
         manager = ConfigManager(config_file)
-        
+
         settings = manager.load()
-        
+
         assert settings.default_model == "test-model"
 
     def test_load_handles_single_quotes(self, tmp_path):
@@ -160,7 +158,7 @@ class TestConfigManagerSave:
         """Raises ValueError for invalid key names."""
         config_path = tmp_path / "config"
         manager = ConfigManager(config_path)
-        
+
         with pytest.raises(ValueError, match="Invalid config key"):
             manager.save("invalid-key", "value")
 
@@ -168,7 +166,7 @@ class TestConfigManagerSave:
         """Raises ValueError for keys starting with number."""
         config_path = tmp_path / "config"
         manager = ConfigManager(config_path)
-        
+
         with pytest.raises(ValueError, match="Invalid config key"):
             manager.save("123KEY", "value")
 
@@ -176,9 +174,9 @@ class TestConfigManagerSave:
         """Creates config file if it doesn't exist."""
         config_path = tmp_path / "config"
         manager = ConfigManager(config_path)
-        
+
         manager.save("TEST_KEY", "test_value")
-        
+
         assert config_path.exists()
         assert 'TEST_KEY="test_value"' in config_path.read_text()
 
@@ -188,9 +186,9 @@ class TestConfigManagerSave:
         config_path.write_text('TEST_KEY="old_value"\n')
         manager = ConfigManager(config_path)
         manager.load()
-        
+
         manager.save("TEST_KEY", "new_value")
-        
+
         content = config_path.read_text()
         assert 'TEST_KEY="new_value"' in content
         assert "old_value" not in content
@@ -201,9 +199,9 @@ class TestConfigManagerSave:
         config_path.write_text('# Comment\nTEST_KEY="value"\n')
         manager = ConfigManager(config_path)
         manager.load()
-        
+
         manager.save("TEST_KEY", "new_value")
-        
+
         content = config_path.read_text()
         assert "# Comment" in content
 

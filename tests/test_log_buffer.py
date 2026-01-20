@@ -1,6 +1,5 @@
 """Tests for spec.ui.log_buffer module."""
 
-import pytest
 from pathlib import Path
 
 from specflow.ui.log_buffer import TaskLogBuffer

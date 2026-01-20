@@ -11,10 +11,10 @@ Tests cover:
 """
 
 import re
-
-import pytest
 from abc import ABC
 from enum import Enum
+
+import pytest
 
 from specflow.integrations.providers.base import (
     GenericTicket,

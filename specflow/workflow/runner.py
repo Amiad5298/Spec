@@ -4,20 +4,18 @@ This module provides the main workflow runner that orchestrates
 all three steps of the spec-driven development workflow.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator, Optional
 
 from specflow.config.manager import ConfigManager
 from specflow.integrations.agents import ensure_agents_installed
 from specflow.integrations.auggie import AuggieClient
 from specflow.integrations.git import (
-    DirtyStateAction,
     create_branch,
     get_current_branch,
     get_current_commit,
     handle_dirty_state,
     is_dirty,
-    stash_changes,
 )
 from specflow.integrations.jira import JiraTicket, fetch_ticket_info
 from specflow.ui.menus import show_git_dirty_menu

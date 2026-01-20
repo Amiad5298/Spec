@@ -10,7 +10,6 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from specflow.utils.logging import log_message
 from specflow.workflow.state import WorkflowState
@@ -25,51 +24,51 @@ class TaskMemory:
     patterns_used: list[str] = field(default_factory=list)
     key_decisions: list[str] = field(default_factory=list)
     test_commands: list[str] = field(default_factory=list)
-    
+
     def to_markdown(self) -> str:
         """Format as markdown for prompt context."""
         parts = [f"### {self.task_name}"]
-        
+
         if self.files_modified:
             parts.append(f"**Files:** {', '.join(self.files_modified)}")
-        
+
         if self.patterns_used:
             parts.append("**Patterns:**")
             for pattern in self.patterns_used:
                 parts.append(f"- {pattern}")
-        
+
         if self.key_decisions:
             parts.append("**Key Decisions:**")
             for decision in self.key_decisions:
                 parts.append(f"- {decision}")
-        
+
         return "\n".join(parts)
 
 
 def capture_task_memory(task: Task, state: WorkflowState) -> TaskMemory:
     """Capture learnings from a completed task.
-    
+
     This extracts patterns and decisions from the task without keeping
     the full conversation history, avoiding context pollution.
-    
+
     Args:
         task: Completed task
         state: Current workflow state
-    
+
     Returns:
         TaskMemory with captured learnings
     """
     log_message(f"Capturing task memory for: {task.name}")
-    
+
     # Get modified files from git
     modified_files = _get_modified_files()
-    
+
     # Analyze changes to identify patterns
     patterns = _identify_patterns_in_changes(modified_files)
-    
+
     # Extract test commands if this was a test task
     test_commands = _extract_test_commands(task, modified_files)
-    
+
     memory = TaskMemory(
         task_name=task.name,
         files_modified=modified_files,
@@ -77,14 +76,14 @@ def capture_task_memory(task: Task, state: WorkflowState) -> TaskMemory:
         key_decisions=[],  # Could be extracted from commit message
         test_commands=test_commands
     )
-    
+
     # Add to state
     if not hasattr(state, 'task_memories'):
         state.task_memories = []
     state.task_memories.append(memory)
-    
+
     log_message(f"Captured {len(patterns)} patterns from task")
-    
+
     return memory
 
 
@@ -105,37 +104,37 @@ def _get_modified_files() -> list[str]:
 
 def _identify_patterns_in_changes(files: list[str]) -> list[str]:
     """Identify patterns in the changed files.
-    
+
     Args:
         files: List of modified file paths
-    
+
     Returns:
         List of identified patterns
     """
     patterns = []
-    
+
     # Analyze file types and locations
-    file_types = set(Path(f).suffix for f in files)
-    directories = set(Path(f).parent for f in files)
-    
+    file_types = {Path(f).suffix for f in files}
+    directories = {Path(f).parent for f in files}
+
     # Identify common patterns
     if '.py' in file_types:
         patterns.append("Python implementation")
-        
+
         # Check for test files
         if any('test' in f for f in files):
             patterns.append("Added Python tests")
-    
+
     if '.ts' in file_types or '.tsx' in file_types:
         patterns.append("TypeScript implementation")
-        
+
         if any('test' in f or 'spec' in f for f in files):
             patterns.append("Added TypeScript tests")
-    
+
     # Check for API patterns
     if any('api' in str(d).lower() for d in directories):
         patterns.append("API endpoint implementation")
-    
+
     # Check for database patterns
     if any('model' in str(d).lower() or 'schema' in str(d).lower() for d in directories):
         patterns.append("Database schema/model")

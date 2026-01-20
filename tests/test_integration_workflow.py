@@ -1,17 +1,14 @@
 """Integration tests for AI Workflow with task memory and error analysis."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-from specflow.workflow.step3_execute import _execute_task
-from specflow.workflow.tasks import Task, TaskStatus
-from specflow.workflow.state import WorkflowState
-from specflow.workflow.task_memory import TaskMemory
-from specflow.workflow.step1_plan import _build_minimal_prompt
+import pytest
+
 from specflow.integrations.jira import JiraTicket
-from specflow.integrations.auggie import AuggieClient
-from specflow.utils.error_analysis import ErrorAnalysis
+from specflow.workflow.state import WorkflowState
+from specflow.workflow.step1_plan import _build_minimal_prompt
+from specflow.workflow.task_memory import TaskMemory
+from specflow.workflow.tasks import Task
 
 
 @pytest.fixture
@@ -88,7 +85,7 @@ class TestFullWorkflowWithTaskMemory:
 
         # Import and call the function that captures memory
         from specflow.workflow.task_memory import capture_task_memory
-        memory = capture_task_memory(task, mock_workflow_state)
+        capture_task_memory(task, mock_workflow_state)
 
         # Verify memory was captured
         assert len(mock_workflow_state.task_memories) == 1
@@ -430,7 +427,7 @@ class TestAuggieClientFailures:
         from specflow.workflow.tasks import Task
 
         task = Task(name="Failed task")
-        memory = capture_task_memory(task, mock_workflow_state)
+        capture_task_memory(task, mock_workflow_state)
 
         # Memory should be captured even with empty results
         assert len(mock_workflow_state.task_memories) == 1

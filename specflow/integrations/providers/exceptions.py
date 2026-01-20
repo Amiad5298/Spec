@@ -5,7 +5,6 @@ issue tracker operations, enabling consistent error handling across
 all provider implementations.
 """
 
-from typing import Optional
 
 
 class IssueTrackerError(Exception):
@@ -15,7 +14,7 @@ class IssueTrackerError(Exception):
     to enable consistent error handling across platforms.
     """
 
-    def __init__(self, message: str, platform: Optional[str] = None) -> None:
+    def __init__(self, message: str, platform: str | None = None) -> None:
         """Initialize the exception.
 
         Args:
@@ -38,8 +37,8 @@ class AuthenticationError(IssueTrackerError):
     def __init__(
         self,
         message: str = "Authentication failed",
-        platform: Optional[str] = None,
-        missing_credentials: Optional[list[str]] = None,
+        platform: str | None = None,
+        missing_credentials: list[str] | None = None,
     ) -> None:
         """Initialize the authentication error.
 
@@ -70,8 +69,8 @@ class TicketNotFoundError(IssueTrackerError):
         self,
         *,  # All following parameters are keyword-only
         ticket_id: str,
-        message: Optional[str] = None,
-        platform: Optional[str] = None,
+        message: str | None = None,
+        platform: str | None = None,
     ) -> None:
         """Initialize the ticket not found error.
 
@@ -94,9 +93,9 @@ class RateLimitError(IssueTrackerError):
 
     def __init__(
         self,
-        retry_after: Optional[int] = None,
-        message: Optional[str] = None,
-        platform: Optional[str] = None,
+        retry_after: int | None = None,
+        message: str | None = None,
+        platform: str | None = None,
     ) -> None:
         """Initialize the rate limit error.
 
@@ -126,9 +125,9 @@ class PlatformNotSupportedError(IssueTrackerError):
 
     def __init__(
         self,
-        input_str: Optional[str] = None,
-        message: Optional[str] = None,
-        supported_platforms: Optional[list[str]] = None,
+        input_str: str | None = None,
+        message: str | None = None,
+        supported_platforms: list[str] | None = None,
     ) -> None:
         """Initialize the platform not supported error.
 

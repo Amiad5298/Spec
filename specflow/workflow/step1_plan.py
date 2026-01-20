@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from specflow.integrations.auggie import AuggieClient
-from specflow.ui.prompts import prompt_confirm, prompt_enter
+from specflow.ui.prompts import prompt_confirm
 from specflow.utils.console import (
     console,
     print_error,
@@ -21,7 +21,6 @@ from specflow.utils.console import (
 from specflow.utils.logging import log_message
 from specflow.workflow.events import format_run_directory
 from specflow.workflow.state import WorkflowState
-
 
 # =============================================================================
 # Log Directory Management

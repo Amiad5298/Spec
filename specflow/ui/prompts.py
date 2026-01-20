@@ -4,12 +4,10 @@ This module provides Questionary-based user input prompts with
 consistent styling and error handling.
 """
 
-from typing import Optional
 
 import questionary
 from questionary import Style
 
-from specflow.utils.console import print_info
 from specflow.utils.errors import UserCancelledError
 from specflow.utils.logging import log_message
 
@@ -68,15 +66,15 @@ def prompt_confirm(
         log_message(f"User response: {result}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def prompt_input(
     message: str,
     default: str = "",
     *,
-    validate: Optional[callable] = None,
+    validate: callable | None = None,
     multiline: bool = False,
 ) -> str:
     """Prompt for text input.
@@ -110,8 +108,8 @@ def prompt_input(
         log_message(f"User input: {result[:50]}...")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def prompt_enter(message: str = "Press Enter to continue...") -> None:
@@ -130,14 +128,14 @@ def prompt_enter(message: str = "Press Enter to continue...") -> None:
             message,
             style=custom_style,
         ).ask()
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def prompt_select(
     message: str,
     choices: list[str],
-    default: Optional[str] = None,
+    default: str | None = None,
 ) -> str:
     """Prompt for single selection from list.
 
@@ -168,14 +166,14 @@ def prompt_select(
         log_message(f"User selected: {result}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 def prompt_checkbox(
     message: str,
     choices: list[str],
-    default: Optional[list[str]] = None,
+    default: list[str] | None = None,
 ) -> list[str]:
     """Prompt for multiple selections from list.
 
@@ -206,8 +204,8 @@ def prompt_checkbox(
         log_message(f"User selected: {result}")
         return result
 
-    except KeyboardInterrupt:
-        raise UserCancelledError("User cancelled with Ctrl+C")
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
 __all__ = [

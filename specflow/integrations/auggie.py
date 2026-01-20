@@ -7,9 +7,9 @@ version checking, and command execution.
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
 from packaging import version
 
@@ -43,7 +43,7 @@ class AgentDefinition:
     color: str = ""
 
 
-def _find_agent_file(agent_name: str) -> Optional[Path]:
+def _find_agent_file(agent_name: str) -> Path | None:
     """Find the agent definition file for a given agent name.
 
     Searches in workspace (.augment/agents/) and user (~/.augment/agents/) locations.
@@ -90,7 +90,7 @@ def _parse_simple_yaml_frontmatter(frontmatter_str: str) -> dict[str, str]:
     return result
 
 
-def _parse_agent_definition(agent_name: str) -> Optional[AgentDefinition]:
+def _parse_agent_definition(agent_name: str) -> AgentDefinition | None:
     """Parse an agent definition file.
 
     Reads the markdown file with YAML frontmatter and extracts
@@ -232,7 +232,7 @@ def version_gte(v1: str, v2: str) -> bool:
         return v1 >= v2
 
 
-def get_auggie_version() -> Optional[str]:
+def get_auggie_version() -> str | None:
     """Get installed Auggie CLI version.
 
     Returns:
@@ -257,7 +257,7 @@ def get_auggie_version() -> Optional[str]:
         return None
 
 
-def get_node_version() -> Optional[str]:
+def get_node_version() -> str | None:
     """Get installed Node.js version.
 
     Returns:
@@ -394,8 +394,8 @@ class AuggieClient:
     def _build_command(
         self,
         prompt: str,
-        agent: Optional[str] = None,
-        model: Optional[str] = None,
+        agent: str | None = None,
+        model: str | None = None,
         print_mode: bool = False,
         quiet: bool = False,
         dont_save_session: bool = False,
@@ -464,8 +464,8 @@ class AuggieClient:
         self,
         prompt: str,
         *,
-        agent: Optional[str] = None,
-        model: Optional[str] = None,
+        agent: str | None = None,
+        model: str | None = None,
         print_mode: bool = False,
         quiet: bool = False,
         dont_save_session: bool = False,
@@ -533,8 +533,8 @@ class AuggieClient:
         self,
         prompt: str,
         *,
-        agent: Optional[str] = None,
-        model: Optional[str] = None,
+        agent: str | None = None,
+        model: str | None = None,
         dont_save_session: bool = False,
     ) -> tuple[bool, str]:
         """Run with --print flag, return success status and captured output.
@@ -568,8 +568,8 @@ class AuggieClient:
         prompt: str,
         *,
         output_callback: Callable[[str], None],
-        agent: Optional[str] = None,
-        model: Optional[str] = None,
+        agent: str | None = None,
+        model: str | None = None,
         dont_save_session: bool = False,
     ) -> tuple[bool, str]:
         """Run with streaming output callback.

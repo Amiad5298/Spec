@@ -20,11 +20,11 @@ from specflow.utils.console import (
 )
 from specflow.utils.error_analysis import ErrorAnalysis, analyze_error_output
 from specflow.utils.errors import (
-    SpecError,
     AuggieNotInstalledError,
     ExitCode,
     GitOperationError,
     JiraNotConfiguredError,
+    SpecError,
     UserCancelledError,
 )
 from specflow.utils.logging import log_command, log_message, setup_logging

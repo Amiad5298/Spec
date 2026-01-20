@@ -1,22 +1,22 @@
 """Tests for spec.workflow.step1_plan module."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from specflow.integrations.jira import JiraTicket
+from specflow.workflow.state import WorkflowState
 from specflow.workflow.step1_plan import (
-    _get_log_base_dir,
-    _create_plan_log_dir,
-    _generate_plan_with_tui,
     _build_minimal_prompt,
-    _save_plan_from_output,
+    _create_plan_log_dir,
     _display_plan_summary,
+    _generate_plan_with_tui,
+    _get_log_base_dir,
     _run_clarification,
+    _save_plan_from_output,
     step_1_create_plan,
 )
-
-from specflow.workflow.state import WorkflowState
-from specflow.integrations.jira import JiraTicket
 
 
 @pytest.fixture
@@ -35,11 +35,11 @@ def workflow_state(ticket, tmp_path):
     """Create a workflow state for testing."""
     state = WorkflowState(ticket=ticket)
     state.planning_model = "test-planning-model"
-    
+
     # Create specs directory
     specs_dir = tmp_path / "specs"
     specs_dir.mkdir(parents=True)
-    
+
     return state
 
 
@@ -85,9 +85,9 @@ class TestCreatePlanLogDir:
     def test_creates_directory_with_correct_structure(self, tmp_path, monkeypatch):
         """Creates directory with correct structure ({base}/ticket_id/plan_generation)."""
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
-        
+
         result = _create_plan_log_dir("TEST-123")
-        
+
         assert result.exists()
         assert result.is_dir()
         assert result.name == "plan_generation"
@@ -97,9 +97,9 @@ class TestCreatePlanLogDir:
         """Creates parent directories with parents=True."""
         log_dir = tmp_path / "deep" / "nested" / "path"
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(log_dir))
-        
+
         result = _create_plan_log_dir("TEST-456")
-        
+
         assert result.exists()
         assert "TEST-456" in str(result)
         assert "plan_generation" in str(result)
@@ -107,9 +107,9 @@ class TestCreatePlanLogDir:
     def test_returns_correct_path(self, tmp_path, monkeypatch):
         """Returns correct Path object."""
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
-        
+
         result = _create_plan_log_dir("PROJ-789")
-        
+
         assert isinstance(result, Path)
         assert result == tmp_path / "PROJ-789" / "plan_generation"
 
@@ -660,7 +660,7 @@ class TestStep1CreatePlanFileHandling:
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
-        plan_path = specs_dir / "TEST-123-plan.md"
+        specs_dir / "TEST-123-plan.md"
 
         # Mock _save_plan_from_output to create the file
         def create_plan_file(path, state):

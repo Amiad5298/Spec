@@ -1,20 +1,20 @@
 """Tests for spec.workflow.runner module."""
 
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from specflow.integrations.jira import JiraTicket
+from specflow.utils.errors import SpecError, UserCancelledError
 from specflow.workflow.runner import (
-    run_spec_driven_workflow,
-    workflow_cleanup,
+    _offer_cleanup,
     _setup_branch,
     _show_completion,
-    _offer_cleanup,
+    run_spec_driven_workflow,
+    workflow_cleanup,
 )
 from specflow.workflow.state import WorkflowState
 from specflow.workflow.step4_update_docs import Step4Result
-from specflow.integrations.jira import JiraTicket
-from specflow.utils.errors import SpecError, UserCancelledError
 
 
 @pytest.fixture
@@ -47,11 +47,11 @@ def workflow_state(ticket, tmp_path):
     state = WorkflowState(ticket=ticket)
     state.planning_model = "test-planning-model"
     state.implementation_model = "test-implementation-model"
-    
+
     # Create specs directory
     specs_dir = tmp_path / "specs"
     specs_dir.mkdir(parents=True)
-    
+
     return state
 
 
@@ -98,7 +98,7 @@ class TestSetupBranchNameGeneration:
         mock_get_branch.return_value = "main"
         mock_confirm.return_value = True
         mock_create.return_value = True
-        
+
         # Update workflow_state with no-summary ticket
         workflow_state.ticket = ticket_no_summary
 

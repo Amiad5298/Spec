@@ -1,24 +1,24 @@
 """Tests for spec.ui.tui module - parallel execution support."""
 
 import threading
-import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
 from rich.console import Console
 
+from specflow.ui.keyboard import _CHAR_MAPPINGS, _ESCAPE_SEQUENCES, Key, KeyboardReader
 from specflow.ui.tui import (
     TaskRunnerUI,
     TaskRunRecord,
     TaskRunStatus,
-    render_task_list,
     render_status_bar,
+    render_task_list,
 )
-from specflow.ui.keyboard import Key, KeyboardReader, _CHAR_MAPPINGS, _ESCAPE_SEQUENCES
 from specflow.workflow.events import (
-    create_task_started_event,
     create_task_finished_event,
     create_task_output_event,
-    TaskEventType,
+    create_task_started_event,
 )
 
 
@@ -81,7 +81,7 @@ class TestTuiParallelMode:
         # Simulate adding running tasks
         tui._running_task_indices.add(0)
         tui._running_task_indices.add(2)
-        
+
         assert 0 in tui._running_task_indices
         assert 2 in tui._running_task_indices
         assert len(tui._running_task_indices) == 2
@@ -91,7 +91,7 @@ class TestTuiParallelMode:
         tui.set_parallel_mode(True)
         tui._running_task_indices.add(0)
         tui._running_task_indices.add(1)
-        
+
         assert tui._get_running_count() == 2
 
 

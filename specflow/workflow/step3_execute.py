@@ -25,15 +25,16 @@ Helper modules:
 """
 
 import threading
+from collections.abc import Callable
 from concurrent.futures import (
-    CancelledError,
     FIRST_COMPLETED,
+    CancelledError,
     ThreadPoolExecutor,
     as_completed,
     wait,
 )
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from specflow.integrations.auggie import (
     AuggieClient,
@@ -62,14 +63,24 @@ from specflow.workflow.events import (
     create_task_started_event,
     format_log_filename,
 )
+from specflow.workflow.git_utils import (
+    DirtyWorkingTreeError,
+    capture_baseline,
+    check_dirty_working_tree,
+)
 from specflow.workflow.log_management import (
-    DEFAULT_LOG_RETENTION,
     cleanup_old_runs as _cleanup_old_runs,
+)
+from specflow.workflow.log_management import (
     create_run_log_dir as _create_run_log_dir,
+)
+from specflow.workflow.log_management import (
     get_log_base_dir as _get_log_base_dir,
 )
 from specflow.workflow.prompts import (
     POST_IMPLEMENTATION_TEST_PROMPT,
+)
+from specflow.workflow.prompts import (
     build_task_prompt as _build_task_prompt,
 )
 from specflow.workflow.review import run_phase_review as _run_phase_review
@@ -85,32 +96,10 @@ from specflow.workflow.tasks import (
 )
 
 if TYPE_CHECKING:
-    from specflow.ui.tui import TaskRunnerUI
+    pass
 
 # Log directory names for workflow steps
 LOG_DIR_TEST_EXECUTION = "test_execution"
-
-
-# =============================================================================
-# Backwards-compatible re-exports from extracted modules
-# =============================================================================
-# These functions have been moved to separate modules but are re-exported here
-# to maintain backwards compatibility with existing code and tests.
-
-from specflow.workflow.autofix import run_auto_fix as _run_auto_fix
-from specflow.workflow.git_utils import (
-    DirtyTreePolicy,
-    DirtyWorkingTreeError,
-    capture_baseline,
-    check_dirty_working_tree,
-    get_smart_diff as _get_smart_diff,
-    parse_stat_file_count as _parse_stat_file_count,
-    parse_stat_total_lines as _parse_stat_total_lines,
-)
-from specflow.workflow.review import (
-    build_review_prompt as _build_review_prompt,
-    parse_review_status as _parse_review_status,
-)
 
 
 def _capture_baseline_for_diffs(state: WorkflowState) -> bool:

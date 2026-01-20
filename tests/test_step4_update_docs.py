@@ -1,24 +1,21 @@
 """Tests for specflow.workflow.step4_update_docs module."""
 
-import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
 
 from specflow.integrations.git import DiffResult
+from specflow.integrations.jira import JiraTicket
+from specflow.workflow.state import WorkflowState
 from specflow.workflow.step4_update_docs import (
-    step_4_update_docs,
+    MAX_DIFF_SIZE,
+    NonDocSnapshot,
+    Step4Result,
     _build_doc_update_prompt,
     _parse_porcelain_z_output,
     is_doc_file,
-    Step4Result,
-    FileSnapshot,
-    NonDocSnapshot,
-    MAX_DIFF_SIZE,
-    DOC_FILE_EXTENSIONS,
+    step_4_update_docs,
 )
-from specflow.workflow.state import WorkflowState
-from specflow.integrations.jira import JiraTicket
 
 
 @pytest.fixture

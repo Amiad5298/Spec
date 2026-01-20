@@ -1,18 +1,19 @@
 """Tests for spec.ui.menus module."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
+
+from specflow.integrations.git import DirtyStateAction
 from specflow.ui.menus import (
     MainMenuChoice,
     TaskReviewChoice,
-    show_main_menu,
-    show_task_review_menu,
     show_git_dirty_menu,
+    show_main_menu,
     show_model_selection,
     show_task_checkboxes,
+    show_task_review_menu,
 )
-from specflow.integrations.git import DirtyStateAction
 from specflow.utils.errors import UserCancelledError
 
 
@@ -56,9 +57,9 @@ class TestShowMainMenu:
     def test_returns_selection(self, mock_select, mock_header):
         """Returns selected choice."""
         mock_select.return_value.ask.return_value = MainMenuChoice.START_WORKFLOW
-        
+
         result = show_main_menu()
-        
+
         assert result == MainMenuChoice.START_WORKFLOW
 
     @patch("specflow.ui.menus.print_header")
@@ -66,7 +67,7 @@ class TestShowMainMenu:
     def test_raises_on_cancel(self, mock_select, mock_header):
         """Raises UserCancelledError when cancelled."""
         mock_select.return_value.ask.return_value = None
-        
+
         with pytest.raises(UserCancelledError):
             show_main_menu()
 
@@ -78,16 +79,16 @@ class TestShowTaskReviewMenu:
     def test_returns_selection(self, mock_select):
         """Returns selected choice."""
         mock_select.return_value.ask.return_value = TaskReviewChoice.APPROVE
-        
+
         result = show_task_review_menu()
-        
+
         assert result == TaskReviewChoice.APPROVE
 
     @patch("questionary.select")
     def test_raises_on_cancel(self, mock_select):
         """Raises UserCancelledError when cancelled."""
         mock_select.return_value.ask.return_value = None
-        
+
         with pytest.raises(UserCancelledError):
             show_task_review_menu()
 
@@ -101,9 +102,9 @@ class TestShowGitDirtyMenu:
     def test_returns_stash(self, mock_select, mock_console, mock_info):
         """Returns STASH action."""
         mock_select.return_value.ask.return_value = DirtyStateAction.STASH
-        
+
         result = show_git_dirty_menu("branch switch")
-        
+
         assert result == DirtyStateAction.STASH
 
     @patch("specflow.ui.menus.print_info")
@@ -112,7 +113,7 @@ class TestShowGitDirtyMenu:
     def test_raises_on_cancel(self, mock_select, mock_console, mock_info):
         """Raises UserCancelledError when cancelled."""
         mock_select.return_value.ask.return_value = None
-        
+
         with pytest.raises(UserCancelledError):
             show_git_dirty_menu("branch switch")
 
@@ -126,15 +127,15 @@ class TestShowModelSelection:
     def test_returns_selected_model(self, mock_select, mock_list, mock_header):
         """Returns selected model ID."""
         from specflow.integrations.auggie import AuggieModel
-        
+
         mock_list.return_value = [
             AuggieModel(name="Claude 3", id="claude-3"),
             AuggieModel(name="GPT-4", id="gpt-4"),
         ]
         mock_select.return_value.ask.return_value = "claude-3"
-        
+
         result = show_model_selection()
-        
+
         assert result == "claude-3"
 
     @patch("specflow.ui.menus.print_header")
@@ -147,9 +148,9 @@ class TestShowModelSelection:
         """Prompts for manual input when model list is empty."""
         mock_list.return_value = []
         mock_input.return_value = "custom-model"
-        
+
         result = show_model_selection()
-        
+
         assert result == "custom-model"
 
 
@@ -160,16 +161,16 @@ class TestShowTaskCheckboxes:
     def test_returns_selected_tasks(self, mock_checkbox):
         """Returns list of selected tasks."""
         mock_checkbox.return_value.ask.return_value = ["Task 1", "Task 3"]
-        
+
         result = show_task_checkboxes(["Task 1", "Task 2", "Task 3"])
-        
+
         assert result == ["Task 1", "Task 3"]
 
     @patch("questionary.checkbox")
     def test_raises_on_cancel(self, mock_checkbox):
         """Raises UserCancelledError when cancelled."""
         mock_checkbox.return_value.ask.return_value = None
-        
+
         with pytest.raises(UserCancelledError):
             show_task_checkboxes(["Task 1", "Task 2"])
 

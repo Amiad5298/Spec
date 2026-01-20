@@ -1,7 +1,6 @@
 """Tests for specflow.utils.logging module."""
 
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +13,7 @@ class TestLogging:
         with patch.dict(os.environ, {}, clear=True):
             # Need to reimport to pick up env changes
             import importlib
+
             import specflow.utils.logging as logging_module
 
             # Reset the module state
@@ -26,6 +26,7 @@ class TestLogging:
         """Logging is enabled when SPECFLOW_LOG=true."""
         with patch.dict(os.environ, {"SPECFLOW_LOG": "true"}):
             import importlib
+
             import specflow.utils.logging as logging_module
 
             logging_module._logger = None
@@ -45,6 +46,7 @@ class TestLogging:
         custom_path = "/tmp/custom-log.log"
         with patch.dict(os.environ, {"SPECFLOW_LOG_FILE": custom_path}):
             import importlib
+
             import specflow.utils.logging as logging_module
 
             logging_module._logger = None
@@ -76,6 +78,7 @@ class TestLogging:
         """log_message does nothing when logging is disabled."""
         with patch.dict(os.environ, {"SPECFLOW_LOG": "false"}):
             import importlib
+
             import specflow.utils.logging as logging_module
 
             logging_module._logger = None
@@ -93,6 +96,7 @@ class TestLogging:
             "SPECFLOW_LOG_FILE": str(log_file),
         }):
             import importlib
+
             import specflow.utils.logging as logging_module
 
             logging_module._logger = None
@@ -116,6 +120,7 @@ class TestLogging:
             "SPECFLOW_LOG_FILE": str(log_file),
         }):
             import importlib
+
             import specflow.utils.logging as logging_module
 
             logging_module._logger = None

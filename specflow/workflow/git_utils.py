@@ -15,7 +15,6 @@ Key features:
 import re
 import subprocess
 from enum import Enum
-from typing import Optional
 
 from specflow.utils.console import print_warning
 
@@ -393,7 +392,7 @@ def _generate_untracked_file_diff(path: str, max_file_size: int) -> str:
 
         return "".join(diff_lines)
 
-    except (OSError, IOError) as e:
+    except OSError as e:
         return (
             f"diff --git a/{path} b/{path}\n"
             f"new file mode 100644\n"
@@ -418,7 +417,7 @@ def _is_binary_file(path: str, sample_size: int = 8192) -> bool:
         with open(path, "rb") as f:
             sample = f.read(sample_size)
         return b"\x00" in sample
-    except (OSError, IOError):
+    except OSError:
         return False
 
 

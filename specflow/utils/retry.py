@@ -9,8 +9,9 @@ handling during concurrent task execution. It includes:
 
 import random
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from specflow.workflow.state import RateLimitConfig

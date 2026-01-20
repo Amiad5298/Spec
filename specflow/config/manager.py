@@ -16,11 +16,10 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from specflow.config.settings import CONFIG_FILE, Settings
 from specflow.utils.logging import log_message
-
 
 # Keys containing these substrings are considered sensitive and should not be logged
 SENSITIVE_KEY_PATTERNS = ("TOKEN", "KEY", "SECRET", "PASSWORD", "PAT")
@@ -58,7 +57,7 @@ class ConfigManager:
                                 Defaults to ~/.specflow-config.
         """
         self.global_config_path = global_config_path or CONFIG_FILE
-        self.local_config_path: Optional[Path] = None
+        self.local_config_path: Path | None = None
         self.settings = Settings()
         self._raw_values: dict[str, str] = {}
         self._config_sources: dict[str, str] = {}
@@ -112,7 +111,7 @@ class ConfigManager:
         log_message(f"Configuration loaded successfully ({len(self._raw_values)} keys)")
         return self.settings
 
-    def _find_local_config(self) -> Optional[Path]:
+    def _find_local_config(self) -> Path | None:
         """Find local .specflow config by traversing up from CWD.
 
         Starts from current working directory and traverses parent
@@ -141,7 +140,7 @@ class ConfigManager:
 
         return None
 
-    def _find_repo_root(self) -> Optional[Path]:
+    def _find_repo_root(self) -> Path | None:
         """Find the repository root by looking for .git directory.
 
         Traverses from current working directory upward until:

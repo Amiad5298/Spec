@@ -1,27 +1,27 @@
 """Tests for spec.workflow.step3_execute module."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from specflow.integrations.jira import JiraTicket
+from specflow.workflow.state import WorkflowState
 from specflow.workflow.step3_execute import (
-    _get_log_base_dir,
-    _create_run_log_dir,
-    _cleanup_old_runs,
     _build_task_prompt,
+    _cleanup_old_runs,
+    _create_run_log_dir,
+    _execute_fallback,
     _execute_task,
     _execute_task_with_callback,
-    _execute_fallback,
     _execute_with_tui,
-    _show_summary,
-    _run_post_implementation_tests,
+    _get_log_base_dir,
     _offer_commit_instructions,
+    _run_post_implementation_tests,
+    _show_summary,
     step_3_execute,
 )
-
-from specflow.workflow.state import WorkflowState
-from specflow.workflow.tasks import Task, TaskStatus, TaskCategory
-from specflow.integrations.jira import JiraTicket
+from specflow.workflow.tasks import Task, TaskCategory, TaskStatus
 
 
 @pytest.fixture
@@ -40,11 +40,11 @@ def workflow_state(ticket, tmp_path):
     """Create a workflow state for testing."""
     state = WorkflowState(ticket=ticket)
     state.implementation_model = "test-model"
-    
+
     # Create specs directory and tasklist
     specs_dir = tmp_path / "specs"
     specs_dir.mkdir(parents=True)
-    
+
     tasklist_path = specs_dir / "TEST-123-tasklist.md"
     tasklist_path.write_text("""# Task List: TEST-123
 
@@ -53,12 +53,12 @@ def workflow_state(ticket, tmp_path):
 - [ ] Task 3
 """)
     state.tasklist_file = tasklist_path
-    
+
     # Create plan file
     plan_path = specs_dir / "TEST-123-plan.md"
     plan_path.write_text("# Plan\n\nImplement feature.")
     state.plan_file = plan_path
-    
+
     return state
 
 
@@ -105,9 +105,9 @@ class TestCreateRunLogDir:
     def test_creates_timestamped_directory(self, tmp_path, monkeypatch):
         """Creates timestamped directory."""
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
-        
+
         result = _create_run_log_dir("TEST-123")
-        
+
         assert result.exists()
         assert result.is_dir()
         assert "TEST-123" in str(result)
@@ -116,18 +116,18 @@ class TestCreateRunLogDir:
         """Creates parent directories."""
         log_dir = tmp_path / "deep" / "nested" / "path"
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(log_dir))
-        
+
         result = _create_run_log_dir("TEST-456")
-        
+
         assert result.exists()
         assert "TEST-456" in str(result)
 
     def test_returns_correct_path(self, tmp_path, monkeypatch):
         """Returns correct Path object."""
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
-        
+
         result = _create_run_log_dir("PROJ-789")
-        
+
         assert isinstance(result, Path)
         assert result.parent.name == "PROJ-789"
 
@@ -145,14 +145,14 @@ class TestCleanupOldRuns:
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
         ticket_dir = tmp_path / "TEST-123"
         ticket_dir.mkdir()
-        
+
         # Create 5 run directories
         for i in range(5):
             run_dir = ticket_dir / f"20260101_00000{i}"
             run_dir.mkdir()
-        
+
         _cleanup_old_runs("TEST-123", keep_count=2)
-        
+
         remaining = list(ticket_dir.iterdir())
         assert len(remaining) == 2
 
@@ -919,7 +919,7 @@ class TestExecuteWithTui:
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
 
-        failed = _execute_with_tui(
+        _execute_with_tui(
             workflow_state, tasks, workflow_state.get_plan_path(),
             workflow_state.get_tasklist_path(), log_dir
         )
@@ -1187,10 +1187,10 @@ class TestStep3Execute:
         # Setup
         mock_tui = MagicMock()
         # Simulate quit requested before the second task
-        mock_tui.quit_requested = True 
+        mock_tui.quit_requested = True
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0)
         mock_tui_class.return_value = mock_tui
-        
+
         # User confirms quit at the prompt
         mock_confirm.return_value = True
 
@@ -1514,8 +1514,8 @@ class TestTaskRetry:
         self, mock_execute, workflow_state, tmp_path
     ):
         """Skips retry wrapper when max_retries=0."""
-        from specflow.workflow.step3_execute import _execute_task_with_retry
         from specflow.workflow.state import RateLimitConfig
+        from specflow.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute.return_value = True
         workflow_state.rate_limit_config = RateLimitConfig(max_retries=0)
@@ -1533,8 +1533,8 @@ class TestTaskRetry:
         self, mock_execute_callback, workflow_state, tmp_path
     ):
         """Uses callback version when callback provided."""
-        from specflow.workflow.step3_execute import _execute_task_with_retry
         from specflow.workflow.state import RateLimitConfig
+        from specflow.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute_callback.return_value = True
         workflow_state.rate_limit_config = RateLimitConfig(max_retries=0)
@@ -1553,8 +1553,8 @@ class TestTaskRetry:
         self, mock_execute, workflow_state, tmp_path
     ):
         """Returns False when task execution fails."""
-        from specflow.workflow.step3_execute import _execute_task_with_retry
         from specflow.workflow.state import RateLimitConfig
+        from specflow.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute.return_value = False
         workflow_state.rate_limit_config = RateLimitConfig(max_retries=0)
@@ -1571,8 +1571,8 @@ class TestTaskRetry:
         self, mock_execute, workflow_state, tmp_path
     ):
         """Retries execution on rate limit errors."""
-        from specflow.workflow.step3_execute import _execute_task_with_retry
         from specflow.workflow.state import RateLimitConfig
+        from specflow.workflow.step3_execute import _execute_task_with_retry
 
         # First call raises rate limit error (HTTP 429), second succeeds
         mock_execute.side_effect = [Exception("HTTP Error 429: Too Many Requests"), True]
@@ -1718,6 +1718,7 @@ class TestParallelFailFast:
         behavior that would occur in real execution with delays.
         """
         import threading
+
         from specflow.workflow.step3_execute import _execute_parallel_fallback
 
         # Shared event to simulate stop_flag behavior
@@ -1853,8 +1854,8 @@ class TestCaptureBaselineForDiffs:
         self, mock_error, mock_check_dirty, workflow_state
     ):
         """Returns False when dirty tree check raises DirtyWorkingTreeError."""
-        from specflow.workflow.step3_execute import _capture_baseline_for_diffs
         from specflow.workflow.git_utils import DirtyWorkingTreeError
+        from specflow.workflow.step3_execute import _capture_baseline_for_diffs
 
         mock_check_dirty.side_effect = DirtyWorkingTreeError("Dirty tree")
 

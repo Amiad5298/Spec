@@ -1,6 +1,5 @@
 """Tests for spec.ui.plan_tui module (StreamingOperationUI)."""
 
-import threading
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -10,8 +9,8 @@ import pytest
 from specflow.ui.plan_tui import (
     DEFAULT_VERBOSE_LINES,
     MAX_LIVENESS_WIDTH,
-    StreamingOperationUI,
     REFRESH_RATE,
+    StreamingOperationUI,
 )
 
 

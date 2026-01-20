@@ -1,17 +1,17 @@
 """Tests for spec.utils.retry module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from specflow.integrations.auggie import AuggieRateLimitError
 from specflow.utils.retry import (
     RateLimitExceededError,
+    _is_retryable_error,
     calculate_backoff_delay,
     with_rate_limit_retry,
-    _is_retryable_error,
 )
 from specflow.workflow.state import RateLimitConfig
-from specflow.integrations.auggie import AuggieRateLimitError
-
 
 # =============================================================================
 # Fixtures
@@ -176,7 +176,7 @@ class TestIsRetryableError:
         """Respects custom retryable_status_codes in config."""
         config = RateLimitConfig(retryable_status_codes=(418, 500))
         error_418 = Exception("I'm a teapot (418)")
-        error_429 = Exception("HTTP 429 Too Many Requests")
+        Exception("HTTP 429 Too Many Requests")
 
         assert _is_retryable_error(error_418, config) is True
         # 429 is not in custom list, but has "rate limit" keywords? No.

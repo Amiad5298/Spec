@@ -10,7 +10,6 @@ from pathlib import Path
 
 from specflow.workflow.events import format_run_directory
 
-
 # Default log retention count
 DEFAULT_LOG_RETENTION = 10
 

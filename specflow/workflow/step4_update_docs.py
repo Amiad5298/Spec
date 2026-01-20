@@ -12,9 +12,10 @@ changes introduced by the agent.
 """
 
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional, Protocol
+from typing import Protocol
 
 from specflow.integrations.auggie import AuggieClient
 from specflow.integrations.git import (
@@ -22,9 +23,14 @@ from specflow.integrations.git import (
     get_diff_from_baseline,
     has_any_changes,
 )
-from specflow.utils.console import print_error, print_header, print_info, print_success, print_warning
+from specflow.utils.console import (
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
+)
 from specflow.workflow.state import WorkflowState
-
 
 # Maximum diff size to avoid context overflow
 MAX_DIFF_SIZE = 8000
@@ -182,7 +188,7 @@ class FileSnapshot:
     was_untracked: bool = False
     was_dirty: bool = False
     existed: bool = True
-    content: Optional[bytes] = None
+    content: bytes | None = None
 
     @classmethod
     def capture(cls, filepath: str, status_code: str) -> "FileSnapshot":
@@ -208,7 +214,7 @@ class FileSnapshot:
         if file_exists:
             try:
                 content = path.read_bytes()
-            except (OSError, IOError):
+            except OSError:
                 pass
 
         return cls(
@@ -371,7 +377,7 @@ class NonDocSnapshot:
                         current_content = path.read_bytes()
                         if current_content != old_snapshot.content:
                             changed.append(filepath)
-                    except (OSError, IOError):
+                    except OSError:
                         # Can't read file - assume changed
                         changed.append(filepath)
                 # Note: file missing case already handled above
@@ -439,7 +445,7 @@ class NonDocSnapshot:
                     try:
                         path.unlink()
                         reverted.append(filepath)
-                    except (OSError, IOError):
+                    except OSError:
                         pass
                 continue
 
@@ -450,7 +456,7 @@ class NonDocSnapshot:
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(snapshot.content)
                     reverted.append(filepath)
-                except (OSError, IOError):
+                except OSError:
                     pass
             elif not snapshot.existed:
                 # A1/A3 FIX: File did NOT exist pre-Step4 (either new untracked or
@@ -464,7 +470,7 @@ class NonDocSnapshot:
                     else:
                         # File already doesn't exist - consider it reverted
                         reverted.append(filepath)
-                except (OSError, IOError):
+                except OSError:
                     pass
             elif not snapshot.was_untracked:
                 # File was tracked, existed pre-Step4, and was clean - use git restore
@@ -525,7 +531,7 @@ class AuggieClientProtocol(Protocol):
 def step_4_update_docs(
     state: WorkflowState,
     *,
-    auggie_client: Optional[AuggieClientProtocol] = None,
+    auggie_client: AuggieClientProtocol | None = None,
 ) -> Step4Result:
     """Execute Step 4: Update documentation based on code changes.
 

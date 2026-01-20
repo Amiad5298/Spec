@@ -8,10 +8,8 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from specflow.utils.logging import log_message
-
 
 # =============================================================================
 # Exceptions
@@ -81,8 +79,8 @@ def normalize_path(file_path: str, repo_root: Path) -> str:
     # Step 4: Jail check - ensure path is within repo_root
     try:
         resolved.relative_to(repo_root_resolved)
-    except ValueError:
-        raise PathSecurityError(file_path, str(repo_root_resolved))
+    except ValueError as e:
+        raise PathSecurityError(file_path, str(repo_root_resolved)) from e
 
     # Return as relative path string
     return str(resolved.relative_to(repo_root_resolved))
@@ -156,18 +154,18 @@ class Task:
     status: TaskStatus = TaskStatus.PENDING
     line_number: int = 0
     indent_level: int = 0
-    parent: Optional[str] = None
+    parent: str | None = None
     # Fields for parallel execution
     category: TaskCategory = TaskCategory.FUNDAMENTAL
     dependency_order: int = 0  # For fundamental tasks ordering
-    group_id: Optional[str] = None  # For grouping parallel tasks
+    group_id: str | None = None  # For grouping parallel tasks
     # Predictive context - explicit file targeting
     target_files: list[str] = field(default_factory=list)
 
 
 def _parse_task_metadata(
     lines: list[str], task_line_num: int
-) -> tuple[TaskCategory, int, Optional[str], list[str]]:
+) -> tuple[TaskCategory, int, str | None, list[str]]:
     """Parse task metadata from comment lines above task.
 
     Searches backwards from the task line, skipping empty lines,

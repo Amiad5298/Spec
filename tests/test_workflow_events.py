@@ -1,22 +1,21 @@
 """Tests for spec.workflow.events module."""
 
 import time
-import pytest
 
 from specflow.workflow.events import (
-    TaskEventType,
     TaskEvent,
-    TaskRunStatus,
+    TaskEventType,
     TaskRunRecord,
-    slugify_task_name,
-    format_log_filename,
-    format_timestamp,
-    format_run_directory,
-    create_run_started_event,
-    create_task_started_event,
-    create_task_output_event,
-    create_task_finished_event,
+    TaskRunStatus,
     create_run_finished_event,
+    create_run_started_event,
+    create_task_finished_event,
+    create_task_output_event,
+    create_task_started_event,
+    format_log_filename,
+    format_run_directory,
+    format_timestamp,
+    slugify_task_name,
 )
 
 

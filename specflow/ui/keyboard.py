@@ -10,7 +10,6 @@ import os
 import select
 import sys
 from enum import Enum
-from typing import Optional
 
 # Check if we're on a Unix-like system
 _IS_UNIX = hasattr(sys.stdin, "fileno") and os.name != "nt"
@@ -86,7 +85,7 @@ class KeyboardReader:
 
     def __init__(self) -> None:
         """Initialize the keyboard reader."""
-        self._old_settings: Optional[list] = None
+        self._old_settings: list | None = None
         self._is_started: bool = False
 
     def start(self) -> None:
@@ -124,7 +123,7 @@ class KeyboardReader:
             self._old_settings = None
         self._is_started = False
 
-    def read_key(self, timeout: float = 0.0) -> Optional[Key]:
+    def read_key(self, timeout: float = 0.0) -> Key | None:
         """Read a single keypress without blocking.
 
         Args:
@@ -154,7 +153,7 @@ class KeyboardReader:
             # Map single characters
             return _CHAR_MAPPINGS.get(char, Key.UNKNOWN)
 
-        except (OSError, select.error):
+        except OSError:
             return None
 
     def _read_escape_sequence(self) -> Key:
@@ -175,7 +174,7 @@ class KeyboardReader:
 
         return _ESCAPE_SEQUENCES.get(seq, Key.UNKNOWN)
 
-    def __enter__(self) -> "KeyboardReader":
+    def __enter__(self) -> KeyboardReader:
         """Context manager entry."""
         self.start()
         return self

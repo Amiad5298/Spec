@@ -44,7 +44,7 @@ class TestIssueTrackerError:
         """Can be raised and caught as expected."""
         with pytest.raises(IssueTrackerError) as exc_info:
             raise IssueTrackerError("Test error", platform="GitHub")
-        
+
         assert "Test error" in str(exc_info.value)
         assert exc_info.value.platform == "GitHub"
 
@@ -303,6 +303,8 @@ class TestExceptionHierarchy:
     def test_can_catch_with_standard_exception(self):
         """Can catch all exceptions using standard Exception."""
         error = AuthenticationError("test")
-        with pytest.raises(Exception):
+        # Verify exception is instance of Exception (inherits from it)
+        assert isinstance(error, Exception)
+        with pytest.raises(AuthenticationError):
             raise error
 

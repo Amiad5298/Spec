@@ -88,11 +88,6 @@ def run_spec_driven_workflow(
     """
     print_header(f"Starting Workflow: {ticket.ticket_id}")
 
-    # Ensure SPEC subagent files are installed
-    if not ensure_agents_installed():
-        print_error("Failed to install SPEC subagent files")
-        return False
-
     # Initialize state with subagent names from config
     state = WorkflowState(
         ticket=ticket,
@@ -120,10 +115,18 @@ def run_spec_driven_workflow(
 
     with workflow_cleanup(state):
         # Handle dirty state before starting
+        # This must happen BEFORE ensure_agents_installed() to avoid discarding
+        # the .gitignore updates that ensure_agents_installed() makes
         if is_dirty():
             action = show_git_dirty_menu("starting workflow")
             if not handle_dirty_state("starting workflow", action):
                 return False
+
+        # Ensure SPEC subagent files are installed (includes .gitignore configuration)
+        # This is done AFTER dirty state handling so the .gitignore updates aren't discarded
+        if not ensure_agents_installed():
+            print_error("Failed to install SPEC subagent files")
+            return False
 
         # Fetch ticket information early (before branch creation)
         print_step("Fetching ticket information...")

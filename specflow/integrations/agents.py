@@ -11,6 +11,7 @@ Supports versioned agent files with automatic update detection:
 
 import hashlib
 from pathlib import Path
+from typing import Optional
 
 from specflow import __version__
 from specflow.integrations.auggie import (
@@ -22,6 +23,29 @@ from specflow.integrations.auggie import (
 )
 from specflow.utils.console import print_info, print_step, print_success, print_warning
 from specflow.utils.logging import log_message
+
+
+def _find_repo_root() -> Optional[Path]:
+    """Find the git repository root by looking for .git directory.
+
+    Traverses from current working directory upward until:
+    - A .git directory is found (returns that directory)
+    - The filesystem root is reached (returns None)
+
+    Returns:
+        Path to repository root, or None if not in a repository
+    """
+    current = Path.cwd()
+    while True:
+        if (current / ".git").exists():
+            return current
+
+        parent = current.parent
+        if parent == current:  # Reached filesystem root
+            break
+        current = parent
+
+    return None
 
 
 # --- Frontmatter and Hash Utilities ---
@@ -614,14 +638,15 @@ def _update_agent_file(agent_path: Path, agent_name: str, quiet: bool = False) -
 # --- Gitignore Management ---
 
 # Patterns that SPECFLOW requires in the target project's .gitignore
+# Note: We do NOT ignore specs/ because plan and tasklist .md files should be visible to users
+# Only runtime artifacts (.specflow/ for logs/state, *.log files) are ignored
 SPECFLOW_GITIGNORE_PATTERNS = [
     ".specflow/",
-    "specs/",
     "*.log",
 ]
 
 # Comment marker to identify SPECFLOW-managed section
-SPECFLOW_GITIGNORE_MARKER = "# SPECFLOW - Workflow artifacts (specs, logs, run state)"
+SPECFLOW_GITIGNORE_MARKER = "# SPECFLOW - Run logs and temporary files"
 
 
 def _check_gitignore_has_pattern(content: str, pattern: str) -> bool:
@@ -652,6 +677,10 @@ def ensure_gitignore_configured(quiet: bool = False) -> bool:
     Checks for required patterns (.specflow/, *.log) and appends them
     if missing. Adds patterns in a clearly marked SPECFLOW section.
 
+    This function finds the git repository root and updates the .gitignore
+    there, ensuring the correct project is targeted regardless of the
+    current working directory.
+
     This is idempotent - running multiple times won't duplicate entries.
 
     Args:
@@ -660,13 +689,23 @@ def ensure_gitignore_configured(quiet: bool = False) -> bool:
     Returns:
         True if .gitignore is properly configured (or was updated successfully)
     """
-    gitignore_path = Path(".gitignore")
+    # Find the git repository root to ensure we update the correct .gitignore
+    repo_root = _find_repo_root()
+    if repo_root is None:
+        # Not in a git repository - fall back to current directory
+        gitignore_path = Path(".gitignore")
+        log_message("Not in a git repository, using current directory for .gitignore")
+    else:
+        gitignore_path = repo_root / ".gitignore"
+        log_message(f"Found git repository root: {repo_root}")
 
     # Read existing content (or empty if file doesn't exist)
     if gitignore_path.exists():
         try:
             existing_content = gitignore_path.read_text()
         except Exception as e:
+            if not quiet:
+                print_warning(f"Failed to read .gitignore: {e}")
             log_message(f"Failed to read .gitignore: {e}")
             return False
     else:
@@ -737,7 +776,11 @@ def ensure_agents_installed(quiet: bool = False) -> bool:
         True if all agents are available (created, updated, or already current)
     """
     # First, ensure .gitignore is configured for SPECFLOW
-    ensure_gitignore_configured(quiet=quiet)
+    # Note: We don't fail the workflow if gitignore update fails, but we log a warning
+    if not ensure_gitignore_configured(quiet=quiet):
+        if not quiet:
+            print_warning("Could not configure .gitignore - workflow artifacts may appear as unversioned")
+        log_message("ensure_gitignore_configured returned False")
 
     agents_dir = get_agents_dir()
 

@@ -44,11 +44,6 @@ class TestCheckGitignoreHasPattern:
         content = "*.pyc\n*.log\n__pycache__/"
         assert _check_gitignore_has_pattern(content, "*.log") is True
 
-    def test_finds_specs_pattern(self):
-        """Returns True for specs/ pattern."""
-        content = "*.pyc\nspecs/\n__pycache__/"
-        assert _check_gitignore_has_pattern(content, "specs/") is True
-
     def test_returns_false_for_missing_pattern(self):
         """Returns False when pattern is not in file."""
         content = "*.pyc\n__pycache__/"
@@ -62,6 +57,38 @@ class TestCheckGitignoreHasPattern:
         """Returns False when file has only comments."""
         content = "# Python\n# Ignore pyc files"
         assert _check_gitignore_has_pattern(content, ".specflow/") is False
+
+
+class TestGitignorePatternsConfiguration:
+    """Tests for SPECFLOW_GITIGNORE_PATTERNS configuration.
+
+    These tests verify the patterns list is correctly configured to:
+    - Ignore runtime artifacts (.specflow/, *.log)
+    - NOT ignore user-visible files (specs/ directory with plan/tasklist .md files)
+    """
+
+    def test_patterns_include_specflow_directory(self):
+        """The .specflow/ directory should be ignored (runtime state/logs)."""
+        assert ".specflow/" in SPECFLOW_GITIGNORE_PATTERNS
+
+    def test_patterns_include_log_files(self):
+        """Log files (*.log) should be ignored."""
+        assert "*.log" in SPECFLOW_GITIGNORE_PATTERNS
+
+    def test_patterns_do_not_include_specs_directory(self):
+        """REGRESSION TEST: specs/ must NOT be ignored.
+
+        The specs/ directory contains plan and tasklist .md files that users
+        need to see and review. Previously, specs/ was incorrectly added to
+        gitignore patterns, causing users to not see their plan files.
+        """
+        assert "specs/" not in SPECFLOW_GITIGNORE_PATTERNS
+        assert "specs" not in SPECFLOW_GITIGNORE_PATTERNS
+
+    def test_patterns_only_contain_expected_entries(self):
+        """Verify the exact patterns list to catch unexpected additions."""
+        expected_patterns = [".specflow/", "*.log"]
+        assert SPECFLOW_GITIGNORE_PATTERNS == expected_patterns
 
 
 class TestEnsureGitignoreConfigured:
@@ -156,7 +183,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create .gitignore with SPECFLOW patterns already present
-        existing_content = "*.pyc\n.specflow/\nspecs/\n*.log\n"
+        existing_content = "*.pyc\n.specflow/\n*.log\n"
         gitignore_path.write_text(existing_content)
 
         result = ensure_gitignore_configured(quiet=True)
@@ -183,8 +210,7 @@ __pycache__/
 
         # .specflow/ should appear only once (not duplicated)
         assert content.count(".specflow/") == 1
-        # specs/ and *.log should be added
-        assert "specs/" in content
+        # *.log should be added
         assert "*.log" in content
 
     def test_handles_file_without_trailing_newline(self, tmp_path, monkeypatch):
@@ -234,7 +260,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create fully configured .gitignore
-        gitignore_path.write_text(".specflow/\nspecs/\n*.log\n")
+        gitignore_path.write_text(".specflow/\n*.log\n")
 
         result = ensure_gitignore_configured(quiet=True)
         assert result is True
@@ -268,6 +294,54 @@ __pycache__/
         # All patterns should be added as actual rules (not just comments)
         lines = [l.strip() for l in content.split("\n") if not l.strip().startswith("#")]
         assert ".specflow/" in lines
-        assert "specs/" in lines
         assert "*.log" in lines
 
+
+class TestRepoRootDetection:
+    """Tests for git repository root detection in gitignore configuration."""
+
+    def test_updates_gitignore_at_repo_root_from_subdir(self, tmp_path, monkeypatch):
+        """When running from a subdirectory, .gitignore is updated at repo root."""
+        # Create a git repo structure
+        repo_root = tmp_path / "my-repo"
+        repo_root.mkdir()
+        (repo_root / ".git").mkdir()
+        (repo_root / ".gitignore").write_text("node_modules/\n")
+
+        # Create nested subdirectory
+        subdir = repo_root / "src" / "deep" / "nested"
+        subdir.mkdir(parents=True)
+
+        # Change to nested directory
+        monkeypatch.chdir(subdir)
+
+        # Run the function
+        result = ensure_gitignore_configured(quiet=True)
+
+        assert result is True
+
+        # .gitignore at repo root should be updated
+        content = (repo_root / ".gitignore").read_text()
+        assert ".specflow/" in content
+        assert "*.log" in content
+
+        # No .gitignore should be created in the subdirectory
+        assert not (subdir / ".gitignore").exists()
+
+    def test_falls_back_to_cwd_when_not_in_git_repo(self, tmp_path, monkeypatch):
+        """When not in a git repo, .gitignore is created in current directory."""
+        # Create a directory without .git
+        no_git_dir = tmp_path / "no-git-project"
+        no_git_dir.mkdir()
+        monkeypatch.chdir(no_git_dir)
+
+        # Run the function
+        result = ensure_gitignore_configured(quiet=True)
+
+        assert result is True
+
+        # .gitignore should be created in current directory
+        gitignore_path = no_git_dir / ".gitignore"
+        assert gitignore_path.exists()
+        content = gitignore_path.read_text()
+        assert ".specflow/" in content

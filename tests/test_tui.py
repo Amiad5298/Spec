@@ -423,8 +423,8 @@ class TestAutoSwitchOnTaskFinish:
         assert tui.selected_index == 0
         assert len(tui._running_task_indices) == 0
 
-    def test_auto_switch_selects_lowest_index_running_task(self, tui):
-        """Auto-switch picks the lowest-indexed running task."""
+    def test_auto_switch_uses_next_neighbor_logic(self, tui):
+        """Auto-switch uses 'Next Neighbor' logic: picks next running task after finished one."""
         tui.set_parallel_mode(True)
         tui.follow_mode = True
 
@@ -439,8 +439,72 @@ class TestAutoSwitchOnTaskFinish:
         # Task 1 finishes
         tui._apply_event(create_task_finished_event(0, "Task 1", "success", 1.0))
 
-        # Should switch to Task 2 (lowest index among running: 1 and 2)
+        # Should switch to Task 2 (next neighbor after index 0)
         assert tui.selected_index == 1
+
+    def test_auto_switch_next_neighbor_middle_task(self):
+        """Next Neighbor: when middle task finishes, switch to next task, not first."""
+        # Need 4 tasks for this test
+        tui = TaskRunnerUI(ticket_id="TEST-123")
+        tui.initialize_records(["Task 1", "Task 2", "Task 3", "Task 4"])
+        tui.set_parallel_mode(True)
+        tui.follow_mode = True
+
+        # Start four tasks
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+        tui._apply_event(create_task_started_event(2, "Task 3"))
+        tui._apply_event(create_task_started_event(3, "Task 4"))
+
+        # User is watching Task 2
+        tui.selected_index = 1
+
+        # Task 2 finishes - should jump to Task 3 (next neighbor), NOT Task 1
+        tui._apply_event(create_task_finished_event(1, "Task 2", "success", 1.0))
+
+        # Should switch to Task 3 (index 2), not Task 1 (index 0)
+        assert tui.selected_index == 2
+
+    def test_auto_switch_next_neighbor_wraps_around(self, tui):
+        """Next Neighbor: when last task finishes, wrap around to first running task."""
+        tui.set_parallel_mode(True)
+        tui.follow_mode = True
+
+        # Start three tasks
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+        tui._apply_event(create_task_started_event(2, "Task 3"))
+
+        # User is watching Task 3 (last task)
+        tui.selected_index = 2
+
+        # Task 3 finishes - no later tasks, should wrap to Task 1
+        tui._apply_event(create_task_finished_event(2, "Task 3", "success", 1.0))
+
+        # Should wrap around to Task 1 (index 0)
+        assert tui.selected_index == 0
+
+    def test_auto_switch_next_neighbor_with_gaps(self):
+        """Next Neighbor: handles non-contiguous running task indices correctly."""
+        # Need 5 tasks for this test
+        tui = TaskRunnerUI(ticket_id="TEST-123")
+        tui.initialize_records(["Task 1", "Task 2", "Task 3", "Task 4", "Task 5"])
+        tui.set_parallel_mode(True)
+        tui.follow_mode = True
+
+        # Start tasks 0, 2, 4 (indices 1 and 3 are not started or already finished)
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        tui._apply_event(create_task_started_event(2, "Task 3"))
+        tui._apply_event(create_task_started_event(4, "Task 5"))
+
+        # User is watching Task 1 (index 0)
+        tui.selected_index = 0
+
+        # Task 1 finishes - should jump to Task 3 (index 2, next running after 0)
+        tui._apply_event(create_task_finished_event(0, "Task 1", "success", 1.0))
+
+        # Should switch to index 2 (next running task after index 0)
+        assert tui.selected_index == 2
 
     def test_auto_switch_works_with_failed_task(self, tui):
         """Auto-switch also works when selected task fails."""

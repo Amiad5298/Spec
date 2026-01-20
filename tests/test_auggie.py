@@ -120,7 +120,7 @@ class TestCheckAuggieInstalled:
     @patch("specflow.integrations.auggie.print_success")
     def test_returns_true_when_valid(self, mock_success, mock_info, mock_step, mock_version):
         """Returns True when version meets requirements."""
-        mock_version.return_value = "0.12.0"
+        mock_version.return_value = "0.13.0"
         
         is_valid, message = check_auggie_installed()
         

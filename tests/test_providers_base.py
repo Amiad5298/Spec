@@ -1245,8 +1245,9 @@ class TestGenericTicketSafeBranchNameNoMalformed:
         # Should not have patterns like "/-" or "-/"
         assert "/-" not in branch
         assert "-/" not in branch
-        # Should have format prefix/ticket-hash
-        assert re.match(r"^fix/ticket-[a-f0-9]{6}$", branch)
+        # Should have format prefix/ticket-hash-unnamed-ticket
+        # (because branch_summary had content that sanitized to empty)
+        assert re.match(r"^fix/ticket-[a-f0-9]{6}-unnamed-ticket$", branch)
 
     def test_all_ticket_types_produce_valid_branches(self):
         """All ticket types produce valid branch names with fallback ID."""

@@ -249,7 +249,7 @@ class TestStep4WithChanges:
         mock_snapshot.detect_changes.return_value = []
         mock_snapshot_class.capture_non_doc_state.return_value = mock_snapshot
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert isinstance(result, Step4Result)
         assert result.success
@@ -289,7 +289,7 @@ class TestStep4AgentFailure:
         mock_client = MagicMock()
         mock_client.run_print_with_output.return_value = (False, "Error occurred")
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_client, use_tui=False)
 
         # Step 4 is non-blocking - always returns success
         assert isinstance(result, Step4Result)
@@ -319,7 +319,7 @@ class TestStep4AgentFailure:
         mock_client = MagicMock()
         mock_client.run_print_with_output.side_effect = Exception("Agent crashed")
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_client, use_tui=False)
 
         # Should return success to not block workflow
         assert isinstance(result, Step4Result)
@@ -359,7 +359,7 @@ class TestStep4NonDocEnforcement:
         mock_snapshot.revert_changes.return_value = ["src/main.py"]
         mock_snapshot_class.capture_non_doc_state.return_value = mock_snapshot
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert isinstance(result, Step4Result)
         assert result.success
@@ -389,7 +389,7 @@ class TestStep4NonDocEnforcement:
         mock_snapshot.detect_changes.return_value = []
         mock_snapshot_class.capture_non_doc_state.return_value = mock_snapshot
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert isinstance(result, Step4Result)
         assert result.success
@@ -501,7 +501,7 @@ class TestStep4UntrackedOnly:
         state = WorkflowState(ticket=ticket)
         state.base_commit = ""  # No base commit
 
-        result = step_4_update_docs(state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert result.success
         assert result.agent_ran  # Agent should run!
@@ -558,7 +558,7 @@ class TestStep4MissingBaseCommit:
         state = WorkflowState(ticket=ticket)
         state.base_commit = ""
 
-        result = step_4_update_docs(state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert result.success
         assert result.agent_ran
@@ -594,7 +594,7 @@ class TestStep4ViolationTracking:
         mock_snapshot.revert_changes.return_value = ["src/code.py"]
         mock_snapshot_class.capture_non_doc_state.return_value = mock_snapshot
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert result.success  # Still non-blocking
         assert result.had_violations is True
@@ -620,7 +620,7 @@ class TestStep4ViolationTracking:
         mock_snapshot.revert_changes.return_value = ["src/code.py"]  # Only one reverted
         mock_snapshot_class.capture_non_doc_state.return_value = mock_snapshot
 
-        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client)
+        result = step_4_update_docs(workflow_state, auggie_client=mock_auggie_client, use_tui=False)
 
         assert result.had_violations is True
         assert "src/code.py" in result.non_doc_reverted
@@ -646,7 +646,7 @@ class TestStep4ViolationTracking:
         mock_snapshot.revert_changes.return_value = ["src/code.py"]
         mock_snapshot_class.capture_non_doc_state.return_value = mock_snapshot
 
-        step_4_update_docs(workflow_state, auggie_client=mock_auggie_client)
+        step_4_update_docs(workflow_state, auggie_client=mock_auggie_client, use_tui=False)
 
         # Verify prominent error messages were printed
         error_calls = [str(c) for c in mock_print_error.call_args_list]

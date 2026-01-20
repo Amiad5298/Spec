@@ -14,7 +14,7 @@ changes introduced by the agent.
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 from specflow.integrations.auggie import AuggieClient
 from specflow.integrations.git import (
@@ -507,11 +507,23 @@ class AuggieClientProtocol(Protocol):
     ) -> tuple[bool, str]:
         ...
 
+    def run_with_callback(
+        self,
+        prompt: str,
+        *,
+        output_callback: "Callable[[str], None]",
+        agent: str | None = None,
+        model: str | None = None,
+        dont_save_session: bool = False,
+    ) -> tuple[bool, str]:
+        ...
+
 
 def step_4_update_docs(
     state: WorkflowState,
     *,
     auggie_client: Optional[AuggieClientProtocol] = None,
+    use_tui: bool = True,
 ) -> Step4Result:
     """Execute Step 4: Update documentation based on code changes.
 
@@ -525,13 +537,21 @@ def step_4_update_docs(
 
     This step is NON-BLOCKING: errors will be reported but won't fail the workflow.
 
+    Uses StreamingOperationUI to provide a consistent collapsible UI with
+    verbose toggle, matching the UX of Steps 1 and 3.
+
     Args:
         state: Current workflow state
         auggie_client: Optional client for dependency injection in tests
+        use_tui: Whether to use the TUI (default True, set False for testing)
 
     Returns:
         Step4Result with details of what happened (always succeeds for workflow)
     """
+    from specflow.ui.plan_tui import StreamingOperationUI
+    from specflow.workflow.events import format_run_directory
+    from specflow.workflow.log_management import get_log_base_dir
+
     print_header("Step 4: Update Documentation")
     result = Step4Result()
 
@@ -555,8 +575,6 @@ def step_4_update_docs(
         print_info("No code changes to document. Skipping.")
         return result
 
-    print_info("Analyzing code changes for documentation updates...")
-
     # Snapshot non-doc files BEFORE agent runs (for enforcement)
     non_doc_snapshot = NonDocSnapshot.capture_non_doc_state()
 
@@ -566,13 +584,43 @@ def step_4_update_docs(
     # Use provided client or create default
     client = auggie_client or AuggieClient()
 
+    # Create log directory for documentation update
+    log_dir = get_log_base_dir() / state.ticket.ticket_id / "doc_update"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{format_run_directory()}.log"
+
     try:
         result.agent_ran = True
-        success, output = client.run_print_with_output(
-            prompt,
-            agent=state.subagent_names.get("doc_updater", "spec-doc-updater"),
-            dont_save_session=True,
-        )
+
+        if use_tui:
+            # Create UI with collapsible panel and verbose toggle
+            ui = StreamingOperationUI(
+                status_message="Updating documentation...",
+                ticket_id=state.ticket.ticket_id,
+            )
+            ui.set_log_path(log_path)
+
+            with ui:
+                success, output = client.run_with_callback(
+                    prompt,
+                    agent=state.subagent_names.get("doc_updater", "spec-doc-updater"),
+                    output_callback=ui.handle_output_line,
+                    dont_save_session=True,
+                )
+
+                # Check if user requested quit
+                if ui.quit_requested:
+                    print_warning("Documentation update cancelled by user.")
+                    return result
+
+            ui.print_summary(success)
+        else:
+            # Non-TUI mode for testing
+            success, output = client.run_print_with_output(
+                prompt,
+                agent=state.subagent_names.get("doc_updater", "spec-doc-updater"),
+                dont_save_session=True,
+            )
 
         # Enforce doc-only changes: detect and revert non-doc modifications
         non_doc_changes = non_doc_snapshot.detect_changes()

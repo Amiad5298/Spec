@@ -13,6 +13,14 @@ Your role is to convert implementation plans into executable task lists optimize
 Create a task list from the provided implementation plan. Tasks will be executed by AI agents,
 some sequentially (FUNDAMENTAL) and some in parallel (INDEPENDENT).
 
+## ⛔ ABSOLUTE RULE: NEVER BUNDLE TESTS IN FUNDAMENTAL TASKS ⛔
+
+**This is the most important rule.** Before outputting ANY task list, verify:
+- NO FUNDAMENTAL task contains "unit test", "integration test", "test coverage", or testing-related work
+- ALL test work is extracted to INDEPENDENT tasks with `group: testing`
+
+If you find yourself writing "Include unit tests in..." inside a FUNDAMENTAL task, STOP and extract it.
+
 ## Task Categories
 
 ### FUNDAMENTAL Tasks (Sequential Execution)
@@ -23,12 +31,14 @@ Tasks that MUST run in order because they have dependencies:
 - Configuration that must be in place first
 - Any task where Task N+1 depends on Task N's output
 
+**FUNDAMENTAL tasks contain ONLY implementation code, NEVER comprehensive tests.**
+
 ### INDEPENDENT Tasks (Parallel Execution)
 Tasks that can run concurrently with no dependencies:
-- UI components (after models/services exist)
-- Separate API endpoints that don't share state
-- Test suites that don't modify shared resources
-- Documentation updates
+- **ALL testing work** (unit tests, integration tests, test fixtures) → `group: testing`
+- UI components (after models/services exist) → `group: ui`
+- Separate API endpoints that don't share state → `group: implementation`
+- Documentation updates → `group: docs`
 
 ## Critical Rules
 
@@ -202,14 +212,16 @@ For each task, you MUST include a `<!-- files: ... -->` comment listing ALL file
 
 ## Categorization Heuristics
 
-1. **If unsure, mark as FUNDAMENTAL** - Sequential is always safe
-2. **Data/Schema/Config tasks are ALWAYS FUNDAMENTAL** - Order 1
-3. **Interface + Core Implementation tasks are FUNDAMENTAL** - Order 2+ (defines contracts others consume)
-4. **Dependent Implementation Layers are INDEPENDENT** - Activity/Controller/Wrapper layers (group: implementation)
-5. **ALL testing tasks are INDEPENDENT** - Unit/Integration tests (group: testing)
-6. **UI/Docs are INDEPENDENT** - Can parallelize (group: ui, group: docs)
-7. **Shared file edits require EXTRACTION** - Extract to FUNDAMENTAL setup task
-8. **Extract comprehensive tests from FUNDAMENTAL** - If a task would take >5 min due to tests, split them out
+1. **If unsure about IMPLEMENTATION code, mark as FUNDAMENTAL** - Sequential is always safe for code
+2. **Tests are NEVER unsure - they are ALWAYS INDEPENDENT** - No exceptions
+3. **Data/Schema/Config tasks are ALWAYS FUNDAMENTAL** - Order 1
+4. **Interface + Core Implementation tasks are FUNDAMENTAL** - Order 2+ (defines contracts others consume)
+5. **Dependent Implementation Layers are INDEPENDENT** - Activity/Controller/Wrapper layers (group: implementation)
+6. **ALL testing tasks are INDEPENDENT** - Unit/Integration tests (group: testing)
+7. **UI/Docs are INDEPENDENT** - Can parallelize (group: ui, group: docs)
+8. **Shared file edits require EXTRACTION** - Extract to FUNDAMENTAL setup task
+
+**VALIDATION CHECK**: Before outputting, scan every FUNDAMENTAL task. If any contains the word "test", "Test", or "tests", you MUST extract that testing work to a separate INDEPENDENT task.
 
 Order tasks by dependency (prerequisites first). Keep descriptions concise but specific.
 
@@ -221,3 +233,22 @@ Parse it and create an optimized task list that balances:
 - Parallelization for independent tasks
 - File disjointness to prevent race conditions
 
+## Final Output Validation
+
+Before returning your task list, perform this checklist:
+
+1. ✅ **Test Extraction Check**: For each FUNDAMENTAL task, verify it does NOT contain:
+   - "Include unit tests..."
+   - "Add test coverage..."
+   - "Write tests for..."
+   - Any test file references (e.g., `*Test.java`, `test_*.py`)
+
+2. ✅ **Independent Tests Exist**: Verify you have INDEPENDENT tasks (group: testing) for:
+   - Unit tests for each implementation
+   - Integration tests if mentioned in the plan
+
+3. ✅ **Maximize Parallelism**: Count your tasks:
+   - FUNDAMENTAL tasks should be minimal (setup + core contracts only)
+   - INDEPENDENT tasks should be the majority (all tests + dependent implementations)
+
+If FUNDAMENTAL count > INDEPENDENT count, you likely bundled too much into FUNDAMENTAL.

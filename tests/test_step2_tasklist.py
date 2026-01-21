@@ -145,6 +145,110 @@ Just some regular text.
         tasks = parse_task_list(result)
         assert len(tasks) == 2
 
+    def test_preserves_subtask_bullets(self):
+        """Preserves non-checkbox bullet points as subtasks.
+
+        Regression test: The post-processor was stripping subtask bullets,
+        resulting in loss of task details like unit test requirements.
+        """
+        output = """# Task List: RED-176578
+
+## Fundamental Tasks (Sequential)
+<!-- category: fundamental, order: 1 -->
+- [ ] Create domain record and GraphQL mutation foundation
+  - Create `UpdateMeteringLogLinkRecord.java` in common module
+  - Create `updateMeteringLogLink.graphql` mutation file
+  - Add `UPDATE_METERING_LOG_LINK` enum constant
+  - Include unit tests for the domain record
+
+<!-- category: fundamental, order: 2 -->
+- [ ] Implement response DTO and converter logic
+  - Create `UpdateMeteringLogLinkResponseModel.java`
+  - Add converter methods
+  - Add unit tests in `DasResponseConverterTest`
+"""
+        result = _extract_tasklist_from_output(output, "RED-176578")
+
+        assert result is not None
+        # Should preserve the subtask bullets
+        assert "- Create `UpdateMeteringLogLinkRecord.java` in common module" in result
+        assert "- Create `updateMeteringLogLink.graphql` mutation file" in result
+        assert "- Include unit tests for the domain record" in result
+        assert "- Create `UpdateMeteringLogLinkResponseModel.java`" in result
+        assert "- Add unit tests in `DasResponseConverterTest`" in result
+
+    def test_preserves_section_headers(self):
+        """Preserves section headers like ## Fundamental Tasks."""
+        output = """# Task List: TEST-123
+
+## Fundamental Tasks (Sequential)
+- [ ] First fundamental task
+
+## Independent Tasks (Parallel)
+- [ ] First independent task
+"""
+        result = _extract_tasklist_from_output(output, "TEST-123")
+
+        assert result is not None
+        assert "## Fundamental Tasks (Sequential)" in result
+        assert "## Independent Tasks (Parallel)" in result
+
+    def test_preserves_files_metadata_comments(self):
+        """Preserves <!-- files: ... --> metadata comments."""
+        output = """# Task List: TEST-123
+
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/main/java/DasService.java -->
+- [ ] Implement DAS service
+  - Add method implementation
+"""
+        result = _extract_tasklist_from_output(output, "TEST-123")
+
+        assert result is not None
+        assert "<!-- files: src/main/java/DasService.java -->" in result
+
+    def test_skips_duplicate_tasklist_header(self):
+        """Skips duplicate '# Task List:' header from AI output.
+
+        Regression test for bug where post-processing agent output would result
+        in duplicate headers like:
+            # Task List: RED-176578
+
+            # Task List: RED-176578
+
+        The extraction function adds its own header, so it should skip any
+        '# Task List:' lines from the AI output to avoid duplication.
+        """
+        output = """# Task List: RED-176578
+
+## Fundamental Tasks (Sequential)
+
+<!-- category: fundamental, order: 1 -->
+- [ ] **Create domain record and GraphQL infrastructure**
+  - Create UpdateMeteringLogLinkRecord.java
+
+## Independent Tasks (Parallel)
+
+<!-- category: independent, group: testing -->
+- [ ] **Unit tests for DasServiceImpl**
+  - Test error handling scenarios
+"""
+        result = _extract_tasklist_from_output(output, "RED-176578")
+
+        assert result is not None
+
+        # Should have exactly ONE header, not two
+        header_count = result.count("# Task List:")
+        assert header_count == 1, f"Expected 1 header, got {header_count}. Result:\n{result}"
+
+        # Should still have the section headers
+        assert "## Fundamental Tasks (Sequential)" in result
+        assert "## Independent Tasks (Parallel)" in result
+
+        # Should still have the tasks
+        assert "- [ ] **Create domain record and GraphQL infrastructure**" in result
+        assert "- [ ] **Unit tests for DasServiceImpl**" in result
+
     def test_extracts_tasks_from_add_tasks_tool_output(self):
         """Extracts tasks from Augment add_tasks tool output format.
 

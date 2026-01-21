@@ -165,11 +165,14 @@ def _extract_tasklist_from_output(output: str, ticket_id: str) -> str | None:
     Parses checkbox tasks from AI output, supporting:
     1. Simple checkbox format: `- [ ] Task name`
     2. add_tasks tool output: `[ ] UUID:xxx NAME:CATEGORY: Task DESCRIPTION:...`
+    3. Subtask bullet points (e.g., `  - Implementation detail`)
+    4. File metadata comments (e.g., `<!-- files: ... -->`)
 
     Design:
     - Strict parsing: Uses exact regex patterns, no guessing
     - UPPERCASE-only categories: Only "FUNDAMENTAL:" and "INDEPENDENT:" (not lowercase)
     - Edge-case safe: Handles task names containing "DESCRIPTION" or "NAME"
+    - Preserves subtasks: Non-checkbox bullets under tasks are kept
 
     Args:
         output: AI output text that may contain task list
@@ -181,25 +184,53 @@ def _extract_tasklist_from_output(output: str, ticket_id: str) -> str | None:
     # Pattern for checkbox task lines: optional indent, optional bullet, checkbox, content
     task_pattern = re.compile(r"^(\s*)[-*]?\s*\[([xX ])\]\s*(.+)$")
 
-    # Pattern for existing category metadata comments (preserve if present)
-    metadata_pattern = re.compile(r"^\s*<!--\s*category:\s*.+-->\s*$")
+    # Pattern for existing category/files metadata comments (preserve if present)
+    metadata_pattern = re.compile(r"^\s*<!--\s*(category|files):\s*.+-->\s*$")
+
+    # Pattern for subtask bullet points (indented bullets without checkbox)
+    # e.g., "  - Implementation detail" or "    - Sub-subtask"
+    subtask_pattern = re.compile(r"^(\s+)[-*]\s+(.+)$")
+
+    # Pattern for section headers (e.g., "## Fundamental Tasks")
+    header_pattern = re.compile(r"^(#+)\s+(.+)$")
+
+    # Pattern for the main task list header we add ourselves (skip duplicates from AI output)
+    # Matches: "# Task List: TICKET-123" or "# Task List: RED-176578"
+    main_header_pattern = re.compile(r"^#\s+Task\s+List:\s*", re.IGNORECASE)
 
     output_lines = output.splitlines()
     result_lines = [f"# Task List: {ticket_id}", ""]
 
     task_count = 0
     pending_metadata: list[str] = []
+    in_task_section = False  # Track if we've seen at least one checkbox task
 
     for line in output_lines:
-        # Preserve existing category metadata comments
+        # Skip the main "# Task List:" header if AI included it (we already added our own)
+        if main_header_pattern.match(line.strip()):
+            continue
+
+        # Preserve existing category/files metadata comments
         if metadata_pattern.match(line):
             pending_metadata.append(line.strip())
+            continue
+
+        # Check for section headers (preserve them)
+        header_match = header_pattern.match(line)
+        if header_match:
+            # Flush pending metadata first
+            for meta in pending_metadata:
+                result_lines.append(meta)
+            pending_metadata = []
+            result_lines.append(line.rstrip())
+            result_lines.append("")  # Add blank line after header
             continue
 
         # Check for checkbox task lines
         task_match = task_pattern.match(line)
         if task_match:
             indent, checkbox, raw_task_content = task_match.groups()
+            in_task_section = True
 
             # Parse using strict add_tasks format parser
             # Returns (category_metadata, clean_task_name)
@@ -220,6 +251,20 @@ def _extract_tasklist_from_output(output: str, ticket_id: str) -> str | None:
             checkbox_char = checkbox.lower()
             result_lines.append(f"{normalized_indent}- [{checkbox_char}] {task_name}")
             task_count += 1
+            continue
+
+        # Check for subtask bullet points (only after we've seen a task)
+        subtask_match = subtask_pattern.match(line)
+        if subtask_match and in_task_section:
+            indent, content = subtask_match.groups()
+            # Preserve subtask with normalized indentation
+            indent_level = len(indent) // 2
+            # Subtasks should be at least 1 level indented
+            if indent_level < 1:
+                indent_level = 1
+            normalized_indent = "  " * indent_level
+            result_lines.append(f"{normalized_indent}- {content}")
+            continue
 
     if task_count == 0:
         log_message("No checkbox tasks found in AI output")
@@ -299,7 +344,87 @@ Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
             log_message("No tasks extracted and no file created, using default")
             _create_default_tasklist(tasklist_path, state)
 
-    return tasklist_path.exists()
+    if not tasklist_path.exists():
+        return False
+
+    # Post-process: extract test-related work from FUNDAMENTAL to INDEPENDENT
+    print_step("Post-processing task list (extracting tests to independent)...")
+    if not _post_process_tasklist(state, tasklist_path):
+        print_warning("Post-processing failed, using original task list")
+        # Continue with original - post-processing is best-effort
+
+    return True
+
+
+def _post_process_tasklist(state: WorkflowState, tasklist_path: Path) -> bool:
+    """Post-process task list to extract test-related work from FUNDAMENTAL tasks.
+
+    Uses the spec-tasklist-fixer agent to:
+    1. Scan FUNDAMENTAL tasks for test-related content
+    2. Extract those items to new INDEPENDENT tasks with group: testing
+    3. Rewrite the task list with proper separation
+
+    This is a best-effort operation - if it fails, the original task list is preserved.
+
+    Args:
+        state: Current workflow state
+        tasklist_path: Path to the task list file
+
+    Returns:
+        True if post-processing succeeded, False otherwise
+    """
+    tasklist_content = tasklist_path.read_text()
+
+    # Skip if task list is empty or very short
+    if len(tasklist_content.strip()) < 50:
+        log_message("Task list too short for post-processing, skipping")
+        return True
+
+    # Build prompt with the task list content
+    prompt = f"""Fix this task list by extracting test-related work from FUNDAMENTAL to INDEPENDENT:
+
+{tasklist_content}
+
+Output ONLY the fixed task list markdown."""
+
+    auggie_client = AuggieClient()
+
+    success, output = auggie_client.run_print_with_output(
+        prompt,
+        agent=state.subagent_names["tasklist_fixer"],
+        dont_save_session=True,
+    )
+
+    if not success:
+        log_message("Post-processing agent failed")
+        return False
+
+    # Extract the fixed task list from output
+    fixed_content = _extract_tasklist_from_output(output, state.ticket.ticket_id)
+
+    if fixed_content:
+        # Verify we can still parse tasks after fixing
+        tasks = parse_task_list(fixed_content)
+        if tasks:
+            tasklist_path.write_text(fixed_content)
+            log_message(f"Post-processed task list: {len(tasks)} tasks")
+            return True
+        else:
+            log_message("Post-processed output has no parseable tasks")
+            return False
+
+    # If extraction failed, check if the file was directly modified
+    if tasklist_path.exists():
+        new_content = tasklist_path.read_text()
+        if new_content != tasklist_content:
+            # AI modified the file directly
+            tasks = parse_task_list(new_content)
+            if tasks:
+                log_message(f"Post-processing modified file directly: {len(tasks)} tasks")
+                return True
+
+    log_message("Post-processing produced no valid output")
+    return False
 
 
 def _create_default_tasklist(tasklist_path: Path, state: WorkflowState) -> None:

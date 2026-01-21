@@ -102,9 +102,9 @@ INDEPENDENT tasks include:
 
 ### Why This Matters: The Parallel Execution Pattern
 
-Once FUNDAMENTAL tasks complete (e.g., "Implement DasService Interface and DasServiceImpl"):
-- Unit tests for DasServiceImpl → can run in parallel (group: testing)
-- DasActivityImpl that calls DasService → can run in parallel (group: implementation)
+Once FUNDAMENTAL tasks complete (e.g., "Implement UserService Interface and UserServiceImpl"):
+- Unit tests for UserServiceImpl → can run in parallel (group: testing)
+- UserActivityImpl that calls UserService → can run in parallel (group: implementation)
 - Integration tests → can run in parallel (group: testing)
 
 All INDEPENDENT tasks run concurrently because they only depend on the FUNDAMENTAL interfaces, NOT on each other.
@@ -116,27 +116,27 @@ If a FUNDAMENTAL task would take >5 minutes due to test writing, extract the tes
 Example - WRONG:
 ```
 <!-- category: fundamental, order: 4 -->
-- [ ] Implement DasService Interface and Implementation
+- [ ] Implement UserService Interface and Implementation
   - Add method to interface
-  - Implement in DasServiceImpl
+  - Implement in UserServiceImpl
   - Add comprehensive unit tests  <-- PROBLEM: Blocks parallel execution
 ```
 
 Example - CORRECT:
 ```
 <!-- category: fundamental, order: 4 -->
-- [ ] Implement DasService Interface and Implementation
+- [ ] Implement UserService Interface and Implementation
   - Add method to interface
-  - Implement in DasServiceImpl (minimal validation only)
+  - Implement in UserServiceImpl (implementation logic only)
 
 <!-- category: independent, group: testing -->
-- [ ] Unit Tests: DasServiceImpl
-  - Comprehensive test coverage for DasServiceImpl
+- [ ] Unit Tests: UserServiceImpl
+  - Comprehensive test coverage for UserServiceImpl
 
 <!-- category: independent, group: implementation -->
-- [ ] Implement DasActivityImpl
-  - Add @ActivityMethod to DasActivity interface
-  - Implement delegation to DasService
+- [ ] Implement UserActivityImpl
+  - Add @ActivityMethod to UserActivity interface
+  - Implement delegation to UserService
 ```
 
 ### ❌ ANTI-PATTERN: The "Bundling Trap"

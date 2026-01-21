@@ -139,6 +139,56 @@ Example - CORRECT:
   - Implement delegation to DasService
 ```
 
+### ❌ ANTI-PATTERN: The "Bundling Trap"
+**Never do this.** This is the #1 reason task lists are rejected.
+
+**BAD (Bundled Tests):**
+```
+- [ ] Implement User Service Interface and Implementation
+  - Create UserServiceImpl class
+  - Write unit tests for validation logic  <-- ⛔ WRONG! This blocks parallel execution
+```
+
+**GOOD (Separated):**
+```
+- [ ] Implement User Service Interface and Implementation
+  - Create UserServiceImpl class (implementation only)
+
+- [ ] Unit Tests: User Service
+  - Write unit tests for validation logic
+```
+
+## Execution Planning (Required)
+
+Before generating the final task list, you must output a hidden XML comment block with your analysis.
+This "thinking block" helps you identify dependencies and separate tests before committing to a task list.
+
+Structure it like this:
+
+```xml
+<!--
+EXECUTION PLAN:
+
+1. FUNDAMENTAL Tasks (Sequential):
+   - Task A: [description] → creates [interface/model/schema]
+   - Task B: [description] → depends on Task A, creates [service/contract]
+
+2. INDEPENDENT Tasks (Parallel):
+   - Implementation: [ActivityImpl, ControllerImpl, etc.]
+   - Testing: [Unit tests for Task A], [Unit tests for Task B], [Integration tests]
+   - Docs: [API docs, README updates]
+
+3. Test Extraction Check:
+   - Task A tests → extracted to "Unit Tests: Task A"
+   - Task B tests → extracted to "Unit Tests: Task B"
+
+4. File Disjointness Verification:
+   - Independent tasks touch disjoint files: ✅/❌
+-->
+```
+
+After outputting this plan, generate the final markdown task list.
+
 ## Output Format
 
 **IMPORTANT:** Output ONLY the task list as plain markdown text. Do NOT use any task management tools.

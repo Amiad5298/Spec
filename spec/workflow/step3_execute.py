@@ -994,10 +994,10 @@ def _run_post_implementation_tests(state: WorkflowState) -> None:
     This includes both modified test files AND tests that cover modified source files.
     Does NOT run the full project test suite.
 
-    Uses StreamingOperationUI to provide a consistent collapsible UI with
-    verbose toggle, matching the UX of Steps 1 and 3.
+    Uses TaskRunnerUI in single-operation mode to provide a consistent
+    collapsible UI with verbose toggle, matching the UX of Steps 1 and 3.
     """
-    from spec.ui.plan_tui import StreamingOperationUI
+    from spec.ui.tui import TaskRunnerUI
     from spec.workflow.events import format_run_directory
 
     # Prompt user to run tests
@@ -1012,10 +1012,11 @@ def _run_post_implementation_tests(state: WorkflowState) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    # Create UI with collapsible panel and verbose toggle
-    ui = StreamingOperationUI(
+    # Create UI with collapsible panel and verbose toggle (single-operation mode)
+    ui = TaskRunnerUI(
         status_message="Running tests for changed code...",
         ticket_id=state.ticket.ticket_id,
+        single_operation_mode=True,
     )
     ui.set_log_path(log_path)
 
@@ -1032,7 +1033,7 @@ def _run_post_implementation_tests(state: WorkflowState) -> None:
             )
 
             # Check if user requested quit
-            if ui.quit_requested:
+            if ui.check_quit_requested():
                 print_warning("Test execution cancelled by user.")
                 return
 

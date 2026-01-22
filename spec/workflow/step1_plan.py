@@ -72,15 +72,16 @@ def _generate_plan_with_tui(
     Returns:
         True if plan generation succeeded.
     """
-    from spec.ui.plan_tui import StreamingOperationUI
+    from spec.ui.tui import TaskRunnerUI
 
     # Create log directory and log path
     log_dir = _create_plan_log_dir(state.ticket.ticket_id)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    ui = StreamingOperationUI(
+    ui = TaskRunnerUI(
         status_message="Generating implementation plan...",
         ticket_id=state.ticket.ticket_id,
+        single_operation_mode=True,
     )
     ui.set_log_path(log_path)
 
@@ -98,7 +99,7 @@ def _generate_plan_with_tui(
         )
 
         # Check if user requested quit
-        if ui.quit_requested:
+        if ui.check_quit_requested():
             print_warning("Plan generation cancelled by user.")
             return False
 
@@ -232,7 +233,9 @@ def _run_clarification(state: WorkflowState, auggie: AuggieClient, plan_path: Pa
     print_info("  - Edge cases not covered")
     console.print()
 
-    if not prompt_confirm("Would you like the AI to review the plan and ask clarification questions?", default=True):
+    if not prompt_confirm(
+        "Would you like the AI to review the plan and ask clarification questions?", default=True
+    ):
         print_info("Skipping clarification phase")
         return True
 
@@ -279,7 +282,9 @@ If the plan is complete and clear, simply respond with 'No clarifications needed
     if success:
         print_success("Clarification phase completed!")
         console.print()
-        print_info("The plan file has been updated with clarification Q&A (if any questions were asked)")
+        print_info(
+            "The plan file has been updated with clarification Q&A (if any questions were asked)"
+        )
     else:
         print_warning("Clarification phase encountered an issue, but continuing...")
 
@@ -350,4 +355,3 @@ def _display_plan_summary(plan_path: Path) -> None:
 __all__ = [
     "step_1_create_plan",
 ]
-

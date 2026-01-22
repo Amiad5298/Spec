@@ -1,4 +1,8 @@
-"""Tests for spec.ui.plan_tui module (StreamingOperationUI)."""
+"""Tests for TaskRunnerUI in single-operation mode.
+
+This module tests the unified TaskRunnerUI class when used in single-operation mode,
+which replaces the deprecated StreamingOperationUI class.
+"""
 
 import time
 from pathlib import Path
@@ -10,26 +14,28 @@ from spec.ui.plan_tui import (
     DEFAULT_VERBOSE_LINES,
     MAX_LIVENESS_WIDTH,
     REFRESH_RATE,
-    StreamingOperationUI,
 )
+from spec.ui.tui import TaskRunnerUI
 
 
-class TestStreamingOperationUICreation:
-    """Tests for StreamingOperationUI initialization."""
+class TestTaskRunnerUISingleOperationMode:
+    """Tests for TaskRunnerUI in single-operation mode (replaces StreamingOperationUI)."""
 
     def test_creates_with_defaults(self):
-        """StreamingOperationUI can be created with default values."""
-        ui = StreamingOperationUI()
+        """TaskRunnerUI can be created with default values in single-operation mode."""
+        ui = TaskRunnerUI(single_operation_mode=True)
         assert ui.status_message == "Processing..."
         assert ui.ticket_id == ""
         assert ui.verbose_mode is False
+        assert ui.single_operation_mode is True
 
     def test_creates_with_custom_values(self):
-        """StreamingOperationUI can be created with custom values."""
-        ui = StreamingOperationUI(
+        """TaskRunnerUI can be created with custom values in single-operation mode."""
+        ui = TaskRunnerUI(
             status_message="Generating plan...",
             ticket_id="TEST-123",
             verbose_mode=True,
+            single_operation_mode=True,
         )
         assert ui.status_message == "Generating plan..."
         assert ui.ticket_id == "TEST-123"
@@ -37,40 +43,40 @@ class TestStreamingOperationUICreation:
 
     def test_internal_state_initialized(self):
         """Internal state is properly initialized."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         assert ui._log_buffer is None
         assert ui._log_path is None
         assert ui._live is None
         assert ui._start_time == 0.0
         assert ui._latest_output_line == ""
-        assert ui.quit_requested is False
+        assert ui.check_quit_requested() is False
 
 
-class TestStreamingOperationUISetLogPath:
-    """Tests for set_log_path method."""
+class TestTaskRunnerUISetLogPath:
+    """Tests for set_log_path method in single-operation mode."""
 
     def test_sets_log_path(self, tmp_path: Path):
         """set_log_path sets the log path."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         log_path = tmp_path / "test.log"
         ui.set_log_path(log_path)
         assert ui._log_path == log_path
 
     def test_creates_log_buffer(self, tmp_path: Path):
         """set_log_path creates a TaskLogBuffer."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         log_path = tmp_path / "test.log"
         ui.set_log_path(log_path)
         assert ui._log_buffer is not None
         assert ui._log_buffer.log_path == log_path
 
 
-class TestStreamingOperationUIHandleOutputLine:
-    """Tests for handle_output_line method."""
+class TestTaskRunnerUIHandleOutputLine:
+    """Tests for handle_output_line method in single-operation mode."""
 
     def test_writes_to_log_buffer(self, tmp_path: Path):
         """handle_output_line writes lines to log buffer."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
 
         ui.handle_output_line("First line")
@@ -81,7 +87,7 @@ class TestStreamingOperationUIHandleOutputLine:
 
     def test_updates_liveness_indicator(self, tmp_path: Path):
         """handle_output_line updates the latest output line."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
 
         ui.handle_output_line("First line")
@@ -94,7 +100,7 @@ class TestStreamingOperationUIHandleOutputLine:
 
     def test_ignores_empty_lines_for_liveness(self, tmp_path: Path):
         """handle_output_line ignores empty lines for liveness indicator."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
 
         ui.handle_output_line("First line")
@@ -107,24 +113,24 @@ class TestStreamingOperationUIHandleOutputLine:
 
     def test_handles_no_log_buffer(self):
         """handle_output_line works without log buffer."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         # Should not raise
         ui.handle_output_line("Test line")
         assert ui._latest_output_line == "Test line"
 
 
-class TestStreamingOperationUITruncateLine:
-    """Tests for _truncate_line method."""
+class TestTaskRunnerUITruncateLine:
+    """Tests for _truncate_line method in single-operation mode."""
 
     def test_returns_short_lines_unchanged(self):
         """Short lines are returned unchanged."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         short = "Hello world"
         assert ui._truncate_line(short) == short
 
     def test_truncates_long_lines(self):
         """Long lines are truncated with ellipsis."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         long_line = "A" * 100
         result = ui._truncate_line(long_line, max_width=50)
         assert len(result) == 50
@@ -132,36 +138,36 @@ class TestStreamingOperationUITruncateLine:
 
     def test_exact_width_unchanged(self):
         """Lines at exact max width are unchanged."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         exact = "A" * 70
         result = ui._truncate_line(exact, max_width=70)
         assert result == exact
 
 
-class TestStreamingOperationUIFormatElapsedTime:
-    """Tests for _format_elapsed_time method."""
+class TestTaskRunnerUIFormatElapsedTime:
+    """Tests for _format_elapsed_time method in single-operation mode."""
 
     def test_formats_seconds_only(self):
         """Formats short times as seconds only."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui._start_time = time.time() - 45
         result = ui._format_elapsed_time()
         assert result == "45s"
 
     def test_formats_minutes_and_seconds(self):
         """Formats longer times with minutes."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui._start_time = time.time() - 125  # 2m 5s
         result = ui._format_elapsed_time()
         assert result == "2m 05s"
 
 
-class TestStreamingOperationUIVerboseMode:
-    """Tests for verbose mode toggle."""
+class TestTaskRunnerUIVerboseMode:
+    """Tests for verbose mode toggle in single-operation mode."""
 
     def test_toggle_verbose_mode(self):
         """_toggle_verbose_mode toggles verbose_mode flag."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         assert ui.verbose_mode is False
 
         ui._toggle_verbose_mode()
@@ -171,29 +177,31 @@ class TestStreamingOperationUIVerboseMode:
         assert ui.verbose_mode is False
 
 
-class TestStreamingOperationUIQuitRequest:
-    """Tests for quit/cancel request handling."""
+class TestTaskRunnerUIQuitRequest:
+    """Tests for quit/cancel request handling in single-operation mode."""
 
     def test_handle_quit_sets_flag(self):
         """_handle_quit sets quit_requested flag."""
-        ui = StreamingOperationUI()
-        assert ui.quit_requested is False
+        ui = TaskRunnerUI(single_operation_mode=True)
+        assert ui.check_quit_requested() is False
 
         ui._handle_quit()
-        assert ui.quit_requested is True
+        assert ui.check_quit_requested() is True
 
 
-class TestStreamingOperationUIContextManager:
-    """Tests for context manager protocol."""
+class TestTaskRunnerUIContextManager:
+    """Tests for context manager protocol in single-operation mode."""
 
-    @patch("spec.ui.plan_tui.Live")
-    @patch.object(StreamingOperationUI, "_input_loop")
-    def test_context_manager_starts_and_stops(self, mock_input_loop, mock_live_class, tmp_path: Path):
+    @patch("spec.ui.tui.Live")
+    @patch.object(TaskRunnerUI, "_input_loop")
+    def test_context_manager_starts_and_stops(
+        self, mock_input_loop, mock_live_class, tmp_path: Path
+    ):
         """Context manager starts and stops TUI."""
         mock_live = MagicMock()
         mock_live_class.return_value = mock_live
 
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
 
         with ui:
@@ -203,43 +211,51 @@ class TestStreamingOperationUIContextManager:
         # Live should have been stopped
         mock_live.stop.assert_called_once()
 
-    @patch("spec.ui.plan_tui.Live")
-    @patch.object(StreamingOperationUI, "_input_loop")
-    def test_context_manager_closes_log_buffer(self, mock_input_loop, mock_live_class, tmp_path: Path):
+    @patch("spec.ui.tui.Live")
+    @patch.object(TaskRunnerUI, "_input_loop")
+    def test_context_manager_closes_log_buffer(
+        self, mock_input_loop, mock_live_class, tmp_path: Path
+    ):
         """Context manager closes log buffer on exit."""
         mock_live_class.return_value = MagicMock()
 
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         log_path = tmp_path / "test.log"
         ui.set_log_path(log_path)
         ui.handle_output_line("Test line")
 
+        # Store reference to log buffer before context
+        log_buffer = ui._log_buffer
+        assert log_buffer is not None
+        assert log_buffer._file_handle is not None
+
         with ui:
-            assert ui._log_buffer._file_handle is not None
+            # Log buffer should still be accessible
+            assert ui._log_buffer is not None
 
-        # After context, buffer should be closed
-        assert ui._log_buffer._file_handle is None
+        # After context, buffer should be closed (file handle closed)
+        assert log_buffer._file_handle is None
 
-    @patch("spec.ui.plan_tui.Live")
-    @patch.object(StreamingOperationUI, "_input_loop")
+    @patch("spec.ui.tui.Live")
+    @patch.object(TaskRunnerUI, "_input_loop")
     def test_context_manager_returns_self(self, mock_input_loop, mock_live_class):
         """Context manager returns self on entry."""
         mock_live_class.return_value = MagicMock()
 
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
 
         with ui as context:
             assert context is ui
 
 
-class TestStreamingOperationUIRendering:
-    """Tests for rendering methods."""
+class TestTaskRunnerUIRendering:
+    """Tests for rendering methods in single-operation mode."""
 
     def test_render_layout_returns_group(self, tmp_path: Path):
         """_render_layout returns a Rich Group."""
         from rich.console import Group
 
-        ui = StreamingOperationUI(status_message="Test", ticket_id="TEST-1")
+        ui = TaskRunnerUI(status_message="Test", ticket_id="TEST-1", single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
         ui._start_time = time.time()
 
@@ -247,11 +263,11 @@ class TestStreamingOperationUIRendering:
         assert isinstance(result, Group)
 
     def test_render_status_bar_shows_shortcuts(self):
-        """_render_status_bar shows keyboard shortcuts."""
+        """_render_single_op_status_bar shows keyboard shortcuts."""
         from rich.text import Text
 
-        ui = StreamingOperationUI()
-        result = ui._render_status_bar()
+        ui = TaskRunnerUI(single_operation_mode=True)
+        result = ui._render_single_op_status_bar()
 
         assert isinstance(result, Text)
         plain_text = result.plain
@@ -260,42 +276,41 @@ class TestStreamingOperationUIRendering:
         assert "[q]" in plain_text
 
     def test_render_normal_panel_shows_status(self, tmp_path: Path):
-        """_render_normal_panel shows status message."""
+        """_render_single_op_normal_panel shows status message."""
         from rich.panel import Panel
         from rich.spinner import Spinner
 
-        ui = StreamingOperationUI(status_message="Generating plan...")
+        ui = TaskRunnerUI(status_message="Generating plan...", single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
         ui._start_time = time.time()
 
         spinner = Spinner("dots")
-        result = ui._render_normal_panel(spinner, "5s")
+        result = ui._render_single_op_normal_panel(spinner, "5s")
 
         assert isinstance(result, Panel)
 
     def test_render_verbose_panel_shows_log_output(self, tmp_path: Path):
-        """_render_verbose_panel shows log output."""
+        """_render_single_op_verbose_panel shows log output."""
         from rich.panel import Panel
-        from rich.spinner import Spinner
 
-        ui = StreamingOperationUI(status_message="Generating plan...")
+        ui = TaskRunnerUI(status_message="Generating plan...", single_operation_mode=True)
         ui.set_log_path(tmp_path / "test.log")
         ui._start_time = time.time()
         ui.handle_output_line("Log line 1")
         ui.handle_output_line("Log line 2")
 
-        spinner = Spinner("dots")
-        result = ui._render_verbose_panel(spinner, "10s")
+        # Note: _render_single_op_verbose_panel only takes elapsed as argument
+        result = ui._render_single_op_verbose_panel("10s")
 
         assert isinstance(result, Panel)
 
 
-class TestStreamingOperationUIPrintSummary:
-    """Tests for print_summary method."""
+class TestTaskRunnerUIPrintSummary:
+    """Tests for print_summary method in single-operation mode."""
 
     def test_print_summary_success(self, tmp_path: Path, capsys):
         """print_summary shows success message."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui._start_time = time.time() - 30
         ui.set_log_path(tmp_path / "test.log")
 
@@ -306,7 +321,7 @@ class TestStreamingOperationUIPrintSummary:
 
     def test_print_summary_failure(self, tmp_path: Path, capsys):
         """print_summary shows failure message."""
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         ui._start_time = time.time() - 60
         ui.set_log_path(tmp_path / "test.log")
 
@@ -316,14 +331,14 @@ class TestStreamingOperationUIPrintSummary:
         # We're mainly testing that it doesn't raise
 
 
-class TestStreamingOperationUIKeyboardHandling:
-    """Tests for keyboard handling."""
+class TestTaskRunnerUIKeyboardHandling:
+    """Tests for keyboard handling in single-operation mode."""
 
     def test_handle_key_v_toggles_verbose(self):
         """Pressing 'v' toggles verbose mode."""
         from spec.ui.keyboard import Key
 
-        ui = StreamingOperationUI()
+        ui = TaskRunnerUI(single_operation_mode=True)
         assert ui.verbose_mode is False
 
         ui._handle_key(Key.V)
@@ -333,11 +348,11 @@ class TestStreamingOperationUIKeyboardHandling:
         """Pressing 'q' sets quit_requested."""
         from spec.ui.keyboard import Key
 
-        ui = StreamingOperationUI()
-        assert ui.quit_requested is False
+        ui = TaskRunnerUI(single_operation_mode=True)
+        assert ui.check_quit_requested() is False
 
         ui._handle_key(Key.Q)
-        assert ui.quit_requested is True
+        assert ui.check_quit_requested() is True
 
 
 class TestConstants:
@@ -386,7 +401,7 @@ class TestStep1TUIIntegration:
 
         return state
 
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     @patch("spec.workflow.step1_plan.AuggieClient")
     def test_uses_tui_when_enabled(
         self,
@@ -406,7 +421,7 @@ class TestStep1TUIIntegration:
         mock_ui_class.return_value = mock_ui
         mock_ui.__enter__ = MagicMock(return_value=mock_ui)
         mock_ui.__exit__ = MagicMock(return_value=None)
-        mock_ui.quit_requested = False
+        mock_ui.check_quit_requested.return_value = False
 
         mock_client = MagicMock()
         mock_client.run_with_callback.return_value = (True, "Generated plan")
@@ -421,7 +436,7 @@ class TestStep1TUIIntegration:
         mock_ui_class.assert_called_once()
         mock_client.run_with_callback.assert_called_once()
 
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     @patch("spec.workflow.step1_plan.AuggieClient")
     def test_tui_quit_returns_false(
         self,
@@ -441,7 +456,7 @@ class TestStep1TUIIntegration:
         mock_ui_class.return_value = mock_ui
         mock_ui.__enter__ = MagicMock(return_value=mock_ui)
         mock_ui.__exit__ = MagicMock(return_value=None)
-        mock_ui.quit_requested = True  # User pressed 'q'
+        mock_ui.check_quit_requested.return_value = True  # User pressed 'q'
 
         mock_client = MagicMock()
         mock_client.run_with_callback.return_value = (True, "Generated plan")
@@ -487,4 +502,3 @@ class TestStep1TUIIntegration:
 
         result = _get_log_base_dir()
         assert result == Path(".spec/runs")
-

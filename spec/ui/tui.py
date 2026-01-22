@@ -88,6 +88,7 @@ def render_task_list(
     selected_index: int = -1,
     ticket_id: str = "",
     parallel_mode: bool = False,
+    spinners: dict[int, Spinner] | None = None,
 ) -> Panel:
     """Render the task list panel with parallel execution support.
 
@@ -96,6 +97,8 @@ def render_task_list(
         selected_index: Index of currently selected task (-1 for none).
         ticket_id: Ticket ID for header display.
         parallel_mode: Whether parallel execution mode is enabled.
+        spinners: Optional cache of spinner objects keyed by task index.
+            If provided, spinners are reused to maintain animation state.
 
     Returns:
         Rich Panel containing the task table.
@@ -117,11 +120,19 @@ def render_task_list(
         icon = record.get_status_icon()
         color = record.get_status_color()
 
-        # Use spinner for running tasks
+        # Use spinner for running tasks - reuse cached spinners to maintain animation
         status_cell: Spinner | Text
         if record.status == TaskRunStatus.RUNNING:
-            status_cell = Spinner("dots", style=color)
+            if spinners is not None:
+                if i not in spinners:
+                    spinners[i] = Spinner("dots", style=color)
+                status_cell = spinners[i]
+            else:
+                status_cell = Spinner("dots", style=color)
         else:
+            # Remove from spinner cache when task is no longer running
+            if spinners is not None and i in spinners:
+                del spinners[i]
             status_cell = Text(icon, style=color)
 
         # Task name with optional selection highlight
@@ -287,6 +298,10 @@ class TaskRunnerUI:
     _event_queue: queue.Queue = field(default_factory=queue.Queue, init=False, repr=False)
     # Lock for thread-safe refresh operations
     _refresh_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    # Lock for thread-safe state access (selected_index, _running_task_indices, etc.)
+    _state_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    # Cache for spinner objects to maintain animation state across renders
+    _spinners: dict[int, Spinner] = field(default_factory=dict, init=False, repr=False)
 
     def initialize_records(self, task_names: list[str]) -> None:
         """Initialize task run records from task names.
@@ -295,8 +310,7 @@ class TaskRunnerUI:
             task_names: List of task names to create records for.
         """
         self.records = [
-            TaskRunRecord(task_index=i, task_name=name)
-            for i, name in enumerate(task_names)
+            TaskRunRecord(task_index=i, task_name=name) for i, name in enumerate(task_names)
         ]
 
     def set_log_dir(self, log_dir: Path) -> None:
@@ -334,12 +348,13 @@ class TaskRunnerUI:
         Returns:
             TaskLogBuffer or None.
         """
-        # Prefer selected task, fall back to running task
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            # Prefer selected task, fall back to running task
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
 
-        # In parallel mode, if no selection, pick first running task
-        if index < 0 and self.parallel_mode and self._running_task_indices:
-            index = min(self._running_task_indices)
+            # In parallel mode, if no selection, pick first running task
+            if index < 0 and self.parallel_mode and self._running_task_indices:
+                index = min(self._running_task_indices)
 
         record = self.get_record(index)
         return record.log_buffer if record else None
@@ -350,11 +365,12 @@ class TaskRunnerUI:
         Returns:
             Task name or empty string.
         """
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
 
-        # In parallel mode, if no selection, pick first running task
-        if index < 0 and self.parallel_mode and self._running_task_indices:
-            index = min(self._running_task_indices)
+            # In parallel mode, if no selection, pick first running task
+            if index < 0 and self.parallel_mode and self._running_task_indices:
+                index = min(self._running_task_indices)
 
         record = self.get_record(index)
         return record.task_name if record else ""
@@ -365,9 +381,10 @@ class TaskRunnerUI:
         Returns:
             Number of running tasks (from set in parallel mode, or 1/0 in sequential).
         """
-        if self.parallel_mode:
-            return len(self._running_task_indices)
-        return 1 if self._current_task_index >= 0 else 0
+        with self._state_lock:
+            if self.parallel_mode:
+                return len(self._running_task_indices)
+            return 1 if self._current_task_index >= 0 else 0
 
     def _find_next_running_task(self, finished_index: int) -> int:
         """Find the next running task index using 'Next Neighbor' logic.
@@ -389,7 +406,9 @@ class TaskRunnerUI:
 
         Precondition:
             self._running_task_indices must not be empty.
+            Caller must hold _state_lock.
         """
+        # NOTE: Caller must hold _state_lock
         # Find running tasks with indices greater than finished_index
         later_tasks = [i for i in self._running_task_indices if i > finished_index]
         if later_tasks:
@@ -404,13 +423,19 @@ class TaskRunnerUI:
         Returns:
             Rich Group containing all panels.
         """
+        # Snapshot state under lock to avoid races during rendering
+        with self._state_lock:
+            selected_idx = self.selected_index
+            current_task_idx = self._current_task_index
+
         running_count = self._get_running_count()
 
         task_panel = render_task_list(
             self.records,
-            selected_index=self.selected_index,
+            selected_index=selected_idx,
             ticket_id=self.ticket_id,
             parallel_mode=self.parallel_mode,
+            spinners=self._spinners,
         )
 
         log_panel = render_log_panel(
@@ -420,7 +445,7 @@ class TaskRunnerUI:
         )
 
         status_bar = render_status_bar(
-            running=self._current_task_index >= 0 or running_count > 0,
+            running=current_task_idx >= 0 or running_count > 0,
             verbose_mode=self.verbose_mode,
             parallel_mode=self.parallel_mode,
             running_count=running_count,
@@ -450,9 +475,7 @@ class TaskRunnerUI:
         # is blocked waiting for subprocess output (both sequential and parallel modes).
         # The refresh loop runs at ~10 Hz with time.sleep() to yield the GIL.
         self._stop_refresh_thread = False
-        self._refresh_thread = threading.Thread(
-            target=self._background_refresh_loop, daemon=True
-        )
+        self._refresh_thread = threading.Thread(target=self._background_refresh_loop, daemon=True)
         self._refresh_thread.start()
 
     def stop(self) -> None:
@@ -569,28 +592,30 @@ class TaskRunnerUI:
         """Move task selection up."""
         if len(self.records) == 0:
             return
-        if self.selected_index < 0:
-            # In parallel mode, start from first running task or first task
-            if self.parallel_mode and self._running_task_indices:
-                self.selected_index = min(self._running_task_indices)
-            else:
-                self.selected_index = max(0, self._current_task_index)
-        elif self.selected_index > 0:
-            self.selected_index -= 1
+        with self._state_lock:
+            if self.selected_index < 0:
+                # In parallel mode, start from first running task or first task
+                if self.parallel_mode and self._running_task_indices:
+                    self.selected_index = min(self._running_task_indices)
+                else:
+                    self.selected_index = max(0, self._current_task_index)
+            elif self.selected_index > 0:
+                self.selected_index -= 1
         self.refresh()
 
     def _move_selection_down(self) -> None:
         """Move task selection down."""
         if len(self.records) == 0:
             return
-        if self.selected_index < 0:
-            # In parallel mode, start from first running task or first task
-            if self.parallel_mode and self._running_task_indices:
-                self.selected_index = min(self._running_task_indices)
-            else:
-                self.selected_index = max(0, self._current_task_index)
-        elif self.selected_index < len(self.records) - 1:
-            self.selected_index += 1
+        with self._state_lock:
+            if self.selected_index < 0:
+                # In parallel mode, start from first running task or first task
+                if self.parallel_mode and self._running_task_indices:
+                    self.selected_index = min(self._running_task_indices)
+                else:
+                    self.selected_index = max(0, self._current_task_index)
+            elif self.selected_index < len(self.records) - 1:
+                self.selected_index += 1
         self.refresh()
 
     def _toggle_follow_mode(self) -> None:
@@ -605,7 +630,8 @@ class TaskRunnerUI:
 
     def _show_log_path(self) -> None:
         """Show the log file path for the selected task."""
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
         record = self.get_record(index)
         if record and record.log_buffer and record.log_buffer.log_path:
             # This will be shown in the next refresh via a message
@@ -614,7 +640,8 @@ class TaskRunnerUI:
 
     def _open_log_in_pager(self) -> None:
         """Open the full log file in system pager."""
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
         record = self.get_record(index)
         if record and record.log_buffer and record.log_buffer.log_path:
             log_path = record.log_buffer.log_path
@@ -634,10 +661,10 @@ class TaskRunnerUI:
     def _handle_quit(self) -> None:
         """Handle quit request."""
         # Check if any task is running (sequential or parallel mode)
-        has_running_tasks = (
-            self._current_task_index >= 0
-            or (self.parallel_mode and len(self._running_task_indices) > 0)
-        )
+        with self._state_lock:
+            has_running_tasks = self._current_task_index >= 0 or (
+                self.parallel_mode and len(self._running_task_indices) > 0
+            )
 
         if has_running_tasks:
             # Tasks are running - set flag for execution loop to handle
@@ -694,13 +721,14 @@ class TaskRunnerUI:
             record.status = TaskRunStatus.RUNNING
             record.start_time = event.timestamp
 
-            if self.parallel_mode:
-                self._running_task_indices.add(event.task_index)
-                # Auto-select first task if nothing selected yet
-                if self.selected_index < 0:
-                    self.selected_index = event.task_index
-            else:
-                self._current_task_index = event.task_index
+            with self._state_lock:
+                if self.parallel_mode:
+                    self._running_task_indices.add(event.task_index)
+                    # Auto-select first task if nothing selected yet
+                    if self.selected_index < 0:
+                        self.selected_index = event.task_index
+                else:
+                    self._current_task_index = event.task_index
 
     def _handle_task_output(self, event: TaskEvent) -> None:
         """Handle TASK_OUTPUT event.
@@ -742,18 +770,19 @@ class TaskRunnerUI:
                     pass  # Best-effort cleanup
                 record.log_buffer = None
 
-            if self.parallel_mode:
-                self._running_task_indices.discard(event.task_index)
-                # Auto-switch to another running task if the finished task was selected
-                # and follow_mode is enabled. This keeps the UI showing live output.
-                # Uses "Next Neighbor" logic: prefer the next running task after the
-                # finished one, wrapping around if necessary for less jarring UX.
-                if (
-                    self.follow_mode
-                    and self.selected_index == event.task_index
-                    and self._running_task_indices
-                ):
-                    self.selected_index = self._find_next_running_task(event.task_index)
+            with self._state_lock:
+                if self.parallel_mode:
+                    self._running_task_indices.discard(event.task_index)
+                    # Auto-switch to another running task if the finished task was selected
+                    # and follow_mode is enabled. This keeps the UI showing live output.
+                    # Uses "Next Neighbor" logic: prefer the next running task after the
+                    # finished one, wrapping around if necessary for less jarring UX.
+                    if (
+                        self.follow_mode
+                        and self.selected_index == event.task_index
+                        and self._running_task_indices
+                    ):
+                        self.selected_index = self._find_next_running_task(event.task_index)
 
     def _handle_run_finished(self, event: TaskEvent) -> None:
         """Handle RUN_FINISHED event.
@@ -761,7 +790,8 @@ class TaskRunnerUI:
         Args:
             event: The run finished event.
         """
-        self._current_task_index = -1
+        with self._state_lock:
+            self._current_task_index = -1
 
     def mark_remaining_skipped(self, from_index: int) -> None:
         """Mark remaining tasks as skipped (for fail_fast).
@@ -807,4 +837,3 @@ __all__ = [
     "DEFAULT_LOG_TAIL_LINES",
     "REFRESH_RATE",
 ]
-

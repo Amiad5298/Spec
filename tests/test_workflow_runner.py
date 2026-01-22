@@ -6,8 +6,8 @@ import pytest
 
 from spec.integrations.jira import JiraTicket
 from spec.utils.errors import SpecError, UserCancelledError
+from spec.workflow.conflict_detection import _detect_context_conflict
 from spec.workflow.runner import (
-    _detect_context_conflict,
     _offer_cleanup,
     _setup_branch,
     _show_completion,

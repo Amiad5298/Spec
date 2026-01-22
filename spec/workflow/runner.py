@@ -4,7 +4,6 @@ This module provides the main workflow runner that orchestrates
 all three steps of the spec-driven development workflow.
 """
 
-import re
 from collections.abc import Generator
 from contextlib import contextmanager
 
@@ -32,123 +31,16 @@ from spec.utils.console import (
 )
 from spec.utils.errors import SpecError, UserCancelledError
 from spec.utils.logging import log_message
+from spec.workflow.conflict_detection import (
+    _detect_context_conflict,
+    detect_context_conflict,
+)
 from spec.workflow.git_utils import DirtyTreePolicy
 from spec.workflow.state import RateLimitConfig, WorkflowState
 from spec.workflow.step1_plan import step_1_create_plan
 from spec.workflow.step2_tasklist import step_2_create_tasklist
 from spec.workflow.step3_execute import step_3_execute
 from spec.workflow.step4_update_docs import step_4_update_docs
-
-# Prompt template for conflict detection between ticket and user context
-_CONFLICT_DETECTION_PROMPT_TEMPLATE = """Analyze the following ticket information and user-provided context for semantic conflicts.
-
-TICKET INFORMATION:
-{ticket_info}
-
-USER-PROVIDED CONTEXT:
-{user_context}
-
-TASK: Determine if there are any semantic conflicts between the ticket and user context.
-Conflicts include:
-- Contradictory requirements (e.g., ticket says "add feature X" but user says "remove feature X")
-- Scope mismatches (e.g., ticket is about backend but user context discusses frontend changes)
-- Incompatible constraints (e.g., different target versions, conflicting technical approaches)
-
-RESPOND IN EXACTLY THIS FORMAT:
-CONFLICT: [YES or NO]
-SUMMARY: [If YES, provide a 1-2 sentence summary of the conflict. If NO, write "No conflicts detected."]
-
-Be conservative - only flag clear contradictions, not mere differences in detail level."""
-
-# Regex patterns for parsing conflict detection response
-_CONFLICT_PATTERN = re.compile(r"CONFLICT\s*:\s*(YES|NO)", re.IGNORECASE)
-_SUMMARY_PATTERN = re.compile(r"SUMMARY\s*:\s*(.*)", re.IGNORECASE | re.DOTALL)
-
-
-# No-op callback for silent LLM calls
-def _noop_callback(_: str) -> None:
-    """No-op callback for silent LLM calls."""
-    pass
-
-
-def _detect_context_conflict(
-    ticket: JiraTicket,
-    user_context: str,
-    auggie: AuggieClient,
-    state: WorkflowState,
-) -> tuple[bool, str]:
-    """Detect semantic conflicts between ticket description and user context.
-
-    Uses a lightweight LLM call to identify contradictions or conflicts between
-    the official ticket description and the user-provided additional context.
-
-    This implements the "Fail-Fast Semantic Check" pattern:
-    - Runs immediately after user context is collected
-    - Uses semantic analysis (not brittle keyword matching)
-    - Returns conflict info for advisory warnings (non-blocking)
-
-    Args:
-        ticket: JiraTicket with title and description
-        user_context: User-provided additional context
-        auggie: Auggie CLI client
-        state: Workflow state for accessing subagent configuration
-
-    Returns:
-        Tuple of (conflict_detected: bool, conflict_summary: str)
-        - conflict_detected: True if semantic conflicts were found
-        - conflict_summary: Description of the conflict(s) if any
-    """
-    # If no user context or no ticket description, no conflict is possible
-    if not user_context.strip():
-        return False, ""
-
-    ticket_info = f"Title: {ticket.title or 'Not available'}\nDescription: {ticket.description or 'Not available'}"
-    if not ticket.description and not ticket.title:
-        return False, ""
-
-    # Build prompt from template
-    prompt = _CONFLICT_DETECTION_PROMPT_TEMPLATE.format(
-        ticket_info=ticket_info,
-        user_context=user_context,
-    )
-
-    log_message("Running conflict detection between ticket and user context")
-
-    try:
-        # Use run_with_callback with a no-op callback to capture output silently
-        success, output = auggie.run_with_callback(
-            prompt,
-            agent=state.subagent_names["planner"],
-            output_callback=_noop_callback,
-            dont_save_session=True,
-        )
-
-        if not success:
-            log_message("Conflict detection LLM call failed")
-            return False, ""
-
-        # Parse the response using regex for robustness
-        conflict_match = _CONFLICT_PATTERN.search(output)
-        conflict_detected = conflict_match is not None and conflict_match.group(1).upper() == "YES"
-
-        # Extract summary
-        summary = ""
-        if conflict_detected:
-            summary_match = _SUMMARY_PATTERN.search(output)
-            if summary_match:
-                summary = summary_match.group(1).strip()
-
-            if not summary:
-                summary = "Potential conflict detected between ticket and user context."
-
-        log_message(
-            f"Conflict detection result: detected={conflict_detected}, summary={summary[:100]}"
-        )
-        return conflict_detected, summary
-
-    except Exception as e:
-        log_message(f"Conflict detection error: {e}")
-        return False, ""
 
 
 def run_spec_driven_workflow(
@@ -448,4 +340,7 @@ def _offer_cleanup(state: WorkflowState, original_branch: str) -> None:
 __all__ = [
     "run_spec_driven_workflow",
     "workflow_cleanup",
+    # Re-exported from conflict_detection module for backward compatibility
+    "_detect_context_conflict",
+    "detect_context_conflict",
 ]

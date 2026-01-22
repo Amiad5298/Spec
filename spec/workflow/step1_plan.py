@@ -248,11 +248,17 @@ def _run_clarification(state: WorkflowState, auggie: AuggieClient, plan_path: Pa
     console.print()
 
     # Build conflict context if a conflict was detected
+    # Truncate conflict_summary to prevent context pollution or prompt injection
+    # from malformed LLM outputs (max 500 characters)
+    _MAX_CONFLICT_SUMMARY_LENGTH = 500
     conflict_context = ""
     if state.conflict_detected and state.conflict_summary:
+        sanitized_summary = state.conflict_summary[:_MAX_CONFLICT_SUMMARY_LENGTH]
+        if len(state.conflict_summary) > _MAX_CONFLICT_SUMMARY_LENGTH:
+            sanitized_summary += "..."
         conflict_context = f"""
 ⚠️ IMPORTANT: A conflict was detected between the ticket description and the user's additional context:
-"{state.conflict_summary}"
+"{sanitized_summary}"
 
 Your FIRST priority should be to ask a clarifying question about this specific conflict to help
 the user resolve the ambiguity. Then proceed with other clarification questions as needed.

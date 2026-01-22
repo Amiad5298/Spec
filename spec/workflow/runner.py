@@ -4,6 +4,7 @@ This module provides the main workflow runner that orchestrates
 all three steps of the spec-driven development workflow.
 """
 
+import re
 from collections.abc import Generator
 from contextlib import contextmanager
 
@@ -38,41 +39,8 @@ from spec.workflow.step2_tasklist import step_2_create_tasklist
 from spec.workflow.step3_execute import step_3_execute
 from spec.workflow.step4_update_docs import step_4_update_docs
 
-
-def _detect_context_conflict(
-    ticket: JiraTicket,
-    user_context: str,
-    auggie: "AuggieClient",
-) -> tuple[bool, str]:
-    """Detect semantic conflicts between ticket description and user context.
-
-    Uses a lightweight LLM call to identify contradictions or conflicts between
-    the official ticket description and the user-provided additional context.
-
-    This implements the "Fail-Fast Semantic Check" pattern:
-    - Runs immediately after user context is collected
-    - Uses semantic analysis (not brittle keyword matching)
-    - Returns conflict info for advisory warnings (non-blocking)
-
-    Args:
-        ticket: JiraTicket with title and description
-        user_context: User-provided additional context
-
-    Returns:
-        Tuple of (conflict_detected: bool, conflict_summary: str)
-        - conflict_detected: True if semantic conflicts were found
-        - conflict_summary: Description of the conflict(s) if any
-    """
-    # If no user context or no ticket description, no conflict is possible
-    if not user_context.strip():
-        return False, ""
-
-    ticket_info = f"Title: {ticket.title or 'Not available'}\nDescription: {ticket.description or 'Not available'}"
-    if not ticket.description and not ticket.title:
-        return False, ""
-
-    # Build a lightweight prompt for conflict detection
-    prompt = f"""Analyze the following ticket information and user-provided context for semantic conflicts.
+# Prompt template for conflict detection between ticket and user context
+_CONFLICT_DETECTION_PROMPT_TEMPLATE = """Analyze the following ticket information and user-provided context for semantic conflicts.
 
 TICKET INFORMATION:
 {ticket_info}
@@ -92,13 +60,66 @@ SUMMARY: [If YES, provide a 1-2 sentence summary of the conflict. If NO, write "
 
 Be conservative - only flag clear contradictions, not mere differences in detail level."""
 
+# Regex patterns for parsing conflict detection response
+_CONFLICT_PATTERN = re.compile(r"CONFLICT\s*:\s*(YES|NO)", re.IGNORECASE)
+_SUMMARY_PATTERN = re.compile(r"SUMMARY\s*:\s*(.*)", re.IGNORECASE | re.DOTALL)
+
+
+# No-op callback for silent LLM calls
+def _noop_callback(_: str) -> None:
+    """No-op callback for silent LLM calls."""
+    pass
+
+
+def _detect_context_conflict(
+    ticket: JiraTicket,
+    user_context: str,
+    auggie: AuggieClient,
+    state: "WorkflowState",
+) -> tuple[bool, str]:
+    """Detect semantic conflicts between ticket description and user context.
+
+    Uses a lightweight LLM call to identify contradictions or conflicts between
+    the official ticket description and the user-provided additional context.
+
+    This implements the "Fail-Fast Semantic Check" pattern:
+    - Runs immediately after user context is collected
+    - Uses semantic analysis (not brittle keyword matching)
+    - Returns conflict info for advisory warnings (non-blocking)
+
+    Args:
+        ticket: JiraTicket with title and description
+        user_context: User-provided additional context
+        auggie: Auggie CLI client
+        state: Workflow state for accessing subagent configuration
+
+    Returns:
+        Tuple of (conflict_detected: bool, conflict_summary: str)
+        - conflict_detected: True if semantic conflicts were found
+        - conflict_summary: Description of the conflict(s) if any
+    """
+    # If no user context or no ticket description, no conflict is possible
+    if not user_context.strip():
+        return False, ""
+
+    ticket_info = f"Title: {ticket.title or 'Not available'}\nDescription: {ticket.description or 'Not available'}"
+    if not ticket.description and not ticket.title:
+        return False, ""
+
+    # Build prompt from template
+    prompt = _CONFLICT_DETECTION_PROMPT_TEMPLATE.format(
+        ticket_info=ticket_info,
+        user_context=user_context,
+    )
+
     log_message("Running conflict detection between ticket and user context")
 
     try:
-        # Use run_print_with_output with a no-op callback to capture output silently
+        # Use run_with_callback with a no-op callback to capture output silently
         success, output = auggie.run_with_callback(
             prompt,
-            output_callback=lambda _: None,  # Silent - don't print to console
+            agent=state.subagent_names["planner"],
+            output_callback=_noop_callback,
             dont_save_session=True,
         )
 
@@ -106,18 +127,16 @@ Be conservative - only flag clear contradictions, not mere differences in detail
             log_message("Conflict detection LLM call failed")
             return False, ""
 
-        # Parse the response
-        output_upper = output.upper()
-        conflict_detected = "CONFLICT: YES" in output_upper or "CONFLICT:YES" in output_upper
+        # Parse the response using regex for robustness
+        conflict_match = _CONFLICT_PATTERN.search(output)
+        conflict_detected = conflict_match is not None and conflict_match.group(1).upper() == "YES"
 
         # Extract summary
         summary = ""
         if conflict_detected:
-            # Try to extract the summary line
-            for line in output.split("\n"):
-                if line.upper().startswith("SUMMARY:"):
-                    summary = line.split(":", 1)[1].strip()
-                    break
+            summary_match = _SUMMARY_PATTERN.search(output)
+            if summary_match:
+                summary = summary_match.group(1).strip()
 
             if not summary:
                 summary = "Potential conflict detected between ticket and user context."
@@ -246,7 +265,7 @@ def run_spec_driven_workflow(
                 # Fail-Fast Semantic Check: Detect conflicts between ticket and user context
                 print_step("Checking for conflicts between ticket and your context...")
                 conflict_detected, conflict_summary = _detect_context_conflict(
-                    state.ticket, state.user_context, auggie
+                    state.ticket, state.user_context, auggie, state
                 )
                 state.conflict_detected = conflict_detected
                 state.conflict_summary = conflict_summary

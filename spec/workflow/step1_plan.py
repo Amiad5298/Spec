@@ -218,7 +218,7 @@ def _run_clarification(state: WorkflowState, auggie: AuggieClient, plan_path: Pa
 
     Args:
         state: Current workflow state
-        auggie: Auggie CLI client (unused, kept for signature compatibility)
+        auggie: Auggie CLI client for running clarification
         plan_path: Path to the created plan file
 
     Returns:
@@ -280,14 +280,12 @@ A2: [My answer]
 
 If the plan is complete and clear, simply respond with 'No clarifications needed - plan is comprehensive.' and do not modify the file."""
 
-    # Use spec-planner subagent for clarification (same agent that created the plan)
-    auggie_client = AuggieClient()
-
     print_step("Running: auggie (interactive mode)")
     print_info(f"Using agent: {state.subagent_names['planner']}")
     console.print()
 
-    success = auggie_client.run_print(prompt, agent=state.subagent_names["planner"])
+    # Use the passed auggie client for clarification (same agent that created the plan)
+    success = auggie.run_print(prompt, agent=state.subagent_names["planner"])
 
     console.print()
     if success:

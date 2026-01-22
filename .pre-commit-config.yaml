@@ -1,0 +1,53 @@
+# Pre-commit hooks for SPEC project
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: [--fix, --config=pyproject.toml]
+      - id: ruff-format
+        args: [--config=pyproject.toml]
+
+  # Mypy - Static type checker
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - typer>=0.9.0
+          - rich>=13.0.0
+          - questionary>=2.0.0
+          - pytest>=7.0.0
+        args: [--config-file=pyproject.toml]
+        pass_filenames: false
+        # Run on entire project for better type inference
+        entry: mypy spec
+
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: debug-statements
+        # Catch accidental debugger/breakpoint statements
+      - id: check-case-conflict
+        # Useful for cross-platform development
+
+  # Typos - Spell checker for source code
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.17.0
+    hooks:
+      - id: typos
+        args: [--config=.typos.toml]
+        # Optional: create .typos.toml to customize

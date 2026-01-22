@@ -1156,5 +1156,7 @@ __all__ = [
     "render_status_bar",
     "_should_use_tui",
     "DEFAULT_LOG_TAIL_LINES",
+    "DEFAULT_VERBOSE_LINES",
+    "MAX_LIVENESS_WIDTH",
     "REFRESH_RATE",
 ]

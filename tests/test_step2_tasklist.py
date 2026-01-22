@@ -12,6 +12,7 @@ from specflow.workflow.step2_tasklist import (
     _display_tasklist,
     _edit_tasklist,
     _extract_tasklist_from_output,
+    _fundamental_section_has_test_keywords,
     _generate_tasklist,
     _parse_add_tasks_line,
     step_2_create_tasklist,
@@ -894,3 +895,85 @@ class TestGenerateTasklistRetry:
 
         assert result is False
 
+
+
+class TestFundamentalSectionKeywordDetection:
+    """Tests for _fundamental_section_has_test_keywords optimization function."""
+
+    def test_positive_match_keyword_in_fundamental_section(self):
+        """Keyword exists in Fundamental Tasks section - should return True."""
+        content = """# Task List: TEST-123
+
+## Fundamental Tasks (Sequential)
+
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/main/java/Service.java -->
+- [ ] **Implement service layer**
+  - Create Service.java
+  - Add business logic
+  - Write unit tests for Service
+
+## Independent Tasks (Parallel)
+
+<!-- category: independent, group: implementation -->
+<!-- files: src/main/java/Controller.java -->
+- [ ] **Update controller**
+  - Add new endpoint
+"""
+        result = _fundamental_section_has_test_keywords(content)
+        assert result is True
+
+    def test_negative_match_keyword_only_in_independent_section(self):
+        """Keyword exists ONLY in Independent Tasks section - should return False.
+
+        This tests the optimization: if there are no test keywords in Fundamental,
+        we can skip the AI refiner call entirely.
+        """
+        content = """# Task List: TEST-123
+
+## Fundamental Tasks (Sequential)
+
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/main/java/Service.java -->
+- [ ] **Implement service layer**
+  - Create Service.java
+  - Add business logic
+  - Implement error handling
+
+## Independent Tasks (Parallel)
+
+<!-- category: independent, group: testing -->
+<!-- files: src/test/java/ServiceTest.java -->
+- [ ] **Write tests for service**
+  - Add unit tests
+  - Add integration tests
+"""
+        result = _fundamental_section_has_test_keywords(content)
+        assert result is False
+
+    def test_ambiguous_keyword_verify_triggers_match(self):
+        """Common verb 'verify' in Fundamental section triggers match - should return True.
+
+        'verify' is in the keyword list and should be detected even though it's
+        commonly used in non-test contexts.
+        """
+        content = """# Task List: TEST-123
+
+## Fundamental Tasks (Sequential)
+
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/main/java/Validator.java -->
+- [ ] **Implement validation logic**
+  - Create Validator.java
+  - Add input validation
+  - Verify data integrity before processing
+
+## Independent Tasks (Parallel)
+
+<!-- category: independent, group: implementation -->
+<!-- files: src/main/java/Handler.java -->
+- [ ] **Update handler**
+  - Add new method
+"""
+        result = _fundamental_section_has_test_keywords(content)
+        assert result is True

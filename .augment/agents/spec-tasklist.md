@@ -32,11 +32,29 @@ All automated tests (unit/integration/fixtures) must be INDEPENDENT tasks with:
 Tests always use exactly: `group: testing`.
 
 ## GATE 3 - EVERY TASK MUST DECLARE FILES (MANDATORY FORMAT)
-Every single task bullet (`- [ ]`) must be preceded immediately by exactly one files comment:
+Every single task bullet (`- [ ]`) **MUST** be preceded immediately by exactly one files comment:
 
 `<!-- files: path/a, path/b -->`
 
 No task may omit it. No extra lines between the files comment and the task bullet.
+
+### How to Extract File Paths (MANDATORY)
+1. **Scan the Implementation Plan** for file references. Look for:
+   - Explicit file headers: `### File: \`src/main/java/...\``
+   - Inline references: "in `SomeClass.java`", "modify `config.yaml`"
+   - Step descriptions: "Create UpdateMeteringLogLinkResponseModel.java DTO"
+2. **Map each task** to the files it will create or modify based on the plan's description.
+3. **Use actual paths** from the plan - do NOT invent or guess paths.
+
+### Fail-Loudly Rule
+If you cannot determine the files for a task:
+- Use `<!-- files: UNRESOLVED - [reason] -->`
+- This triggers a validation failure and forces manual review.
+- Do NOT omit the files comment entirely.
+
+### Enforcement (STOP and Verify)
+Before finalizing output: scan every `- [ ]` line.
+If ANY task lacks an immediately preceding `<!-- files: ... -->` comment: **STOP. Add the missing file comment. Then continue.**
 
 ## GATE 4 - INDEPENDENT TASKS MUST HAVE DISJOINT FILE SETS
 Any two INDEPENDENT tasks must not touch the same file.
@@ -95,20 +113,26 @@ Before the task list, output exactly one hidden comment block:
 <!--
 EXECUTION PLAN:
 
-A) FUNDAMENTAL (Sequential):
+A) FILE EXTRACTION (from Implementation Plan):
+   - Task 1 will touch: [list actual file paths from plan]
+   - Task 2 will touch: [list actual file paths from plan]
+   - Task N will touch: [list actual file paths from plan]
+   (If a task's files cannot be determined, mark as UNRESOLVED)
+
+B) FUNDAMENTAL (Sequential):
    1. ...
    2. ...
 
-B) INDEPENDENT (Parallel):
+C) INDEPENDENT (Parallel):
    - implementation: ...
    - testing: ...
    - docs: ...
 
-C) Test Extraction:
+D) Test Extraction:
    - Extracted tests for [X] -> "Unit Tests: [X]" (group: testing)
    - Extracted tests for [Y] -> "Unit Tests: [Y]" (group: testing)
 
-D) File Disjointness Check:
+E) File Disjointness Check:
    - Task T1 files: ...
    - Task T2 files: ...
    - Conflicts? YES/NO (If YES -> show which file + which task resolves it)

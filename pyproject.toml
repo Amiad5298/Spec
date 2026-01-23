@@ -38,6 +38,7 @@ dev = [
     "pytest-mock>=3.0.0",
     "pytest-xdist>=3.5.0",      # Parallel test execution
     "pytest-timeout>=2.2.0",    # Timeout for hanging tests
+    "pytest-asyncio>=1.0.0",    # Async test support
     "mypy>=1.0.0",
     "ruff>=0.1.0",
     "pre-commit>=3.6.0",        # Git hook management
@@ -71,6 +72,8 @@ addopts = [
 # pytest-xdist: use 'pytest -n auto' for parallel execution
 # Not in addopts to allow sequential debugging when needed
 timeout_method = "thread"        # Works better with Rich console
+asyncio_mode = "auto"            # pytest-asyncio: auto-detect async tests
+asyncio_default_fixture_loop_scope = "function"  # Each test gets its own event loop
 
 [tool.coverage.run]
 source = ["spec"]

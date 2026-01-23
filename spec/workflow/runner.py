@@ -284,7 +284,7 @@ def _show_completion(state: WorkflowState) -> None:
     console.print()
     print_info("Next steps:")
     print_info("  1. Review the changes")
-    print_info("  2. Run tests: pytest")
+    print_info("  2. Run tests")
     print_info("  3. Create a pull request")
     console.print()
 

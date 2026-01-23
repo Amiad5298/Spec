@@ -298,7 +298,7 @@ class TestShowCompletion:
         calls = [str(c) for c in mock_print_info.call_args_list]
         assert any("Next steps" in c for c in calls)
         assert any("Review" in c for c in calls)
-        assert any("pytest" in c for c in calls)
+        assert any("tests" in c for c in calls)
 
 
 # =============================================================================

@@ -135,19 +135,16 @@ def render_task_list(
         icon = record.get_status_icon()
         color = record.get_status_color()
 
-        # Use spinner for running tasks - reuse cached spinners to maintain animation
+        # Use spinner for running tasks - retrieve from cache (read-only)
+        # Spinners are created in _handle_task_started and removed in _handle_task_finished
         status_cell: Spinner | Text
         if record.status == TaskRunStatus.RUNNING:
-            if spinners is not None:
-                if i not in spinners:
-                    spinners[i] = Spinner("line", style=color)
-                status_cell = spinners[i]
-            else:
-                status_cell = Spinner("line", style=color)
+            # Retrieve existing spinner created by the event handler
+            # Do NOT instantiate a new Spinner("dots") here if missing,
+            # or it will freeze the animation.
+            spinner = spinners.get(record.task_index) if spinners is not None else None
+            status_cell = spinner if spinner else Spinner("dots", style=color)
         else:
-            # Remove from spinner cache when task is no longer running
-            if spinners is not None and i in spinners:
-                del spinners[i]
             status_cell = Text(icon, style=color)
 
         # Task name with optional selection highlight
@@ -346,7 +343,7 @@ class TaskRunnerUI:
         self.records = [
             TaskRunRecord(task_index=i, task_name=name) for i, name in enumerate(task_names)
         ]
-        self._spinners = {}  # Explicit initialization
+        self._spinners.clear()  # Clear spinner cache for new run
 
     def set_log_dir(self, log_dir: Path) -> None:
         """Set the log directory for this run (multi-task mode).
@@ -1024,6 +1021,10 @@ class TaskRunnerUI:
             record.status = TaskRunStatus.RUNNING
             record.start_time = event.timestamp
 
+            # Create the spinner instance here (Event-Driven)
+            # This ensures the spinner is created once and maintains its animation state
+            self._spinners[event.task_index] = Spinner("dots", style=record.get_status_color())
+
             with self._state_lock:
                 if self.parallel_mode:
                     self._running_task_indices.add(event.task_index)
@@ -1072,6 +1073,9 @@ class TaskRunnerUI:
                 except Exception:
                     pass  # Best-effort cleanup
                 record.log_buffer = None
+
+            # Cleanup spinner to prevent stale state
+            self._spinners.pop(event.task_index, None)
 
             with self._state_lock:
                 if self.parallel_mode:

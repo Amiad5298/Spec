@@ -23,11 +23,16 @@ from .exceptions import AgentIntegrationError, PlatformNotSupportedError
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern to extract JSON from markdown code blocks
-# Matches ```json ... ``` or ``` ... ``` with optional language hint
-_CODE_BLOCK_PATTERN = re.compile(
-    r"```(?:json)?\s*\n?(.*?)\n?```",
+# Regex pattern to extract JSON-tagged markdown code blocks (```json ... ```)
+_JSON_CODE_BLOCK_PATTERN = re.compile(
+    r"```json\s*\n?(.*?)\n?```",
     re.DOTALL | re.IGNORECASE,
+)
+
+# Regex pattern to extract any markdown code blocks (``` ... ```)
+_ANY_CODE_BLOCK_PATTERN = re.compile(
+    r"```(?:\w*)?\s*\n?(.*?)\n?```",
+    re.DOTALL,
 )
 
 
@@ -156,7 +161,16 @@ class AgentMediatedFetcher(TicketFetcher):
             )
 
         prompt = self._build_prompt(ticket_id, platform)
-        response = await self._execute_fetch_prompt(prompt, platform)
+        try:
+            response = await self._execute_fetch_prompt(prompt, platform)
+        except AgentIntegrationError:
+            raise
+        except Exception as e:
+            raise AgentIntegrationError(
+                message=f"Unexpected error during agent communication: {e}",
+                agent_name=self.name,
+                original_error=e,
+            ) from e
         return self._parse_response(response)
 
     def _build_prompt(self, ticket_id: str, platform: Platform) -> str:
@@ -178,10 +192,10 @@ class AgentMediatedFetcher(TicketFetcher):
     def _parse_response(self, response: str) -> dict[str, Any]:
         """Parse agent response and extract JSON data.
 
-        Handles multiple response formats:
-        - Bare JSON object: {"key": "value"}
-        - Markdown code block: ```json\n{...}\n```
-        - Markdown without language hint: ```\n{...}\n```
+        Uses a prioritized extraction strategy:
+        1. First, try all ```json tagged code blocks
+        2. Then, try any code blocks without json tag
+        3. Finally, attempt to extract the first valid JSON object from raw text
 
         Args:
             response: Raw string response from agent
@@ -198,53 +212,85 @@ class AgentMediatedFetcher(TicketFetcher):
                 agent_name=self.name,
             )
 
-        # Try to extract JSON from markdown code blocks first
-        code_block_match = _CODE_BLOCK_PATTERN.search(response)
-        if code_block_match:
-            json_str = code_block_match.group(1).strip()
-            logger.debug("Extracted JSON from markdown code block")
-        else:
-            # Try bare JSON - find first { and last }
-            json_str = response.strip()
+        # Priority 1: Try all JSON-tagged code blocks (```json ... ```)
+        json_blocks = _JSON_CODE_BLOCK_PATTERN.findall(response)
+        for block in json_blocks:
+            result = self._try_parse_json(block.strip())
+            if result is not None:
+                logger.debug("Extracted JSON from json-tagged code block")
+                return result
 
-        try:
-            result = json.loads(json_str)
-            if not isinstance(result, dict):
-                raise AgentIntegrationError(
-                    message=f"Expected JSON object, got {type(result).__name__}",
-                    agent_name=self.name,
-                )
+        # Priority 2: Try any code blocks (``` ... ```)
+        any_blocks = _ANY_CODE_BLOCK_PATTERN.findall(response)
+        for block in any_blocks:
+            result = self._try_parse_json(block.strip())
+            if result is not None:
+                logger.debug("Extracted JSON from untagged code block")
+                return result
+
+        # Priority 3: Try to extract the first valid JSON object from raw text
+        result = self._extract_first_json_object(response)
+        if result is not None:
+            logger.debug("Extracted JSON from raw text")
             return result
-        except json.JSONDecodeError as e:
-            logger.debug(
-                "Initial JSON parse failed: %s. Attempting fallback extraction.",
-                e,
-            )
-            # Try to find JSON object in the response
-            # Look for first { and last } to handle text before/after JSON
-            start_idx = response.find("{")
-            end_idx = response.rfind("}")
-            if start_idx != -1 and end_idx > start_idx:
-                try:
-                    json_str = response[start_idx : end_idx + 1]
-                    result = json.loads(json_str)
-                    if isinstance(result, dict):
-                        logger.debug(
-                            "Fallback extraction succeeded: found JSON at positions %d-%d",
-                            start_idx,
-                            end_idx,
-                        )
-                        return result
-                except json.JSONDecodeError:
-                    logger.debug(
-                        "Fallback extraction also failed for substring at %d-%d",
-                        start_idx,
-                        end_idx,
-                    )
-                    pass
 
-            raise AgentIntegrationError(
-                message=f"Failed to parse JSON from agent response: {e}",
-                agent_name=self.name,
-                original_error=e,
-            ) from e
+        raise AgentIntegrationError(
+            message="Failed to parse JSON from agent response: no valid JSON object found",
+            agent_name=self.name,
+        )
+
+    def _try_parse_json(self, text: str) -> dict[str, Any] | None:
+        """Attempt to parse text as a JSON object.
+
+        Args:
+            text: String to parse as JSON
+
+        Returns:
+            Parsed dict if successful and result is a dict, None otherwise
+        """
+        try:
+            result = json.loads(text)
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+        return None
+
+    def _extract_first_json_object(self, text: str) -> dict[str, Any] | None:
+        """Extract the first valid JSON object from text.
+
+        Finds the first '{' and attempts to parse progressively longer
+        substrings until a valid JSON object is found or all possibilities
+        are exhausted.
+
+        Args:
+            text: Raw text that may contain JSON
+
+        Returns:
+            Parsed dict if a valid JSON object is found, None otherwise
+        """
+        start_idx = text.find("{")
+        if start_idx == -1:
+            return None
+
+        # Try to find matching closing braces by tracking nesting depth
+        # This is more robust than using rfind which is too greedy
+        depth = 0
+        for i, char in enumerate(text[start_idx:], start=start_idx):
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    # Found a potential complete JSON object
+                    candidate = text[start_idx : i + 1]
+                    result = self._try_parse_json(candidate)
+                    if result is not None:
+                        return result
+                    # If parsing failed, reset and continue looking for the next '{'
+                    next_start = text.find("{", start_idx + 1)
+                    if next_start == -1:
+                        return None
+                    start_idx = next_start
+                    depth = 1  # We're now inside this new brace
+        return None

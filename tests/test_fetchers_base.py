@@ -234,26 +234,41 @@ class TestAgentMediatedFetcherJSONParsing:
     def test_parse_json_array_raises_error(self):
         """JSON array (not object) raises AgentIntegrationError."""
         fetcher = MockAgentFetcher()
-        with pytest.raises(AgentIntegrationError, match="Expected JSON object"):
+        with pytest.raises(AgentIntegrationError, match="Failed to parse JSON"):
             fetcher._parse_response("[1, 2, 3]")
 
     def test_parse_json_string_raises_error(self):
         """JSON string raises AgentIntegrationError."""
         fetcher = MockAgentFetcher()
-        with pytest.raises(AgentIntegrationError, match="Expected JSON object"):
+        with pytest.raises(AgentIntegrationError, match="Failed to parse JSON"):
             fetcher._parse_response('"just a string"')
 
     def test_parse_first_code_block_when_multiple_exist(self):
-        """When multiple code blocks exist, parses the first one."""
+        """When multiple json-tagged code blocks exist, parses the first one."""
         fetcher = MockAgentFetcher()
         response = '```json\n{"id": "first"}\n```\nSome text\n```json\n{"id": "second"}\n```'
         result = fetcher._parse_response(response)
         assert result == {"id": "first"}
 
-    def test_parse_multiple_code_blocks_different_formats(self):
-        """When multiple code blocks with different formats exist, parses the first."""
+    def test_parse_json_tagged_block_prioritized_over_untagged(self):
+        """JSON-tagged blocks are prioritized over untagged blocks."""
         fetcher = MockAgentFetcher()
-        response = '```\n{"id": "first"}\n```\nMore text\n```json\n{"id": "second"}\n```'
+        # Untagged block appears first, but json-tagged block should be prioritized
+        response = '```\n{"id": "untagged"}\n```\nMore text\n```json\n{"id": "tagged"}\n```'
+        result = fetcher._parse_response(response)
+        assert result == {"id": "tagged"}
+
+    def test_parse_fallback_to_untagged_block(self):
+        """Falls back to untagged code block if no json-tagged blocks exist."""
+        fetcher = MockAgentFetcher()
+        response = '```\n{"id": "untagged"}\n```\nSome text after'
+        result = fetcher._parse_response(response)
+        assert result == {"id": "untagged"}
+
+    def test_parse_multiple_json_objects_in_text(self):
+        """Extracts first valid JSON object when multiple exist in raw text."""
+        fetcher = MockAgentFetcher()
+        response = 'First object: {"id": "first"} and second: {"id": "second"}'
         result = fetcher._parse_response(response)
         assert result == {"id": "first"}
 
@@ -261,53 +276,87 @@ class TestAgentMediatedFetcherJSONParsing:
 class TestAgentMediatedFetcherFetchRaw:
     """Tests for fetch_raw method."""
 
-    def test_fetch_raw_success(self):
+    @pytest.mark.asyncio
+    async def test_fetch_raw_success(self):
         """fetch_raw returns parsed JSON for supported platform."""
-        import asyncio
-
-        async def run_test():
-            fetcher = MockAgentFetcher('{"id": "PROJ-123", "status": "open"}')
-            return await fetcher.fetch_raw("PROJ-123", Platform.JIRA)
-
-        result = asyncio.run(run_test())
+        fetcher = MockAgentFetcher('{"id": "PROJ-123", "status": "open"}')
+        result = await fetcher.fetch_raw("PROJ-123", Platform.JIRA)
         assert result == {"id": "PROJ-123", "status": "open"}
 
-    def test_fetch_raw_builds_correct_prompt(self):
+    @pytest.mark.asyncio
+    async def test_fetch_raw_builds_correct_prompt(self):
         """fetch_raw builds prompt using template and ticket ID."""
-        import asyncio
-
-        async def run_test():
-            fetcher = MockAgentFetcher('{"id": "TEST-1"}')
-            await fetcher.fetch_raw("TEST-1", Platform.JIRA)
-            return fetcher
-
-        fetcher = asyncio.run(run_test())
+        fetcher = MockAgentFetcher('{"id": "TEST-1"}')
+        await fetcher.fetch_raw("TEST-1", Platform.JIRA)
         assert fetcher._last_prompt == "Fetch ticket TEST-1 from JIRA"
         assert fetcher._last_platform == Platform.JIRA
 
-    def test_fetch_raw_unsupported_platform_raises_error(self):
+    @pytest.mark.asyncio
+    async def test_fetch_raw_unsupported_platform_raises_error(self):
         """fetch_raw raises PlatformNotSupportedError for unsupported platform."""
-        import asyncio
-
-        async def run_test():
-            fetcher = MockAgentFetcher()
-            await fetcher.fetch_raw("TEST-1", Platform.GITHUB)
-
+        fetcher = MockAgentFetcher()
         with pytest.raises(PlatformNotSupportedError) as exc_info:
-            asyncio.run(run_test())
+            await fetcher.fetch_raw("TEST-1", Platform.GITHUB)
         assert exc_info.value.platform == "GITHUB"
         assert exc_info.value.fetcher_name == "Mock Agent Fetcher"
 
-    def test_fetch_raw_with_markdown_response(self):
+    @pytest.mark.asyncio
+    async def test_fetch_raw_with_markdown_response(self):
         """fetch_raw handles markdown-wrapped JSON response."""
-        import asyncio
-
-        async def run_test():
-            fetcher = MockAgentFetcher('```json\n{"id": "MD-1"}\n```')
-            return await fetcher.fetch_raw("MD-1", Platform.LINEAR)
-
-        result = asyncio.run(run_test())
+        fetcher = MockAgentFetcher('```json\n{"id": "MD-1"}\n```')
+        result = await fetcher.fetch_raw("MD-1", Platform.LINEAR)
         assert result == {"id": "MD-1"}
+
+    @pytest.mark.asyncio
+    async def test_fetch_raw_wraps_unexpected_exceptions(self):
+        """fetch_raw wraps unexpected exceptions in AgentIntegrationError."""
+
+        class FailingFetcher(AgentMediatedFetcher):
+            @property
+            def name(self) -> str:
+                return "Failing Fetcher"
+
+            def supports_platform(self, platform: Platform) -> bool:
+                return True
+
+            async def _execute_fetch_prompt(self, prompt: str, platform: Platform) -> str:
+                raise ValueError("Network timeout")
+
+            def _get_prompt_template(self, platform: Platform) -> str:
+                return "Fetch {ticket_id}"
+
+        fetcher = FailingFetcher()
+        with pytest.raises(AgentIntegrationError) as exc_info:
+            await fetcher.fetch_raw("TEST-1", Platform.JIRA)
+        assert "Unexpected error" in str(exc_info.value)
+        assert exc_info.value.original_error is not None
+        assert isinstance(exc_info.value.original_error, ValueError)
+        # Verify exception chaining
+        assert exc_info.value.__cause__ is exc_info.value.original_error
+
+    @pytest.mark.asyncio
+    async def test_fetch_raw_preserves_agent_integration_errors(self):
+        """fetch_raw re-raises AgentIntegrationError without wrapping."""
+
+        class AgentErrorFetcher(AgentMediatedFetcher):
+            @property
+            def name(self) -> str:
+                return "Agent Error Fetcher"
+
+            def supports_platform(self, platform: Platform) -> bool:
+                return True
+
+            async def _execute_fetch_prompt(self, prompt: str, platform: Platform) -> str:
+                raise AgentIntegrationError("Agent unavailable", agent_name="Test")
+
+            def _get_prompt_template(self, platform: Platform) -> str:
+                return "Fetch {ticket_id}"
+
+        fetcher = AgentErrorFetcher()
+        with pytest.raises(AgentIntegrationError) as exc_info:
+            await fetcher.fetch_raw("TEST-1", Platform.JIRA)
+        assert str(exc_info.value) == "Agent unavailable"
+        assert exc_info.value.agent_name == "Test"
 
 
 class TestAgentMediatedFetcherBuildPrompt:

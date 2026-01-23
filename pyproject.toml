@@ -71,6 +71,8 @@ addopts = [
 # pytest-xdist: use 'pytest -n auto' for parallel execution
 # Not in addopts to allow sequential debugging when needed
 timeout_method = "thread"        # Works better with Rich console
+asyncio_mode = "auto"            # pytest-asyncio: auto-detect async tests
+asyncio_default_fixture_loop_scope = "function"  # Each test gets its own event loop
 
 [tool.coverage.run]
 source = ["spec"]

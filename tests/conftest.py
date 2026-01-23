@@ -5,12 +5,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Enable pytest-asyncio for async test support
+pytest_plugins = ("pytest_asyncio",)
+
 
 @pytest.fixture
 def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file with sample values."""
     config_file = tmp_path / ".spec-config"
-    config_file.write_text('''# SPEC Configuration
+    config_file.write_text(
+        """# SPEC Configuration
 DEFAULT_MODEL="claude-3"
 PLANNING_MODEL="claude-3-opus"
 IMPLEMENTATION_MODEL="claude-3-sonnet"
@@ -18,7 +22,8 @@ DEFAULT_JIRA_PROJECT="PROJ"
 AUTO_OPEN_FILES="true"
 SKIP_CLARIFICATION="false"
 SQUASH_AT_END="true"
-''')
+"""
+    )
     return config_file
 
 
@@ -35,7 +40,8 @@ def sample_plan_file(tmp_path: Path) -> Path:
     """Create a sample plan file."""
     plan = tmp_path / "specs" / "TEST-123-plan.md"
     plan.parent.mkdir(parents=True)
-    plan.write_text('''# Implementation Plan: TEST-123
+    plan.write_text(
+        """# Implementation Plan: TEST-123
 
 ## Summary
 Test implementation plan for feature development.
@@ -48,7 +54,8 @@ Test implementation plan for feature development.
 ### Phase 2: Frontend
 1. Create UI components
 2. Add form validation
-''')
+"""
+    )
     return plan
 
 
@@ -57,7 +64,8 @@ def sample_tasklist_file(tmp_path: Path) -> Path:
     """Create a sample task list file."""
     tasklist = tmp_path / "specs" / "TEST-123-tasklist.md"
     tasklist.parent.mkdir(parents=True)
-    tasklist.write_text('''# Task List: TEST-123
+    tasklist.write_text(
+        """# Task List: TEST-123
 
 ## Phase 1: Setup
 - [ ] Create database schema
@@ -67,14 +75,15 @@ def sample_tasklist_file(tmp_path: Path) -> Path:
 ## Phase 2: Frontend
 - [ ] Create UI components
 * [ ] Add form validation
-''')
+"""
+    )
     return tasklist
 
 
 @pytest.fixture
 def mock_subprocess():
     """Mock subprocess.run for git/auggie commands."""
-    with patch('subprocess.run') as mock:
+    with patch("subprocess.run") as mock:
         mock.return_value = MagicMock(
             returncode=0,
             stdout="",
@@ -155,4 +164,3 @@ def rate_limit_config():
         max_delay_seconds=30.0,
         jitter_factor=0.25,
     )
-

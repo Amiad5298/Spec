@@ -72,15 +72,16 @@ def _generate_plan_with_tui(
     Returns:
         True if plan generation succeeded.
     """
-    from spec.ui.plan_tui import StreamingOperationUI
+    from spec.ui.tui import TaskRunnerUI
 
     # Create log directory and log path
     log_dir = _create_plan_log_dir(state.ticket.ticket_id)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    ui = StreamingOperationUI(
+    ui = TaskRunnerUI(
         status_message="Generating implementation plan...",
         ticket_id=state.ticket.ticket_id,
+        single_operation_mode=True,
     )
     ui.set_log_path(log_path)
 
@@ -98,7 +99,7 @@ def _generate_plan_with_tui(
         )
 
         # Check if user requested quit
-        if ui.quit_requested:
+        if ui.check_quit_requested():
             print_warning("Plan generation cancelled by user.")
             return False
 

@@ -123,7 +123,7 @@ class TestGeneratePlanWithTui:
     """Tests for _generate_plan_with_tui function."""
 
     @patch("spec.workflow.step1_plan.AuggieClient")
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     def test_returns_true_on_successful_generation(
         self, mock_tui_class, mock_auggie_class, workflow_state, tmp_path, monkeypatch
     ):
@@ -131,7 +131,7 @@ class TestGeneratePlanWithTui:
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
 
         mock_tui = MagicMock()
-        mock_tui.quit_requested = False
+        mock_tui.check_quit_requested.return_value = False
         mock_tui_class.return_value = mock_tui
 
         mock_client = MagicMock()
@@ -145,15 +145,15 @@ class TestGeneratePlanWithTui:
         assert result is True
 
     @patch("spec.workflow.step1_plan.AuggieClient")
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     def test_returns_false_when_user_requests_quit(
         self, mock_tui_class, mock_auggie_class, workflow_state, tmp_path, monkeypatch
     ):
-        """Returns False when user requests quit (via ui.quit_requested)."""
+        """Returns False when user requests quit (via ui.check_quit_requested())."""
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
 
         mock_tui = MagicMock()
-        mock_tui.quit_requested = True  # User requested quit
+        mock_tui.check_quit_requested.return_value = True  # User requested quit
         mock_tui_class.return_value = mock_tui
 
         mock_client = MagicMock()
@@ -167,7 +167,7 @@ class TestGeneratePlanWithTui:
         assert result is False
 
     @patch("spec.workflow.step1_plan.AuggieClient")
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     def test_log_path_is_set_on_ui(
         self, mock_tui_class, mock_auggie_class, workflow_state, tmp_path, monkeypatch
     ):
@@ -175,7 +175,7 @@ class TestGeneratePlanWithTui:
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
 
         mock_tui = MagicMock()
-        mock_tui.quit_requested = False
+        mock_tui.check_quit_requested.return_value = False
         mock_tui_class.return_value = mock_tui
 
         mock_client = MagicMock()
@@ -192,7 +192,7 @@ class TestGeneratePlanWithTui:
         assert ".log" in str(log_path_arg)
 
     @patch("spec.workflow.step1_plan.AuggieClient")
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     def test_auggie_client_uses_subagent(
         self, mock_tui_class, mock_auggie_class, workflow_state, tmp_path, monkeypatch
     ):
@@ -200,7 +200,7 @@ class TestGeneratePlanWithTui:
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
 
         mock_tui = MagicMock()
-        mock_tui.quit_requested = False
+        mock_tui.check_quit_requested.return_value = False
         mock_tui_class.return_value = mock_tui
 
         mock_client = MagicMock()
@@ -219,7 +219,7 @@ class TestGeneratePlanWithTui:
         assert call_kwargs["agent"] == workflow_state.subagent_names["planner"]
 
     @patch("spec.workflow.step1_plan.AuggieClient")
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     def test_returns_false_on_auggie_failure(
         self, mock_tui_class, mock_auggie_class, workflow_state, tmp_path, monkeypatch
     ):
@@ -227,7 +227,7 @@ class TestGeneratePlanWithTui:
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
 
         mock_tui = MagicMock()
-        mock_tui.quit_requested = False
+        mock_tui.check_quit_requested.return_value = False
         mock_tui_class.return_value = mock_tui
 
         mock_client = MagicMock()
@@ -241,7 +241,7 @@ class TestGeneratePlanWithTui:
         assert result is False
 
     @patch("spec.workflow.step1_plan.AuggieClient")
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
+    @patch("spec.ui.tui.TaskRunnerUI")
     def test_dont_save_session_flag_is_passed(
         self, mock_tui_class, mock_auggie_class, workflow_state, tmp_path, monkeypatch
     ):
@@ -249,7 +249,7 @@ class TestGeneratePlanWithTui:
         monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
 
         mock_tui = MagicMock()
-        mock_tui.quit_requested = False
+        mock_tui.check_quit_requested.return_value = False
         mock_tui_class.return_value = mock_tui
 
         mock_client = MagicMock()

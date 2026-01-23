@@ -41,12 +41,14 @@ LOG_DIR_DOC_UPDATE = "doc_update"
 # Documentation file patterns (extensions)
 # Note: .txt is intentionally excluded to avoid modifying config files like
 # requirements.txt, constraints.txt, etc.
-DOC_FILE_EXTENSIONS = frozenset({
-    ".md",
-    ".rst",
-    ".adoc",
-    ".asciidoc",
-})
+DOC_FILE_EXTENSIONS = frozenset(
+    {
+        ".md",
+        ".rst",
+        ".adoc",
+        ".asciidoc",
+    }
+)
 
 # Documentation directory patterns (paths that contain docs)
 DOC_PATH_PATTERNS = (
@@ -58,24 +60,28 @@ DOC_PATH_PATTERNS = (
 
 # Specific .github/ directory/file names that ARE documentation (case-insensitive)
 # These are checked as exact path segments after .github/
-GITHUB_DOC_NAMES = frozenset({
-    "readme",
-    "contributing",
-    "code_of_conduct",
-    "security",
-    "support",
-    "funding",
-    "issue_template",
-    "pull_request_template",
-})
+GITHUB_DOC_NAMES = frozenset(
+    {
+        "readme",
+        "contributing",
+        "code_of_conduct",
+        "security",
+        "support",
+        "funding",
+        "issue_template",
+        "pull_request_template",
+    }
+)
 
 # .github/ subdirectories that are NOT documentation (code/config)
 # These are checked as directory names that must NOT be in the path
-GITHUB_NON_DOC_DIRS = frozenset({
-    "workflows",
-    "actions",
-    "scripts",
-})
+GITHUB_NON_DOC_DIRS = frozenset(
+    {
+        "workflows",
+        "actions",
+        "scripts",
+    }
+)
 
 # Legacy patterns for backward compatibility (used for substring checks)
 GITHUB_NON_DOC_PATTERNS = (
@@ -85,17 +91,19 @@ GITHUB_NON_DOC_PATTERNS = (
 )
 
 # Files that are always considered documentation
-DOC_FILE_NAMES = frozenset({
-    "README",
-    "CHANGELOG",
-    "CONTRIBUTING",
-    "LICENSE",
-    "AUTHORS",
-    "HISTORY",
-    "NEWS",
-    "RELEASE",
-    "CHANGES",
-})
+DOC_FILE_NAMES = frozenset(
+    {
+        "README",
+        "CHANGELOG",
+        "CONTRIBUTING",
+        "LICENSE",
+        "AUTHORS",
+        "HISTORY",
+        "NEWS",
+        "RELEASE",
+        "CHANGES",
+    }
+)
 
 
 def _is_github_doc_path(filepath_lower: str) -> bool:
@@ -120,7 +128,7 @@ def _is_github_doc_path(filepath_lower: str) -> bool:
         return False
 
     # Check if any segment after .github is a non-doc directory
-    for part in parts[github_idx + 1:]:
+    for part in parts[github_idx + 1 :]:
         if part in GITHUB_NON_DOC_DIRS:
             return False
 
@@ -403,7 +411,9 @@ class NonDocSnapshot:
                     # snapshot), we set existed=True so revert_changes() uses git restore.
                     # For truly untracked files ("??"), set existed=False so they get deleted.
                     # This prevents deleting tracked files that the agent modified.
-                    file_existed_pre_step4 = not is_untracked  # Tracked files "existed" for restore purposes
+                    file_existed_pre_step4 = (
+                        not is_untracked
+                    )  # Tracked files "existed" for restore purposes
                     self.snapshots[filepath] = FileSnapshot(
                         path=filepath,
                         was_untracked=is_untracked,
@@ -545,8 +555,8 @@ def step_4_update_docs(
 
     This step is NON-BLOCKING: errors will be reported but won't fail the workflow.
 
-    Uses StreamingOperationUI to provide a consistent collapsible UI with
-    verbose toggle, matching the UX of Steps 1 and 3.
+    Uses TaskRunnerUI in single-operation mode to provide a consistent
+    collapsible UI with verbose toggle, matching the UX of Steps 1 and 3.
 
     Args:
         state: Current workflow state
@@ -555,7 +565,7 @@ def step_4_update_docs(
     Returns:
         Step4Result with details of what happened (always succeeds for workflow)
     """
-    from spec.ui.plan_tui import StreamingOperationUI
+    from spec.ui.tui import TaskRunnerUI
     from spec.workflow.events import format_run_directory
     from spec.workflow.log_management import get_log_base_dir
 
@@ -573,7 +583,9 @@ def step_4_update_docs(
     diff_result = get_diff_from_baseline(state.base_commit)
 
     if diff_result.has_error:
-        print_warning(f"Failed to compute diff; skipping documentation update: {diff_result.error_message}")
+        print_warning(
+            f"Failed to compute diff; skipping documentation update: {diff_result.error_message}"
+        )
         result.error_message = diff_result.error_message
         # Non-blocking - still return success for workflow
         return result
@@ -596,10 +608,11 @@ def step_4_update_docs(
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    # Create UI with collapsible panel and verbose toggle
-    ui = StreamingOperationUI(
+    # Create UI with collapsible panel and verbose toggle (single-operation mode)
+    ui = TaskRunnerUI(
         status_message="Updating documentation...",
         ticket_id=state.ticket.ticket_id,
+        single_operation_mode=True,
     )
     ui.set_log_path(log_path)
 
@@ -615,7 +628,7 @@ def step_4_update_docs(
             )
 
             # Check if user requested quit
-            if ui.quit_requested:
+            if ui.check_quit_requested():
                 print_warning("Documentation update cancelled by user.")
                 return result
 
@@ -762,4 +775,3 @@ __all__ = [
     "DOC_PATH_PATTERNS",
     "LOG_DIR_DOC_UPDATE",
 ]
-

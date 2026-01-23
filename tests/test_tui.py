@@ -270,6 +270,7 @@ class TestLogBufferCleanup:
 
     def test_log_buffer_closed_on_success(self, tui):
         """Log buffer is closed when task finishes with success."""
+
         # Create a mock log buffer
         class MockLogBuffer:
             def __init__(self):
@@ -290,6 +291,7 @@ class TestLogBufferCleanup:
 
     def test_log_buffer_closed_on_failure(self, tui):
         """Log buffer is closed when task finishes with failure."""
+
         class MockLogBuffer:
             def __init__(self):
                 self.closed = False
@@ -308,6 +310,7 @@ class TestLogBufferCleanup:
 
     def test_log_buffer_closed_on_skipped(self, tui):
         """Log buffer is closed when task finishes with skipped status."""
+
         class MockLogBuffer:
             def __init__(self):
                 self.closed = False
@@ -326,6 +329,7 @@ class TestLogBufferCleanup:
 
     def test_log_buffer_close_exception_ignored(self, tui):
         """Exceptions during log buffer close are caught and ignored."""
+
         class FailingLogBuffer:
             def close(self):
                 raise RuntimeError("Close failed!")
@@ -554,6 +558,216 @@ class TestAutoSwitchOnTaskFinish:
 
         # Selection stays unchanged (sequential mode doesn't use auto-switch)
         assert tui.selected_index == 0
+
+
+# =============================================================================
+# Tests for Spinner Caching
+# =============================================================================
+
+
+class TestSpinnerCaching:
+    """Tests for spinner caching to maintain animation state.
+
+    Spinners are now managed via events:
+    - Created in _handle_task_started
+    - Removed in _handle_task_finished
+    - render_task_list is read-only (retrieves from cache, doesn't create/remove)
+    """
+
+    def test_spinner_reuse_for_running_task(self, tui):
+        """Spinner objects are reused for running tasks across renders."""
+
+        # Start task via event - this creates the spinner
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+        assert 1 in tui._spinners
+        first_spinner = tui._spinners[1]
+
+        # Render multiple times - spinner should be the same object
+        tui._render_layout()
+        tui._render_layout()
+        assert 1 in tui._spinners
+        second_spinner = tui._spinners[1]
+
+        # Verify it's the EXACT same object (identity check)
+        assert first_spinner is second_spinner
+
+    def test_spinner_cleanup_when_task_finishes(self, tui):
+        """Spinner is removed from cache when task finishes via event handler."""
+        # Start task - creates spinner
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+        assert 1 in tui._spinners
+
+        # Finish task via event - removes spinner
+        tui._apply_event(create_task_finished_event(1, "Task 2", status="success", duration=1.0))
+        assert 1 not in tui._spinners
+
+    def test_spinner_cleanup_on_failed_task(self, tui):
+        """Spinner is removed when task fails via event handler."""
+        # Start task - creates spinner
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        assert 0 in tui._spinners
+
+        # Task fails via event - removes spinner
+        tui._apply_event(create_task_finished_event(0, "Task 1", status="failed", duration=1.0))
+        assert 0 not in tui._spinners
+
+    def test_spinner_cleanup_on_skipped_task(self, tui):
+        """Spinner is removed when task is skipped via event handler."""
+        # Start task - creates spinner
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        assert 0 in tui._spinners
+
+        # Task is skipped via event - removes spinner
+        tui._apply_event(create_task_finished_event(0, "Task 1", status="skipped", duration=0.0))
+        assert 0 not in tui._spinners
+
+    def test_multiple_spinners_tracked_in_parallel_mode(self, tui):
+        """Multiple running tasks each have their own cached spinner."""
+        tui.set_parallel_mode(True)
+
+        # Start all three tasks via events
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+        tui._apply_event(create_task_started_event(2, "Task 3"))
+
+        # All three should have spinners
+        assert 0 in tui._spinners
+        assert 1 in tui._spinners
+        assert 2 in tui._spinners
+        assert len(tui._spinners) == 3
+
+        # Verify they're different objects
+        assert tui._spinners[0] is not tui._spinners[1]
+        assert tui._spinners[1] is not tui._spinners[2]
+
+    def test_spinner_cache_partial_cleanup(self, tui):
+        """Only finished tasks are removed from spinner cache."""
+        tui.set_parallel_mode(True)
+
+        # Start all three tasks via events
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+        tui._apply_event(create_task_started_event(2, "Task 3"))
+        assert len(tui._spinners) == 3
+        spinner_1 = tui._spinners[1]
+
+        # Task 0 finishes via event
+        tui._apply_event(create_task_finished_event(0, "Task 1", status="success", duration=1.0))
+
+        # Task 0 removed, but 1 and 2 still cached
+        assert 0 not in tui._spinners
+        assert 1 in tui._spinners
+        assert 2 in tui._spinners
+        assert len(tui._spinners) == 2
+
+        # Spinner for task 1 should be the same object
+        assert tui._spinners[1] is spinner_1
+
+    def test_spinner_cache_none_creates_new_spinners(self, records):
+        """When spinners=None, new spinners are created each render (no caching)."""
+        # First render without cache
+        panel1 = render_task_list(records, spinners=None)
+
+        # Second render without cache - should work fine (no errors)
+        panel2 = render_task_list(records, spinners=None)
+
+        # Both should render successfully (no assertion needed, just verify no crash)
+        assert panel1 is not None
+        assert panel2 is not None
+
+    def test_tui_uses_spinner_cache(self, tui):
+        """TaskRunnerUI maintains spinner cache across refreshes."""
+        tui.set_parallel_mode(True)
+
+        # Start two tasks via events - this creates the spinners
+        tui._apply_event(create_task_started_event(0, "Task 1"))
+        tui._apply_event(create_task_started_event(1, "Task 2"))
+
+        # Spinners should be cached after events
+        assert 0 in tui._spinners
+        assert 1 in tui._spinners
+        spinner_0 = tui._spinners[0]
+        spinner_1 = tui._spinners[1]
+
+        # Render (via _render_layout) - spinners should still be same objects
+        tui._render_layout()
+
+        # Second render
+        tui._render_layout()
+
+        # Same spinner objects should be reused
+        assert tui._spinners[0] is spinner_0
+        assert tui._spinners[1] is spinner_1
+
+        # Finish task 0
+        tui._apply_event(create_task_finished_event(0, "Task 1", "success", 1.0))
+        tui._render_layout()
+
+        # Task 0 spinner removed, task 1 still cached
+        assert 0 not in tui._spinners
+        assert 1 in tui._spinners
+        assert tui._spinners[1] is spinner_1
+
+
+# =============================================================================
+# Tests for Thread Safety Enhancements
+# =============================================================================
+
+
+class TestThreadSafetyEnhancements:
+    """Tests for thread-safe state access methods."""
+
+    def test_check_quit_requested_thread_safe(self, tui):
+        """check_quit_requested() provides thread-safe read access."""
+        assert tui.check_quit_requested() is False
+
+        # Set quit flag
+        tui._handle_quit()
+
+        assert tui.check_quit_requested() is True
+
+    def test_clear_quit_request_thread_safe(self, tui):
+        """clear_quit_request() provides thread-safe write access."""
+        # Set quit flag
+        tui._handle_quit()
+        assert tui.check_quit_requested() is True
+
+        # Clear it
+        tui.clear_quit_request()
+        assert tui.check_quit_requested() is False
+
+    def test_toggle_follow_mode_thread_safe(self, tui):
+        """_toggle_follow_mode uses lock for consistency."""
+        initial = tui.follow_mode
+        tui._toggle_follow_mode()
+        assert tui.follow_mode != initial
+
+    def test_toggle_verbose_mode_thread_safe(self, tui):
+        """_toggle_verbose_mode uses lock for consistency."""
+        initial = tui.verbose_mode
+        tui._toggle_verbose_mode()
+        assert tui.verbose_mode != initial
+
+    def test_concurrent_quit_requests(self, tui):
+        """Multiple threads can safely request quit."""
+        num_threads = 10
+        barrier = threading.Barrier(num_threads)
+
+        def request_quit():
+            barrier.wait()
+            tui._handle_quit()
+
+        threads = []
+        for _ in range(num_threads):
+            t = threading.Thread(target=request_quit)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # Quit should be requested
+        assert tui.check_quit_requested() is True
 
 
 # =============================================================================

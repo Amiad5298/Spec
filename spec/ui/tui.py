@@ -1,14 +1,22 @@
-"""TUI (Text User Interface) for Step 3 task execution.
+"""TUI (Text User Interface) for workflow execution.
 
 This module provides a rich terminal interface for visualizing and
-interacting with Step 3 task execution. Uses Rich's Live display
+interacting with workflow execution. Uses Rich's Live display
 for real-time updates.
 
+Supports two modes:
+1. **Multi-task mode** (default): For Step 3 task execution with task list,
+   navigation, and parallel execution support.
+2. **Single-operation mode**: For Steps 1/4 with simplified spinner display,
+   liveness indicator, and streaming output.
+
 Features:
-- Task list panel with status icons
+- Task list panel with status icons (multi-task mode)
+- Spinner with liveness indicator (single-operation mode)
 - Real-time log output panel
 - Keyboard navigation
 - Auto-scroll log following
+- Thread-safe state management
 """
 
 from __future__ import annotations
@@ -31,6 +39,7 @@ from rich.table import Table
 from rich.text import Text
 
 from spec.ui.keyboard import Key, KeyboardReader
+from spec.ui.log_buffer import TaskLogBuffer
 from spec.utils.console import console
 from spec.workflow.events import (
     TaskEvent,
@@ -40,7 +49,7 @@ from spec.workflow.events import (
 )
 
 if TYPE_CHECKING:
-    from spec.ui.log_buffer import TaskLogBuffer
+    pass  # Keep for future type-only imports
 
 
 # =============================================================================
@@ -51,7 +60,13 @@ if TYPE_CHECKING:
 DEFAULT_LOG_TAIL_LINES = 15
 
 # Refresh rate for the TUI (times per second)
-REFRESH_RATE = 4
+REFRESH_RATE = 10
+
+# Default number of log lines to display in verbose mode (single-operation mode)
+DEFAULT_VERBOSE_LINES = 10
+
+# Maximum width for liveness indicator text (single-operation mode)
+MAX_LIVENESS_WIDTH = 70
 
 
 def _should_use_tui(override: bool | None = None) -> bool:
@@ -88,6 +103,7 @@ def render_task_list(
     selected_index: int = -1,
     ticket_id: str = "",
     parallel_mode: bool = False,
+    spinners: dict[int, Spinner] | None = None,
 ) -> Panel:
     """Render the task list panel with parallel execution support.
 
@@ -96,6 +112,8 @@ def render_task_list(
         selected_index: Index of currently selected task (-1 for none).
         ticket_id: Ticket ID for header display.
         parallel_mode: Whether parallel execution mode is enabled.
+        spinners: Optional cache of spinner objects keyed by task index.
+            If provided, spinners are reused to maintain animation state.
 
     Returns:
         Rich Panel containing the task table.
@@ -117,10 +135,15 @@ def render_task_list(
         icon = record.get_status_icon()
         color = record.get_status_color()
 
-        # Use spinner for running tasks
+        # Use spinner for running tasks - retrieve from cache (read-only)
+        # Spinners are created in _handle_task_started and removed in _handle_task_finished
         status_cell: Spinner | Text
         if record.status == TaskRunStatus.RUNNING:
-            status_cell = Spinner("dots", style=color)
+            # Retrieve existing spinner created by the event handler
+            # Do NOT instantiate a new Spinner("dots") here if missing,
+            # or it will freeze the animation.
+            spinner = spinners.get(record.task_index) if spinners is not None else None
+            status_cell = spinner if spinner else Spinner("dots", style=color)
         else:
             status_cell = Text(icon, style=color)
 
@@ -250,18 +273,26 @@ def render_status_bar(
 
 @dataclass
 class TaskRunnerUI:
-    """TUI manager for Step 3 task execution.
+    """Unified TUI manager for workflow execution.
+
+    Supports two display modes:
+    1. **Multi-task mode** (default): Shows task list with navigation, used for
+       Step 3 with multiple tasks and parallel execution support.
+    2. **Single-operation mode**: Shows simplified spinner with liveness indicator,
+       used for Steps 1/4 with streaming AI output.
 
     Manages Rich Live display, handles keyboard input,
     and orchestrates layout updates based on task events.
 
     Attributes:
         ticket_id: Ticket identifier for display.
-        records: List of task run records.
+        records: List of task run records (multi-task mode).
         selected_index: Currently selected task index.
         follow_mode: Whether log auto-scroll is enabled.
         verbose_mode: Whether verbose mode is enabled.
         parallel_mode: Whether multiple tasks can run simultaneously.
+        single_operation_mode: If True, use simplified single-spinner display.
+        status_message: Message to display next to spinner (single-operation mode).
     """
 
     ticket_id: str = ""
@@ -270,23 +301,38 @@ class TaskRunnerUI:
     follow_mode: bool = True
     verbose_mode: bool = False
     parallel_mode: bool = False  # Multiple tasks can run simultaneously
+    # Single-operation mode configuration (for Steps 1/4)
+    single_operation_mode: bool = False
+    status_message: str = "Processing..."
     _current_task_index: int = -1
     _running_task_indices: set[int] = field(default_factory=set)  # Track parallel tasks
     _live: Live | None = field(default=None, init=False, repr=False)
     _log_dir: Path | None = field(default=None, init=False, repr=False)
+    # Single-operation mode state
+    _log_buffer: TaskLogBuffer | None = field(default=None, init=False, repr=False)
+    _log_path: Path | None = field(default=None, init=False, repr=False)
+    _start_time: float = field(default=0.0, init=False, repr=False)
+    _latest_output_line: str = field(default="", init=False, repr=False)
     # Keyboard input handling
     _keyboard_reader: KeyboardReader = field(default_factory=KeyboardReader, init=False, repr=False)
     _input_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _stop_input_thread: bool = field(default=False, init=False, repr=False)
-    # Background refresh thread for parallel mode spinner animation
+    # Background refresh thread for spinner animation
     _refresh_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _stop_refresh_thread: bool = field(default=False, init=False, repr=False)
-    # Quit signal for execution loop
-    quit_requested: bool = field(default=False, init=False, repr=False)
+    # Quit signal for execution loop.
+    # WARNING: Do not access directly. Use check_quit_requested() and
+    # clear_quit_request() to ensure thread safety.
+    _quit_requested: bool = field(default=False, init=False, repr=False)
     # Thread-safe event queue for parallel execution
     _event_queue: queue.Queue = field(default_factory=queue.Queue, init=False, repr=False)
     # Lock for thread-safe refresh operations
     _refresh_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    # Lock for thread-safe state access (selected_index, _running_task_indices, etc.)
+    # Uses RLock to support reentrant locking (e.g., methods that call other locked methods)
+    _state_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
+    # Cache for spinner objects to maintain animation state across renders
+    _spinners: dict[int, Spinner] = field(default_factory=dict, init=False, repr=False)
 
     def initialize_records(self, task_names: list[str]) -> None:
         """Initialize task run records from task names.
@@ -295,17 +341,51 @@ class TaskRunnerUI:
             task_names: List of task names to create records for.
         """
         self.records = [
-            TaskRunRecord(task_index=i, task_name=name)
-            for i, name in enumerate(task_names)
+            TaskRunRecord(task_index=i, task_name=name) for i, name in enumerate(task_names)
         ]
+        self._spinners.clear()  # Clear spinner cache for new run
 
     def set_log_dir(self, log_dir: Path) -> None:
-        """Set the log directory for this run.
+        """Set the log directory for this run (multi-task mode).
 
         Args:
             log_dir: Path to the log directory.
         """
         self._log_dir = log_dir
+
+    def set_log_path(self, path: Path) -> None:
+        """Set log file path and create buffer (single-operation mode).
+
+        Args:
+            path: Path to the log file.
+        """
+        self._log_path = path
+        self._log_buffer = TaskLogBuffer(log_path=path)
+
+    def handle_output_line(self, line: str) -> None:
+        """Callback for AI output lines (single-operation mode).
+
+        Called for each line of AI output. This method:
+        1. Writes the line to the log buffer (file + memory)
+        2. Updates the liveness indicator with the latest line
+        3. Triggers a display refresh to show the updated liveness text
+
+        Thread-safe: can be called from any thread.
+
+        Args:
+            line: A single line of AI output (without trailing newline).
+        """
+        # Write to log buffer
+        if self._log_buffer is not None:
+            self._log_buffer.write(line)
+
+        # Update liveness indicator (truncate if too long)
+        with self._state_lock:
+            if line.strip():
+                self._latest_output_line = line
+
+        # Refresh display (already thread-safe via _refresh_lock)
+        self.refresh()
 
     def set_parallel_mode(self, enabled: bool) -> None:
         """Enable or disable parallel execution display mode.
@@ -334,15 +414,17 @@ class TaskRunnerUI:
         Returns:
             TaskLogBuffer or None.
         """
-        # Prefer selected task, fall back to running task
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            # Prefer selected task, fall back to running task
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
 
-        # In parallel mode, if no selection, pick first running task
-        if index < 0 and self.parallel_mode and self._running_task_indices:
-            index = min(self._running_task_indices)
+            # In parallel mode, if no selection, pick first running task
+            if index < 0 and self.parallel_mode and self._running_task_indices:
+                index = min(self._running_task_indices)
 
-        record = self.get_record(index)
-        return record.log_buffer if record else None
+            # Access record inside lock to avoid check-then-act race
+            record = self.get_record(index)
+            return record.log_buffer if record else None
 
     def get_current_task_name(self) -> str:
         """Get the name of the currently displayed task.
@@ -350,14 +432,16 @@ class TaskRunnerUI:
         Returns:
             Task name or empty string.
         """
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
 
-        # In parallel mode, if no selection, pick first running task
-        if index < 0 and self.parallel_mode and self._running_task_indices:
-            index = min(self._running_task_indices)
+            # In parallel mode, if no selection, pick first running task
+            if index < 0 and self.parallel_mode and self._running_task_indices:
+                index = min(self._running_task_indices)
 
-        record = self.get_record(index)
-        return record.task_name if record else ""
+            # Access record inside lock to avoid check-then-act race
+            record = self.get_record(index)
+            return record.task_name if record else ""
 
     def _get_running_count(self) -> int:
         """Get the number of currently running tasks.
@@ -365,9 +449,10 @@ class TaskRunnerUI:
         Returns:
             Number of running tasks (from set in parallel mode, or 1/0 in sequential).
         """
-        if self.parallel_mode:
-            return len(self._running_task_indices)
-        return 1 if self._current_task_index >= 0 else 0
+        with self._state_lock:
+            if self.parallel_mode:
+                return len(self._running_task_indices)
+            return 1 if self._current_task_index >= 0 else 0
 
     def _find_next_running_task(self, finished_index: int) -> int:
         """Find the next running task index using 'Next Neighbor' logic.
@@ -389,7 +474,9 @@ class TaskRunnerUI:
 
         Precondition:
             self._running_task_indices must not be empty.
+            Caller must hold _state_lock.
         """
+        # NOTE: Caller must hold _state_lock
         # Find running tasks with indices greater than finished_index
         later_tasks = [i for i in self._running_task_indices if i > finished_index]
         if later_tasks:
@@ -401,35 +488,240 @@ class TaskRunnerUI:
     def _render_layout(self) -> Group:
         """Render the complete TUI layout.
 
+        Renders different layouts based on mode:
+        - Single-operation mode: Simple spinner with liveness indicator
+        - Multi-task mode: Task list with log panel
+
         Returns:
             Rich Group containing all panels.
         """
-        running_count = self._get_running_count()
+        # Single-operation mode: simplified layout
+        if self.single_operation_mode:
+            return self._render_single_operation_layout()
+
+        # Multi-task mode: full layout with task list
+        return self._render_multi_task_layout()
+
+    def _render_single_operation_layout(self) -> Group:
+        """Render simplified layout for single-operation mode.
+
+        Returns:
+            Rich Group with spinner panel and status bar.
+        """
+        with self._state_lock:
+            verbose_mode_snapshot = self.verbose_mode
+            latest_line = self._latest_output_line
+
+        # Build spinner line with elapsed time
+        elapsed = self._format_elapsed_time()
+
+        elements: list[Panel | Text] = []
+
+        if verbose_mode_snapshot:
+            elements.append(self._render_single_op_verbose_panel(elapsed))
+        else:
+            elements.append(self._render_single_op_normal_panel(elapsed, latest_line))
+
+        elements.append(self._render_single_op_status_bar())
+
+        return Group(*elements)
+
+    def _render_multi_task_layout(self) -> Group:
+        """Render full layout for multi-task mode.
+
+        Returns:
+            Rich Group with task panel, log panel, and status bar.
+        """
+        # Snapshot ALL state under lock once to avoid races and redundant locking
+        with self._state_lock:
+            selected_idx = self.selected_index
+            current_task_idx = self._current_task_index
+            parallel_mode_snapshot = self.parallel_mode
+            follow_mode_snapshot = self.follow_mode
+            verbose_mode_snapshot = self.verbose_mode
+
+            # Calculate running_count directly here to avoid re-locking
+            if self.parallel_mode:
+                running_count = len(self._running_task_indices)
+            else:
+                running_count = 1 if self._current_task_index >= 0 else 0
+
+            # Snapshot log buffer and task name here to avoid redundant lock acquisition
+            # (get_current_log_buffer and get_current_task_name also acquire _state_lock)
+            display_index = selected_idx if selected_idx >= 0 else current_task_idx
+            if display_index < 0 and self.parallel_mode and self._running_task_indices:
+                display_index = min(self._running_task_indices)
+            display_record = self.get_record(display_index)
+            current_log_buffer = display_record.log_buffer if display_record else None
+            current_task_name = display_record.task_name if display_record else ""
 
         task_panel = render_task_list(
             self.records,
-            selected_index=self.selected_index,
+            selected_index=selected_idx,
             ticket_id=self.ticket_id,
-            parallel_mode=self.parallel_mode,
+            parallel_mode=parallel_mode_snapshot,
+            spinners=self._spinners,
         )
 
         log_panel = render_log_panel(
-            self.get_current_log_buffer(),
-            task_name=self.get_current_task_name(),
-            follow_mode=self.follow_mode,
+            current_log_buffer,
+            task_name=current_task_name,
+            follow_mode=follow_mode_snapshot,
         )
 
         status_bar = render_status_bar(
-            running=self._current_task_index >= 0 or running_count > 0,
-            verbose_mode=self.verbose_mode,
-            parallel_mode=self.parallel_mode,
+            running=current_task_idx >= 0 or running_count > 0,
+            verbose_mode=verbose_mode_snapshot,
+            parallel_mode=parallel_mode_snapshot,
             running_count=running_count,
         )
 
         return Group(task_panel, log_panel, status_bar)
 
+    def _format_elapsed_time(self) -> str:
+        """Format elapsed time since start.
+
+        Returns:
+            Formatted time string like '1m 23s'.
+        """
+        elapsed = time.time() - self._start_time
+        minutes = int(elapsed // 60)
+        seconds = int(elapsed % 60)
+        if minutes > 0:
+            return f"{minutes}m {seconds:02d}s"
+        return f"{seconds}s"
+
+    def _truncate_line(self, line: str, max_width: int = MAX_LIVENESS_WIDTH) -> str:
+        """Truncate a line to max width with ellipsis.
+
+        Args:
+            line: Line to truncate.
+            max_width: Maximum width.
+
+        Returns:
+            Truncated line with '…' if needed.
+        """
+        if len(line) <= max_width:
+            return line
+        return line[: max_width - 1] + "…"
+
+    def _render_single_op_normal_panel(self, elapsed: str, latest_line: str) -> Panel:
+        """Render the normal (non-verbose) panel for single-operation mode.
+
+        Args:
+            elapsed: Formatted elapsed time string.
+            latest_line: Latest output line for liveness indicator.
+
+        Returns:
+            Rich Panel with spinner, status, and liveness indicator.
+        """
+        content_lines = []
+
+        # Main status line
+        status_text = Text()
+        status_text.append("  ")
+        status_text.append(self.status_message, style="bold")
+        status_text.append(f"  {elapsed}", style="dim")
+        content_lines.append(status_text)
+
+        # Empty line
+        content_lines.append(Text())
+
+        # Liveness indicator
+        if latest_line:
+            truncated = self._truncate_line(latest_line.strip())
+            liveness = Text()
+            liveness.append("  ► ", style="dim cyan")
+            liveness.append(truncated, style="dim")
+            content_lines.append(liveness)
+        else:
+            content_lines.append(Text("  [dim]Waiting for output...[/dim]"))
+
+        # Empty line
+        content_lines.append(Text())
+
+        # Log path
+        if self._log_path:
+            log_text = Text()
+            log_text.append("  Logs: ", style="dim")
+            log_text.append(str(self._log_path), style="dim italic")
+            content_lines.append(log_text)
+
+        content = Group(*content_lines)
+
+        # Build header - use ticket_id if provided
+        header = f"⟳ {self.ticket_id}" if self.ticket_id else "⟳ Operation"
+
+        return Panel(
+            content,
+            title=header,
+            border_style="blue",
+        )
+
+    def _render_single_op_verbose_panel(self, elapsed: str) -> Panel:
+        """Render the verbose panel for single-operation mode.
+
+        Args:
+            elapsed: Formatted elapsed time string.
+
+        Returns:
+            Rich Panel with spinner, status, and log output.
+        """
+        content_lines = []
+
+        # Main status line
+        status_text = Text()
+        status_text.append("  ")
+        status_text.append(self.status_message, style="bold")
+        status_text.append(f"  {elapsed}", style="dim")
+        content_lines.append(status_text)
+
+        # Separator
+        content_lines.append(Text("  " + "─" * 60, style="dim"))
+
+        # Log output
+        if self._log_buffer is not None:
+            lines = self._log_buffer.get_tail(DEFAULT_VERBOSE_LINES)
+            for line in lines:
+                content_lines.append(Text(f"  {line}"))
+        else:
+            content_lines.append(Text("  [dim]No output yet...[/dim]"))
+
+        content = Group(*content_lines)
+
+        # Build header
+        header = f"⟳ {self.ticket_id}" if self.ticket_id else "⟳ Operation"
+
+        return Panel(
+            content,
+            title=header,
+            border_style="green",
+        )
+
+    def _render_single_op_status_bar(self) -> Text:
+        """Render the keyboard shortcuts status bar for single-operation mode.
+
+        Returns:
+            Rich Text with keyboard shortcuts.
+        """
+        shortcuts = [
+            ("[v]", "Toggle verbose"),
+            ("[Enter]", "View log"),
+            ("[q]", "Cancel"),
+        ]
+
+        text = Text()
+        for key, action in shortcuts:
+            text.append(key, style="bold cyan")
+            text.append(f" {action}  ", style="dim")
+
+        return text
+
     def start(self) -> None:
         """Start the Live display and keyboard input handling."""
+        # Initialize start time for elapsed time tracking
+        self._start_time = time.time()
+
         # Start keyboard reader
         self._keyboard_reader.start()
         self._stop_input_thread = False
@@ -440,19 +732,18 @@ class TaskRunnerUI:
         self._live = Live(
             self._render_layout(),
             console=console,
+            auto_refresh=False,  # We rely entirely on manual background refresh
             refresh_per_second=REFRESH_RATE,
             vertical_overflow="visible",
         )
-        self._live.start()
+        self._live.start(refresh=True)
 
         # Start background refresh thread for smooth spinner animation.
         # This ensures the spinner keeps animating even when the main thread
         # is blocked waiting for subprocess output (both sequential and parallel modes).
         # The refresh loop runs at ~10 Hz with time.sleep() to yield the GIL.
         self._stop_refresh_thread = False
-        self._refresh_thread = threading.Thread(
-            target=self._background_refresh_loop, daemon=True
-        )
+        self._refresh_thread = threading.Thread(target=self._background_refresh_loop, daemon=True)
         self._refresh_thread.start()
 
     def stop(self) -> None:
@@ -477,6 +768,11 @@ class TaskRunnerUI:
             self._live.stop()
             self._live = None
 
+        # Close log buffer (single-operation mode)
+        if self._log_buffer is not None:
+            self._log_buffer.close()
+            self._log_buffer = None
+
     def _background_refresh_loop(self) -> None:
         """Background thread loop for refreshing the display.
 
@@ -500,7 +796,7 @@ class TaskRunnerUI:
         with self._refresh_lock:
             self._drain_event_queue()
             if self._live is not None:
-                self._live.update(self._render_layout())
+                self._live.update(self._render_layout(), refresh=True)
 
     def post_event(self, event: TaskEvent) -> None:
         """Thread-safe: push event to queue (called from worker threads).
@@ -550,6 +846,17 @@ class TaskRunnerUI:
         Args:
             key: The key that was pressed.
         """
+        if self.single_operation_mode:
+            # Single-operation mode: limited keyboard handling
+            if key == Key.ENTER:
+                self._open_log_in_pager()
+            elif key == Key.V:
+                self._toggle_verbose_mode()
+            elif key == Key.Q:
+                self._handle_quit()
+            return
+
+        # Multi-task mode: full keyboard handling
         if key == Key.UP or key == Key.K:
             self._move_selection_up()
         elif key == Key.DOWN or key == Key.J:
@@ -569,43 +876,48 @@ class TaskRunnerUI:
         """Move task selection up."""
         if len(self.records) == 0:
             return
-        if self.selected_index < 0:
-            # In parallel mode, start from first running task or first task
-            if self.parallel_mode and self._running_task_indices:
-                self.selected_index = min(self._running_task_indices)
-            else:
-                self.selected_index = max(0, self._current_task_index)
-        elif self.selected_index > 0:
-            self.selected_index -= 1
+        with self._state_lock:
+            if self.selected_index < 0:
+                # In parallel mode, start from first running task or first task
+                if self.parallel_mode and self._running_task_indices:
+                    self.selected_index = min(self._running_task_indices)
+                else:
+                    self.selected_index = max(0, self._current_task_index)
+            elif self.selected_index > 0:
+                self.selected_index -= 1
         self.refresh()
 
     def _move_selection_down(self) -> None:
         """Move task selection down."""
         if len(self.records) == 0:
             return
-        if self.selected_index < 0:
-            # In parallel mode, start from first running task or first task
-            if self.parallel_mode and self._running_task_indices:
-                self.selected_index = min(self._running_task_indices)
-            else:
-                self.selected_index = max(0, self._current_task_index)
-        elif self.selected_index < len(self.records) - 1:
-            self.selected_index += 1
+        with self._state_lock:
+            if self.selected_index < 0:
+                # In parallel mode, start from first running task or first task
+                if self.parallel_mode and self._running_task_indices:
+                    self.selected_index = min(self._running_task_indices)
+                else:
+                    self.selected_index = max(0, self._current_task_index)
+            elif self.selected_index < len(self.records) - 1:
+                self.selected_index += 1
         self.refresh()
 
     def _toggle_follow_mode(self) -> None:
         """Toggle log auto-scroll mode."""
-        self.follow_mode = not self.follow_mode
+        with self._state_lock:
+            self.follow_mode = not self.follow_mode
         self.refresh()
 
     def _toggle_verbose_mode(self) -> None:
         """Toggle verbose mode (expanded log panel)."""
-        self.verbose_mode = not self.verbose_mode
+        with self._state_lock:
+            self.verbose_mode = not self.verbose_mode
         self.refresh()
 
     def _show_log_path(self) -> None:
         """Show the log file path for the selected task."""
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
+        with self._state_lock:
+            index = self.selected_index if self.selected_index >= 0 else self._current_task_index
         record = self.get_record(index)
         if record and record.log_buffer and record.log_buffer.log_path:
             # This will be shown in the next refresh via a message
@@ -614,38 +926,53 @@ class TaskRunnerUI:
 
     def _open_log_in_pager(self) -> None:
         """Open the full log file in system pager."""
-        index = self.selected_index if self.selected_index >= 0 else self._current_task_index
-        record = self.get_record(index)
-        if record and record.log_buffer and record.log_buffer.log_path:
-            log_path = record.log_buffer.log_path
-            if log_path.exists():
-                # Temporarily stop the TUI to show pager
+        log_path: Path | None = None
+
+        if self.single_operation_mode:
+            # Single-operation mode: use _log_path directly
+            log_path = self._log_path
+        else:
+            # Multi-task mode: get log path from selected record
+            with self._state_lock:
+                index = (
+                    self.selected_index if self.selected_index >= 0 else self._current_task_index
+                )
+            record = self.get_record(index)
+            if record and record.log_buffer and record.log_buffer.log_path:
+                log_path = record.log_buffer.log_path
+
+        if log_path and log_path.exists():
+            # Temporarily stop the TUI to show pager
+            if self._live is not None:
+                self._live.stop()
+            try:
+                # Use 'less' or 'more' as pager
+                pager = os.environ.get("PAGER", "less")
+                subprocess.run([pager, str(log_path)])
+            finally:
+                # Restart the TUI
                 if self._live is not None:
-                    self._live.stop()
-                try:
-                    # Use 'less' or 'more' as pager
-                    pager = os.environ.get("PAGER", "less")
-                    subprocess.run([pager, str(log_path)])
-                finally:
-                    # Restart the TUI
-                    if self._live is not None:
-                        self._live.start()
+                    self._live.start(refresh=True)
 
     def _handle_quit(self) -> None:
         """Handle quit request."""
-        # Check if any task is running (sequential or parallel mode)
-        has_running_tasks = (
-            self._current_task_index >= 0
-            or (self.parallel_mode and len(self._running_task_indices) > 0)
-        )
+        # Set quit flag under lock for consistency
+        with self._state_lock:
+            self._quit_requested = True
 
-        if has_running_tasks:
-            # Tasks are running - set flag for execution loop to handle
-            # The execution loop will prompt for confirmation
-            self.quit_requested = True
-        else:
-            # No task running - safe to quit immediately
-            self.quit_requested = True
+    def check_quit_requested(self) -> bool:
+        """Thread-safe check for quit request.
+
+        Returns:
+            True if quit was requested, False otherwise.
+        """
+        with self._state_lock:
+            return self._quit_requested
+
+    def clear_quit_request(self) -> None:
+        """Thread-safe clear of quit request flag."""
+        with self._state_lock:
+            self._quit_requested = False
 
     # =========================================================================
     # Event Handlers
@@ -694,13 +1021,18 @@ class TaskRunnerUI:
             record.status = TaskRunStatus.RUNNING
             record.start_time = event.timestamp
 
-            if self.parallel_mode:
-                self._running_task_indices.add(event.task_index)
-                # Auto-select first task if nothing selected yet
-                if self.selected_index < 0:
-                    self.selected_index = event.task_index
-            else:
-                self._current_task_index = event.task_index
+            # Create the spinner instance here (Event-Driven)
+            # This ensures the spinner is created once and maintains its animation state
+            self._spinners[event.task_index] = Spinner("dots", style=record.get_status_color())
+
+            with self._state_lock:
+                if self.parallel_mode:
+                    self._running_task_indices.add(event.task_index)
+                    # Auto-select first task if nothing selected yet
+                    if self.selected_index < 0:
+                        self.selected_index = event.task_index
+                else:
+                    self._current_task_index = event.task_index
 
     def _handle_task_output(self, event: TaskEvent) -> None:
         """Handle TASK_OUTPUT event.
@@ -742,18 +1074,22 @@ class TaskRunnerUI:
                     pass  # Best-effort cleanup
                 record.log_buffer = None
 
-            if self.parallel_mode:
-                self._running_task_indices.discard(event.task_index)
-                # Auto-switch to another running task if the finished task was selected
-                # and follow_mode is enabled. This keeps the UI showing live output.
-                # Uses "Next Neighbor" logic: prefer the next running task after the
-                # finished one, wrapping around if necessary for less jarring UX.
-                if (
-                    self.follow_mode
-                    and self.selected_index == event.task_index
-                    and self._running_task_indices
-                ):
-                    self.selected_index = self._find_next_running_task(event.task_index)
+            # Cleanup spinner to prevent stale state
+            self._spinners.pop(event.task_index, None)
+
+            with self._state_lock:
+                if self.parallel_mode:
+                    self._running_task_indices.discard(event.task_index)
+                    # Auto-switch to another running task if the finished task was selected
+                    # and follow_mode is enabled. This keeps the UI showing live output.
+                    # Uses "Next Neighbor" logic: prefer the next running task after the
+                    # finished one, wrapping around if necessary for less jarring UX.
+                    if (
+                        self.follow_mode
+                        and self.selected_index == event.task_index
+                        and self._running_task_indices
+                    ):
+                        self.selected_index = self._find_next_running_task(event.task_index)
 
     def _handle_run_finished(self, event: TaskEvent) -> None:
         """Handle RUN_FINISHED event.
@@ -761,7 +1097,8 @@ class TaskRunnerUI:
         Args:
             event: The run finished event.
         """
-        self._current_task_index = -1
+        with self._state_lock:
+            self._current_task_index = -1
 
     def mark_remaining_skipped(self, from_index: int) -> None:
         """Mark remaining tasks as skipped (for fail_fast).
@@ -775,8 +1112,28 @@ class TaskRunnerUI:
                 record.status = TaskRunStatus.SKIPPED
         self.refresh()
 
-    def print_summary(self) -> None:
-        """Print execution summary after TUI stops."""
+    def print_summary(self, success: bool | None = None) -> None:
+        """Print execution summary after TUI stops.
+
+        Args:
+            success: For single-operation mode, whether operation succeeded.
+                     For multi-task mode, ignored (success determined from records).
+        """
+        if self.single_operation_mode:
+            # Single-operation mode summary
+            elapsed = self._format_elapsed_time()
+            console.print()
+            if success:
+                console.print(f"[green]✓[/green] Operation completed in {elapsed}")
+            elif success is False:
+                console.print(f"[red]✗[/red] Operation failed after {elapsed}")
+            else:
+                console.print(f"[yellow]⊘[/yellow] Operation cancelled after {elapsed}")
+            if self._log_path:
+                console.print(f"[dim]Logs saved to: {self._log_path}[/dim]")
+            return
+
+        # Multi-task mode summary
         success_count = sum(1 for r in self.records if r.status == TaskRunStatus.SUCCESS)
         failed_count = sum(1 for r in self.records if r.status == TaskRunStatus.FAILED)
         skipped_count = sum(1 for r in self.records if r.status == TaskRunStatus.SKIPPED)
@@ -805,6 +1162,7 @@ __all__ = [
     "render_status_bar",
     "_should_use_tui",
     "DEFAULT_LOG_TAIL_LINES",
+    "DEFAULT_VERBOSE_LINES",
+    "MAX_LIVENESS_WIDTH",
     "REFRESH_RATE",
 ]
-

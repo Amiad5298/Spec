@@ -19,7 +19,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from spec.config.fetch_config import (
     AgentConfig,
@@ -35,7 +35,6 @@ from spec.config.fetch_config import (
     validate_credentials,
     validate_strategy_for_platform,
 )
-from spec.config.schema import validate_config_dict
 from spec.config.settings import CONFIG_FILE, Settings
 from spec.integrations.git import find_repo_root
 from spec.utils.console import console, print_header, print_info
@@ -166,181 +165,7 @@ class ConfigManager:
 
         return None
 
-    def _is_yaml_file(self, path: Path) -> bool:
-        """Detect if a file appears to be YAML format.
-
-        Detection priority (simple and deterministic):
-        1. File extension .yml/.yaml → YAML
-        2. Any '=' found in content lines → KEY=VALUE (not YAML)
-        3. YAML-like content (nested structures) → YAML
-        4. Empty or unknown format → KEY=VALUE (safe default)
-
-        Args:
-            path: Path to the config file
-
-        Returns:
-            True if file is YAML format, False for KEY=VALUE format
-        """
-        # 1. Check extension first - definitive
-        if path.suffix.lower() in (".yaml", ".yml"):
-            return True
-
-        # 2. Check content
-        try:
-            with path.open() as f:
-                has_content = False
-                for i, line in enumerate(f):
-                    if i >= 20:  # Check first 20 lines
-                        break
-                    line = line.strip()
-                    # Skip empty lines and comments
-                    if not line or line.startswith("#"):
-                        continue
-                    has_content = True
-                    # Any '=' means KEY=VALUE format - definitive
-                    if "=" in line:
-                        return False
-
-                # 3. If file is empty or only comments, treat as KEY=VALUE (safe default)
-                if not has_content:
-                    return False
-
-        except Exception:
-            # If we can't read the file, default to KEY=VALUE (safer)
-            return False
-
-        # 4. No '=' found but has content - assume YAML
-        return True
-
     def _load_file(self, path: Path, source: str = "file") -> None:
-        """Load configuration from a file.
-
-        Automatically detects file format (YAML or KEY=VALUE) and loads
-        appropriately.
-
-        Args:
-            path: Path to the config file
-            source: Source identifier for debugging
-        """
-        if self._is_yaml_file(path):
-            self._load_yaml_file(path, source)
-        else:
-            self._load_keyvalue_file(path, source)
-
-    def _load_yaml_file(self, path: Path, source: str = "file") -> None:
-        """Load configuration from a YAML file.
-
-        Parses the nested YAML structure (matching FETCH_CONFIG_SCHEMA) and
-        converts it to flat key-value pairs. Validates against schema and
-        raises ConfigValidationError for malformed YAML to prevent the system
-        from starting in an inconsistent state.
-
-        Args:
-            path: Path to the YAML config file
-            source: Source identifier for debugging
-
-        Raises:
-            ConfigValidationError: If YAML parsing fails or schema validation fails.
-                This ensures fail-fast behavior for malformed configurations.
-        """
-        try:
-            import yaml  # type: ignore[import-untyped]
-        except ImportError:
-            log_message("Warning: PyYAML not installed, skipping YAML config")
-            return
-
-        try:
-            with path.open() as f:
-                config = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            # Fail-fast: YAML parsing errors indicate malformed configuration
-            raise ConfigValidationError(
-                f"Failed to parse YAML config {path}: {e}. "
-                "Please fix the YAML syntax before continuing."
-            ) from e
-
-        if not isinstance(config, dict):
-            # Fail-fast: YAML must be a dictionary at the root level
-            raise ConfigValidationError(
-                f"YAML config {path} is not a dictionary (got {type(config).__name__}). "
-                "Configuration must be a YAML mapping/object at the root level."
-            )
-
-        # Validate against schema - fail-fast on validation errors
-        errors = validate_config_dict(config)
-        if errors:
-            error_list = "\n  - ".join(errors)
-            raise ConfigValidationError(
-                f"YAML config {path} failed schema validation:\n  - {error_list}\n"
-                "Please fix the configuration before continuing."
-            )
-
-        # Convert nested YAML to flat key-value pairs
-        self._yaml_to_flat(config, source)
-
-    def _yaml_to_flat(self, config: dict[str, Any], source: str) -> None:
-        """Convert nested YAML config to flat KEY=VALUE pairs.
-
-        Maps YAML structure to equivalent flat keys:
-        - agent.platform -> AGENT_PLATFORM
-        - agent.integrations.jira -> AGENT_INTEGRATION_JIRA
-        - fetch_strategy.default -> FETCH_STRATEGY_DEFAULT
-        - fetch_strategy.per_platform.azure_devops -> FETCH_STRATEGY_AZURE_DEVOPS
-        - performance.cache_duration_hours -> CACHE_DURATION_HOURS
-        - fallback_credentials.jira.url -> FALLBACK_JIRA_URL
-
-        Args:
-            config: Parsed YAML configuration dictionary
-            source: Source identifier for debugging
-        """
-        # Agent configuration
-        if "agent" in config:
-            agent = config["agent"]
-            if "platform" in agent:
-                self._raw_values["AGENT_PLATFORM"] = str(agent["platform"])
-                self._config_sources["AGENT_PLATFORM"] = source
-            if "integrations" in agent:
-                for platform, enabled in agent["integrations"].items():
-                    key = f"AGENT_INTEGRATION_{platform.upper()}"
-                    self._raw_values[key] = str(enabled).lower()
-                    self._config_sources[key] = source
-
-        # Fetch strategy configuration
-        if "fetch_strategy" in config:
-            fs = config["fetch_strategy"]
-            if "default" in fs:
-                self._raw_values["FETCH_STRATEGY_DEFAULT"] = str(fs["default"])
-                self._config_sources["FETCH_STRATEGY_DEFAULT"] = source
-            if "per_platform" in fs:
-                for platform, strategy in fs["per_platform"].items():
-                    key = f"FETCH_STRATEGY_{platform.upper()}"
-                    self._raw_values[key] = str(strategy)
-                    self._config_sources[key] = source
-
-        # Performance configuration
-        if "performance" in config:
-            perf = config["performance"]
-            perf_mapping = {
-                "cache_duration_hours": "FETCH_CACHE_DURATION_HOURS",
-                "timeout_seconds": "FETCH_TIMEOUT_SECONDS",
-                "max_retries": "FETCH_MAX_RETRIES",
-                "retry_delay_seconds": "FETCH_RETRY_DELAY_SECONDS",
-            }
-            for yaml_key, flat_key in perf_mapping.items():
-                if yaml_key in perf:
-                    self._raw_values[flat_key] = str(perf[yaml_key])
-                    self._config_sources[flat_key] = source
-
-        # Fallback credentials
-        if "fallback_credentials" in config:
-            for platform, creds in config["fallback_credentials"].items():
-                if isinstance(creds, dict):
-                    for cred_key, cred_value in creds.items():
-                        key = f"FALLBACK_{platform.upper()}_{cred_key.upper()}"
-                        self._raw_values[key] = str(cred_value)
-                        self._config_sources[key] = source
-
-    def _load_keyvalue_file(self, path: Path, source: str = "file") -> None:
         """Load key=value pairs from a config file.
 
         Args:

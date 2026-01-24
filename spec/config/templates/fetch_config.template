@@ -57,9 +57,9 @@ FETCH_STRATEGY_AZURE_DEVOPS=direct
 FETCH_STRATEGY_TRELLO=direct
 
 # ============================================================
-# PERFORMANCE SETTINGS
+# FETCH PERFORMANCE SETTINGS
 # ============================================================
-# Configure timeouts, retries, and caching to prevent hangs.
+# Configure timeouts, retries, and caching for ticket fetching.
 # All values have safe upper bounds that are enforced.
 
 # Cache duration in hours (0 = no caching, max: 168 hours / 1 week)

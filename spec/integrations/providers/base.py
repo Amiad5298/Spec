@@ -401,6 +401,29 @@ class IssueTrackerProvider(ABC):
     - Map platform statuses to TicketStatus enum
     - Map platform types to TicketType enum
     - Never call print() or input() directly (use UserInteractionInterface)
+
+    Constructor Contract:
+        Provider ``__init__`` methods must be compatible with ProviderRegistry
+        instantiation. The registry uses runtime inspection to inject dependencies.
+        Valid constructor signatures:
+
+        1. No required arguments (recommended for simple providers)::
+
+            def __init__(self):
+                self._session = None
+
+        2. Optional ``user_interaction`` parameter for DI::
+
+            def __init__(self, user_interaction: UserInteractionInterface | None = None):
+                self.user_interaction = user_interaction or CLIUserInteraction()
+
+        The registry will automatically inject ``UserInteractionInterface`` if the
+        parameter exists. Providers with other required parameters will fail
+        instantiation with a ``TypeError``.
+
+    Class Attributes:
+        PLATFORM: Required class attribute of type ``Platform`` for registry
+            registration. Must be set before using ``@ProviderRegistry.register``.
     """
 
     @property
@@ -497,4 +520,3 @@ class IssueTrackerProvider(ABC):
             Short lowercase hyphenated summary (max 50 chars)
         """
         return sanitize_title_for_branch(ticket.title)
-

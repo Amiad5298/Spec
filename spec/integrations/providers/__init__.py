@@ -37,6 +37,7 @@ from spec.integrations.providers.exceptions import (
     RateLimitError,
     TicketNotFoundError,
 )
+from spec.integrations.providers.registry import ProviderRegistry
 from spec.integrations.providers.user_interaction import (
     CLIUserInteraction,
     NonInteractiveUserInteraction,
@@ -71,4 +72,6 @@ __all__ = [
     "TicketNotFoundError",
     "RateLimitError",
     "PlatformNotSupportedError",
+    # Registry
+    "ProviderRegistry",
 ]

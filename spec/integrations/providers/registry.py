@@ -32,6 +32,7 @@ from __future__ import annotations
 import inspect
 import logging
 import threading
+from typing import ClassVar
 
 from spec.integrations.providers.base import IssueTrackerProvider, Platform
 from spec.integrations.providers.detector import PlatformDetector
@@ -61,10 +62,10 @@ class ProviderRegistry:
         protected by _lock to ensure safe concurrent access.
     """
 
-    _providers: dict[Platform, type[IssueTrackerProvider]] = {}
-    _instances: dict[Platform, IssueTrackerProvider] = {}
-    _user_interaction: UserInteractionInterface = CLIUserInteraction()
-    _lock: threading.Lock = threading.Lock()
+    _providers: ClassVar[dict[Platform, type[IssueTrackerProvider]]] = {}
+    _instances: ClassVar[dict[Platform, IssueTrackerProvider]] = {}
+    _user_interaction: ClassVar[UserInteractionInterface] = CLIUserInteraction()
+    _lock: ClassVar[threading.Lock] = threading.Lock()
 
     @classmethod
     def register(cls, provider_class: type[IssueTrackerProvider]) -> type[IssueTrackerProvider]:
@@ -85,7 +86,11 @@ class ProviderRegistry:
         Raises:
             TypeError: If provider_class is not a subclass of IssueTrackerProvider,
                 doesn't have a PLATFORM attribute, or PLATFORM is not a Platform enum
-            ValueError: If a different provider is already registered for this platform
+
+        Note:
+            If a different provider is already registered for this platform, the
+            existing provider will be replaced and a warning will be logged. The
+            cached instance for that platform will also be cleared.
         """
         # Validate provider_class is a subclass of IssueTrackerProvider
         if not isinstance(provider_class, type) or not issubclass(
@@ -99,7 +104,7 @@ class ProviderRegistry:
         # Validate PLATFORM attribute exists
         if not hasattr(provider_class, "PLATFORM"):
             raise TypeError(
-                f"Provider class {provider_class.__name__} must have a PLATFORM " "class attribute"
+                f"Provider class {provider_class.__name__} must have a PLATFORM class attribute"
             )
 
         platform = provider_class.PLATFORM

@@ -306,6 +306,23 @@ class TestProviderRegistryGetProvider:
         error = exc_info.value
         assert "GITHUB" in error.supported_platforms
 
+    def test_get_provider_handles_init_exception(self):
+        """Exception during provider __init__ propagates correctly."""
+
+        class FailingProvider(MockJiraProvider):
+            PLATFORM = Platform.JIRA
+
+            def __init__(self):
+                raise RuntimeError("Provider initialization failed!")
+
+        ProviderRegistry.register(FailingProvider)
+
+        with pytest.raises(RuntimeError, match="Provider initialization failed"):
+            ProviderRegistry.get_provider(Platform.JIRA)
+
+        # Verify the instance was not cached
+        assert Platform.JIRA not in ProviderRegistry._instances
+
 
 class TestProviderRegistryGetProviderForInput:
     """Tests for ProviderRegistry.get_provider_for_input()."""

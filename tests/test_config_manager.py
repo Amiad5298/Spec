@@ -2034,6 +2034,80 @@ FETCH_STRATEGY_LINEAR=agent
         # Should have errors for active platforms that can't use agent strategy
         assert len(errors) > 0
 
+    def test_validate_fetch_config_strict_raises_on_invalid_agent_platform(self, tmp_path):
+        """strict=True raises ConfigValidationError for invalid agent platform."""
+        from spec.config.fetch_config import ConfigValidationError
+
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=invalid_platform\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        with pytest.raises(ConfigValidationError, match="Invalid agent platform"):
+            manager.validate_fetch_config(strict=True)
+
+    def test_validate_fetch_config_nonstrict_collects_invalid_agent_platform(self, tmp_path):
+        """strict=False collects error for invalid agent platform without raising."""
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=invalid_platform\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        # Should NOT raise
+        errors = manager.validate_fetch_config(strict=False)
+
+        # Should have collected the error
+        assert len(errors) >= 1
+        assert any("invalid agent platform" in e.lower() for e in errors)
+
+    def test_validate_fetch_config_strict_raises_on_invalid_strategy(self, tmp_path):
+        """strict=True raises ConfigValidationError for invalid fetch strategy."""
+        from spec.config.fetch_config import ConfigValidationError
+
+        config_path = tmp_path / "config"
+        config_path.write_text("FETCH_STRATEGY_DEFAULT=invalid_strategy\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        with pytest.raises(ConfigValidationError, match="Invalid fetch strategy"):
+            manager.validate_fetch_config(strict=True)
+
+    def test_validate_fetch_config_nonstrict_collects_invalid_strategy(self, tmp_path):
+        """strict=False collects error for invalid fetch strategy without raising."""
+        config_path = tmp_path / "config"
+        config_path.write_text("FETCH_STRATEGY_DEFAULT=invalid_strategy\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        # Should NOT raise
+        errors = manager.validate_fetch_config(strict=False)
+
+        # Should have collected the error
+        assert len(errors) >= 1
+        assert any("invalid fetch strategy" in e.lower() for e in errors)
+
+    def test_validate_fetch_config_nonstrict_collects_multiple_errors(self, tmp_path):
+        """strict=False collects all errors without raising."""
+        config_path = tmp_path / "config"
+        # Multiple invalid values
+        config_path.write_text(
+            """AGENT_PLATFORM=bad_platform
+FETCH_STRATEGY_DEFAULT=bad_strategy
+FETCH_STRATEGY_JIRA=also_invalid
+"""
+        )
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        # Should NOT raise
+        errors = manager.validate_fetch_config(strict=False)
+
+        # Should have collected multiple errors
+        assert len(errors) >= 2
+        error_text = " ".join(errors).lower()
+        assert "invalid agent platform" in error_text
+        assert "invalid fetch strategy" in error_text
+
 
 class TestYamlConfigLoading:
     """Tests for YAML configuration file loading."""
@@ -2066,6 +2140,29 @@ class TestYamlConfigLoading:
         """Detects KEY=VALUE format by content."""
         config_file = tmp_path / ".spec"
         config_file.write_text('AGENT_PLATFORM="cursor"\n')
+        manager = ConfigManager(config_file)
+
+        assert manager._is_yaml_file(config_file) is False
+
+    def test_is_keyvalue_file_with_colon_in_value(self, tmp_path):
+        """Files with '=' are never misdetected as YAML even with colons."""
+        config_file = tmp_path / ".spec"
+        # Has both : and = - should be detected as KEY=VALUE
+        config_file.write_text("JIRA_URL=https://example.atlassian.net\n")
+        manager = ConfigManager(config_file)
+
+        assert manager._is_yaml_file(config_file) is False
+
+    def test_is_keyvalue_file_with_yaml_like_content(self, tmp_path):
+        """Files with '=' take precedence over YAML-like colons."""
+        config_file = tmp_path / ".spec"
+        # Has KEY=VALUE mixed with YAML-like lines
+        config_file.write_text(
+            """# Comment: this is a config file
+AGENT_PLATFORM=cursor
+JIRA_URL=https://example:8080/api
+"""
+        )
         manager = ConfigManager(config_file)
 
         assert manager._is_yaml_file(config_file) is False

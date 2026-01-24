@@ -169,7 +169,11 @@ class ConfigManager:
     def _is_yaml_file(self, path: Path) -> bool:
         """Detect if a file appears to be YAML format.
 
-        Checks file extension and content to determine format.
+        Detection priority (simple and deterministic):
+        1. File extension .yml/.yaml → YAML
+        2. Any '=' found in content lines → KEY=VALUE (not YAML)
+        3. YAML-like content (nested structures) → YAML
+        4. Empty or unknown format → KEY=VALUE (safe default)
 
         Args:
             path: Path to the config file
@@ -177,35 +181,36 @@ class ConfigManager:
         Returns:
             True if file is YAML format, False for KEY=VALUE format
         """
-        # Check extension first
+        # 1. Check extension first - definitive
         if path.suffix.lower() in (".yaml", ".yml"):
             return True
 
-        # Check content for YAML indicators
+        # 2. Check content
         try:
             with path.open() as f:
-                first_lines = []
+                has_content = False
                 for i, line in enumerate(f):
-                    if i >= 10:  # Check first 10 lines
+                    if i >= 20:  # Check first 20 lines
                         break
                     line = line.strip()
-                    if line and not line.startswith("#"):
-                        first_lines.append(line)
-
-                # KEY=VALUE format has lines with '='
-                # YAML nested format has lines with ':' but typically no '='
-                for line in first_lines:
-                    # If we see agent:, fetch_strategy:, etc. it's YAML
-                    if line.endswith(":") or ": " in line:
-                        # Could be YAML, check if it doesn't look like KEY=VALUE
-                        if "=" not in line:
-                            return True
+                    # Skip empty lines and comments
+                    if not line or line.startswith("#"):
+                        continue
+                    has_content = True
+                    # Any '=' means KEY=VALUE format - definitive
                     if "=" in line:
                         return False
-        except Exception:
-            pass
 
-        return False
+                # 3. If file is empty or only comments, treat as KEY=VALUE (safe default)
+                if not has_content:
+                    return False
+
+        except Exception:
+            # If we can't read the file, default to KEY=VALUE (safer)
+            return False
+
+        # 4. No '=' found but has content - assume YAML
+        return True
 
     def _load_file(self, path: Path, source: str = "file") -> None:
         """Load configuration from a file.
@@ -951,27 +956,57 @@ class ConfigManager:
         - Strategy/platform compatibility
         - Credential availability and completeness
         - Per-platform override references
+        - Enum parsing (agent platform, fetch strategies)
 
         Args:
             strict: If True, raises ConfigValidationError on first error.
-                    If False, collects and returns all warnings/errors.
+                    If False, collects and returns all errors without raising.
 
         Returns:
-            List of validation messages (warnings/errors)
+            List of validation error messages
 
         Raises:
             ConfigValidationError: If strict=True and validation fails
         """
         errors: list[str] = []
-        agent_config = self.get_agent_config()
-        strategy_config = self.get_fetch_strategy_config()
+
+        # Get agent config - may raise ConfigValidationError for invalid enum values
+        try:
+            agent_config = self.get_agent_config()
+        except ConfigValidationError as e:
+            if strict:
+                raise
+            errors.append(str(e))
+            # Use default agent config to continue validation
+            agent_config = AgentConfig(
+                platform=AgentPlatform.AUGGIE,
+                integrations={},
+            )
+
+        # Get strategy config - may raise ConfigValidationError for invalid enum values
+        try:
+            strategy_config = self.get_fetch_strategy_config()
+        except ConfigValidationError as e:
+            if strict:
+                raise
+            errors.append(str(e))
+            # Use default strategy config to continue validation
+            strategy_config = FetchStrategyConfig(
+                default=FetchStrategy.AUTO,
+                per_platform={},
+            )
 
         # Validate per-platform overrides reference known platforms
         override_warnings = strategy_config.validate_platform_overrides(strict=False)
         errors.extend(override_warnings)
 
         # Get only the active platforms that need validation
-        active_platforms = self._get_active_platforms()
+        # Use the already-parsed configs to avoid re-calling getters (which could raise)
+        active_platforms = get_active_platforms(
+            raw_config_keys=set(self._raw_values.keys()),
+            strategy_config=strategy_config,
+            agent_config=agent_config,
+        )
 
         # Validate only active platforms' strategies
         for platform in active_platforms:

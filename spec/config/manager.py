@@ -233,7 +233,7 @@ class ConfigManager:
             source: Source identifier for debugging
         """
         try:
-            import yaml
+            import yaml  # type: ignore[import-untyped]
         except ImportError:
             log_message("Warning: PyYAML not installed, skipping YAML config")
             return

@@ -334,8 +334,15 @@ class JiraProvider(IssueTrackerProvider):
                 pass  # Fall back to empty string
 
         # Fallback if we couldn't construct from 'self'
+        # Use JIRA_BASE_URL env var if available, otherwise leave URL empty
+        # (empty is better than a wrong hardcoded URL for self-hosted instances)
         if not browse_url and ticket_id:
-            browse_url = f"https://jira.atlassian.net/browse/{ticket_id}"
+            base_url = os.environ.get("JIRA_BASE_URL", "")
+            if base_url:
+                # Strip trailing slash for consistency
+                base_url = base_url.rstrip("/")
+                browse_url = f"{base_url}/browse/{ticket_id}"
+            # If no base URL configured, leave browse_url as empty string
 
         # Extract priority with defensive handling
         priority_obj = fields.get("priority")
@@ -406,7 +413,7 @@ class JiraProvider(IssueTrackerProvider):
 
         # Add ADF description to metadata if present
         if adf_description is not None:
-            platform_metadata["adf_description"] = adf_description  # type: ignore[typeddict-unknown-key]
+            platform_metadata["adf_description"] = adf_description
 
         return GenericTicket(
             id=ticket_id,

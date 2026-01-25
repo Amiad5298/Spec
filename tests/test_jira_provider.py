@@ -340,14 +340,38 @@ class TestJiraProviderNormalize:
         assert ticket.url == "https://jira.internal.company.com/browse/DEV-456"
 
     def test_normalize_fallback_url_when_no_self(self, provider):
-        """Falls back to default URL when 'self' not available."""
+        """Falls back to empty URL when 'self' not available and no JIRA_BASE_URL."""
         response = {
             "key": "TEST-1",
             "fields": {"summary": "Test ticket"},
         }
         ticket = provider.normalize(response)
 
-        assert ticket.url == "https://jira.atlassian.net/browse/TEST-1"
+        # Without JIRA_BASE_URL env var, URL should be empty (safer than wrong hardcoded URL)
+        assert ticket.url == ""
+
+    def test_normalize_fallback_url_with_env_var(self, provider, monkeypatch):
+        """Falls back to JIRA_BASE_URL env var when 'self' not available."""
+        monkeypatch.setenv("JIRA_BASE_URL", "https://jira.mycompany.com")
+        response = {
+            "key": "TEST-1",
+            "fields": {"summary": "Test ticket"},
+        }
+        ticket = provider.normalize(response)
+
+        assert ticket.url == "https://jira.mycompany.com/browse/TEST-1"
+
+    def test_normalize_fallback_url_strips_trailing_slash(self, provider, monkeypatch):
+        """JIRA_BASE_URL with trailing slash is handled correctly."""
+        monkeypatch.setenv("JIRA_BASE_URL", "https://jira.mycompany.com/")
+        response = {
+            "key": "TEST-1",
+            "fields": {"summary": "Test ticket"},
+        }
+        ticket = provider.normalize(response)
+
+        # Trailing slash should be stripped to avoid double slashes
+        assert ticket.url == "https://jira.mycompany.com/browse/TEST-1"
 
     def test_normalize_handles_adf_description(self, provider):
         """Handles Atlassian Document Format description."""

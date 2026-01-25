@@ -1,8 +1,10 @@
 # Implementation Plan: AMI-31 - Implement DirectAPIFetcher as Fallback with REST/GraphQL Clients
 
 **Ticket:** [AMI-31](https://linear.app/amiadspec/issue/AMI-31/implement-directapifetcher-as-fallback-with-restgraphql-clients)
-**Status:** Draft
+**Status:** Implemented
+**PR:** [#24](https://github.com/Amiad5298/Spec/pull/24)
 **Date:** 2026-01-25
+**Last Updated:** 2026-01-25
 
 ---
 
@@ -15,6 +17,58 @@ Unlike `AuggieMediatedFetcher` which delegates to an AI agent's MCP tools, `Dire
 - **GraphQL APIs**: Linear, Monday, GitHub (alternative)
 
 The fetcher extends `TicketFetcher` ABC (AMI-29) and uses `AuthenticationManager` (AMI-22) for credential retrieval and `FetchPerformanceConfig` (AMI-33) for timeout/retry settings.
+
+---
+
+## Implementation Notes (Post-PR #24)
+
+> **This section documents features implemented in PR #24 that were not in the original plan.**
+
+### Additional Features Implemented
+
+| Feature | Description |
+|---------|-------------|
+| **Resource Management** | Async context manager (`__aenter__`/`__aexit__`) and `close()` method for HTTP client lifecycle |
+| **Lifecycle Safety** | `weakref.finalize` warns about unclosed clients to prevent resource leaks |
+| **Concurrency Safety** | `asyncio.Lock` for thread-safe handler creation and HTTP client initialization |
+| **Handler Registry** | Centralized registry pattern in `handlers/__init__.py` with `create_handler()` function |
+| **Extended Exceptions** | New handler-specific exceptions: `CredentialValidationError`, `TicketIdFormatError`, `PlatformApiError`, `PlatformNotFoundError` |
+| **Rate Limiting** | 429 handling with Retry-After header support (RFC 7231 compliant) |
+| **Backoff Cap** | Exponential backoff capped at `MAX_RETRY_DELAY_SECONDS` |
+| **Testability** | Injectable `sleeper` and `jitter_generator` for deterministic retry testing |
+| **Security** | Log sanitization (`_truncate_error_body`, `_sanitize_debug_log`) to prevent PII leakage |
+| **True Lazy Loading** | Only instantiate requested platform handler, not all handlers at once |
+
+### Exception Hierarchy (Implemented)
+
+The implementation added handler-specific exceptions that are mapped to `Agent*` exceptions:
+
+```
+TicketFetchError (base)
+├── CredentialValidationError  → mapped to AgentIntegrationError
+├── TicketIdFormatError        → mapped to AgentIntegrationError
+├── PlatformApiError           → mapped to AgentFetchError
+│   └── PlatformNotFoundError  → mapped to AgentFetchError
+├── PlatformNotSupportedError
+├── AgentIntegrationError      (public API)
+├── AgentFetchError            (public API)
+└── AgentResponseParseError    (public API)
+```
+
+### Resource Management Pattern (Required)
+
+```python
+# Recommended: Use async context manager
+async with DirectAPIFetcher(auth_manager) as fetcher:
+    data = await fetcher.fetch(ticket_id, platform)
+
+# Alternative: Explicit close
+fetcher = DirectAPIFetcher(auth_manager)
+try:
+    data = await fetcher.fetch(ticket_id, platform)
+finally:
+    await fetcher.close()
+```
 
 ---
 
@@ -1319,38 +1373,48 @@ class TestAzureDevOpsIntegration:
 
 ---
 
-## Acceptance Criteria Checklist
+## Acceptance Criteria Checklist (Updated Post-Implementation)
 
 From the Linear ticket:
 
-- [ ] `DirectAPIFetcher` class implementing `TicketFetcher` ABC
-- [ ] Constructor accepts `AuthenticationManager` (primary) and optional `ConfigManager`
-- [ ] `supports_platform()` uses `AuthenticationManager.has_fallback_configured(Platform)`
-- [ ] `fetch()` provides string-based interface for consistency with AuggieMediatedFetcher
-- [ ] `fetch_raw()` uses `AuthenticationManager.get_credentials(Platform)` returning `PlatformCredentials`
-- [ ] Handles `PlatformCredentials.credentials` as `Mapping[str, str]` (immutable)
-- [ ] Raises `AgentIntegrationError` when credentials not configured
-- [ ] Raises `AgentFetchError` for HTTP/API failures
-- [ ] Raises `AgentResponseParseError` for JSON/GraphQL parse failures
-- [ ] HTTP client injection for testing (optional `http_client` parameter in handlers)
-- [ ] Unit tests with mocked AuthenticationManager
-- [ ] Integration tests for Jira, GitHub, and one non-Auggie platform
+- [x] `DirectAPIFetcher` class implementing `TicketFetcher` ABC
+- [x] Constructor accepts `AuthenticationManager` (primary) and optional `ConfigManager`
+- [x] `supports_platform()` uses `AuthenticationManager.has_fallback_configured(Platform)`
+- [x] `fetch()` provides string-based interface for consistency with AuggieMediatedFetcher
+- [x] `fetch_raw()` uses `AuthenticationManager.get_credentials(Platform)` returning `PlatformCredentials`
+- [x] Handles `PlatformCredentials.credentials` as `Mapping[str, str]` (immutable)
+- [x] Raises `AgentIntegrationError` when credentials not configured
+- [x] Raises `AgentFetchError` for HTTP/API failures
+- [x] Raises `AgentResponseParseError` for JSON/GraphQL parse failures
+- [x] HTTP client injection for testing (optional `http_client` parameter in handlers)
+- [x] Unit tests with mocked AuthenticationManager
+- [ ] Integration tests for Jira, GitHub, and one non-Auggie platform *(test file exists, verify coverage)*
 
 ### Additional Criteria (From Architecture Review Comment 2026-01-25)
 
-- [ ] **All 6 platform handlers implemented**: JiraHandler, LinearHandler, GitHubHandler, AzureDevOpsHandler, TrelloHandler, MondayHandler
-- [ ] Each handler correctly uses the credential keys from AuthenticationManager (per AMI-22)
-- [ ] Each handler validates required credential keys before making API calls
-- [ ] Integration tests for at least Jira, GitHub, and one non-Auggie platform (Azure DevOps, Trello, or Monday)
+- [x] **All 6 platform handlers implemented**: JiraHandler, LinearHandler, GitHubHandler, AzureDevOpsHandler, TrelloHandler, MondayHandler
+- [x] Each handler correctly uses the credential keys from AuthenticationManager (per AMI-22)
+- [x] Each handler validates required credential keys before making API calls
+- [ ] Integration tests for at least Jira, GitHub, and one non-Auggie platform (Azure DevOps, Trello, or Monday) *(verify coverage)*
 
-### Additional Features to Implement
+### Additional Features Implemented (Beyond Original Plan)
 
-- [ ] Retry logic with exponential backoff using `FetchPerformanceConfig` settings
-- [ ] Timeout hierarchy: per-request > instance > config default
-- [ ] Handler package structure for maintainability
-- [ ] Package exports in `fetchers/__init__.py`
-- [ ] Type hints and docstrings for all public methods
-- [ ] Credential key validation in each handler (`_validate_credentials()` method)
+- [x] Retry logic with exponential backoff using `FetchPerformanceConfig` settings
+- [x] Timeout hierarchy: per-request > instance > config default
+- [x] Handler package structure for maintainability
+- [x] Package exports in `fetchers/__init__.py`
+- [x] Type hints and docstrings for all public methods
+- [x] Credential key validation in each handler (`_validate_credentials()` method)
+- [x] Async context manager for resource lifecycle management (`__aenter__`/`__aexit__`/`close()`)
+- [x] Concurrency-safe handler/client initialization with `asyncio.Lock`
+- [x] Rate limiting (429) handling with Retry-After header support (RFC 7231)
+- [x] Backoff cap at `MAX_RETRY_DELAY_SECONDS` to prevent excessively long waits
+- [x] Log sanitization to prevent PII leakage (`_truncate_error_body`, `_sanitize_debug_log`)
+- [x] Injectable `sleeper` and `jitter_generator` for deterministic testing
+- [x] Handler registry pattern in `handlers/__init__.py` for clean instantiation
+- [x] New exception types: `CredentialValidationError`, `TicketIdFormatError`, `PlatformApiError`, `PlatformNotFoundError`
+- [x] `weakref.finalize` lifecycle safety warning for unclosed clients
+- [x] `GraphQLPlatformHandler` base class for GraphQL-specific handlers
 
 ---
 

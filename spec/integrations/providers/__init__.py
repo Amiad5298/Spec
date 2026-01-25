@@ -37,6 +37,7 @@ from spec.integrations.providers.exceptions import (
     RateLimitError,
     TicketNotFoundError,
 )
+from spec.integrations.providers.jira import JiraProvider
 from spec.integrations.providers.registry import ProviderRegistry
 from spec.integrations.providers.user_interaction import (
     CLIUserInteraction,
@@ -74,4 +75,6 @@ __all__ = [
     "PlatformNotSupportedError",
     # Registry
     "ProviderRegistry",
+    # Providers
+    "JiraProvider",
 ]

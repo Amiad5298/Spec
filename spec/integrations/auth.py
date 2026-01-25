@@ -24,8 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 def _freeze_credentials(creds: dict[str, str]) -> Mapping[str, str]:
-    """Convert a mutable dict to an immutable MappingProxyType."""
-    return MappingProxyType(creds)
+    """Convert a mutable dict to an immutable MappingProxyType.
+
+    Creates a shallow copy of the dictionary before freezing to prevent
+    aliasing issues where modifications to the original dict would affect
+    the frozen view.
+    """
+    return MappingProxyType(dict(creds))
 
 
 @dataclass(frozen=True)

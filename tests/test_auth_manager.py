@@ -239,6 +239,40 @@ class TestGetCredentials:
         # Verify alias keys are NOT present
         assert "org" not in creds.credentials
 
+    def test_get_credentials_calls_config_with_correct_keys(self, mock_config_manager):
+        """Verify platform.name.lower() produces correct config keys.
+
+        This test ensures that the Platform enum names map to the exact string
+        keys expected by ConfigManager. If the Enum name ever changes (e.g.,
+        AZURE_DEVOPS -> AZUREDEVOPS), this test will fail, preventing a
+        regression in credential loading.
+        """
+        mock_config_manager.get_fallback_credentials.return_value = {"token": "test"}
+        auth_manager = AuthenticationManager(mock_config_manager)
+
+        # Test AZURE_DEVOPS specifically - its underscore is critical
+        auth_manager.get_credentials(Platform.AZURE_DEVOPS)
+        mock_config_manager.get_fallback_credentials.assert_called_with(
+            "azure_devops", strict=True, validate=True
+        )
+
+        # Test other platforms to ensure consistent naming contract
+        mock_config_manager.reset_mock()
+        mock_config_manager.get_fallback_credentials.return_value = {"token": "test"}
+
+        auth_manager.get_credentials(Platform.JIRA)
+        mock_config_manager.get_fallback_credentials.assert_called_with(
+            "jira", strict=True, validate=True
+        )
+
+        mock_config_manager.reset_mock()
+        mock_config_manager.get_fallback_credentials.return_value = {"token": "test"}
+
+        auth_manager.get_credentials(Platform.GITHUB)
+        mock_config_manager.get_fallback_credentials.assert_called_with(
+            "github", strict=True, validate=True
+        )
+
 
 # =============================================================================
 # has_fallback_configured() Tests

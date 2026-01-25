@@ -663,9 +663,9 @@ class TestSpinnerCaching:
         # Spinner for task 1 should be the same object
         assert tui._spinners[1] is spinner_1
 
-    def test_spinner_cache_none_creates_new_spinners(self, records):
-        """When spinners=None, new spinners are created each render (no caching)."""
-        # First render without cache
+    def test_spinner_cache_none_uses_static_fallback(self, records):
+        """When spinners=None, static icon fallback is used (prevents animation freeze)."""
+        # First render without cache - should use static icon fallback
         panel1 = render_task_list(records, spinners=None)
 
         # Second render without cache - should work fine (no errors)

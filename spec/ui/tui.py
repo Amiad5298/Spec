@@ -143,7 +143,9 @@ def render_task_list(
             # Do NOT instantiate a new Spinner("dots") here if missing,
             # or it will freeze the animation.
             spinner = spinners.get(record.task_index) if spinners is not None else None
-            status_cell = spinner if spinner else Spinner("dots", style=color)
+            # Use static icon as fallback instead of creating new Spinner
+            # to prevent animation freeze due to frame counter reset
+            status_cell = spinner if spinner else Text(icon, style=color)
         else:
             status_cell = Text(icon, style=color)
 

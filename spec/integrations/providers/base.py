@@ -175,6 +175,8 @@ class PlatformMetadata(TypedDict, total=False):
     issue_type_id: str
     resolution: str
     fix_versions: list[str]
+    api_url: str  # The raw API URL (e.g., self link from Jira)
+    adf_description: dict[str, Any]  # Atlassian Document Format description
 
     # GitHub-specific
     repository: str

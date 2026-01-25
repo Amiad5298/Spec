@@ -79,7 +79,7 @@ class TestJiraProviderProperties:
 class TestJiraProviderCanHandle:
     """Test can_handle() method."""
 
-    # Valid URLs
+    # Valid URLs including alphanumeric project keys
     @pytest.mark.parametrize(
         "url",
         [
@@ -89,13 +89,17 @@ class TestJiraProviderCanHandle:
             "https://jira.company.com/browse/PROJ-123",
             "https://jira.example.org/browse/TEST-1",
             "http://jira.internal.net/browse/DEV-42",
+            # Alphanumeric project keys
+            "https://company.atlassian.net/browse/A1-123",
+            "https://jira.example.com/browse/A1B2-456",
+            "https://myorg.atlassian.net/browse/X99-1",
         ],
     )
     def test_can_handle_valid_urls(self, provider, url):
-        """can_handle returns True for valid Jira URLs."""
+        """can_handle returns True for valid Jira URLs including alphanumeric project keys."""
         assert provider.can_handle(url) is True
 
-    # Valid IDs
+    # Valid IDs with explicit project prefix
     @pytest.mark.parametrize(
         "ticket_id",
         [
@@ -103,14 +107,29 @@ class TestJiraProviderCanHandle:
             "ABC-1",
             "XYZ-99999",
             "proj-123",  # lowercase
-            "A1-1",  # alphanumeric project
-            "123",  # numeric-only (uses default project)
-            "99999",  # large numeric-only
+            "A1-1",  # alphanumeric project key
+            "A1B2-123",  # alphanumeric project key
+            "X99-1",  # project starting with letter, contains digits
         ],
     )
     def test_can_handle_valid_ids(self, provider, ticket_id):
-        """can_handle returns True for valid ticket IDs."""
+        """can_handle returns True for valid ticket IDs with project prefix."""
         assert provider.can_handle(ticket_id) is True
+
+    def test_can_handle_numeric_only_without_explicit_default_returns_false(self, provider):
+        """Numeric-only input without explicit default project returns False.
+
+        This prevents ambiguous input from being claimed by Jira when no
+        project context is explicitly configured.
+        """
+        assert provider.can_handle("123") is False
+        assert provider.can_handle("99999") is False
+
+    def test_can_handle_numeric_only_with_explicit_default_returns_true(self):
+        """Numeric-only input returns True when default project is explicit."""
+        provider_with_default = JiraProvider(default_project="MYPROJ")
+        assert provider_with_default.can_handle("123") is True
+        assert provider_with_default.can_handle("99999") is True
 
     # Invalid inputs
     @pytest.mark.parametrize(
@@ -141,6 +160,17 @@ class TestJiraProviderParseInput:
         """Parses self-hosted Jira URL."""
         url = "https://jira.company.com/browse/TEST-42"
         assert provider.parse_input(url) == "TEST-42"
+
+    def test_parse_alphanumeric_project_url(self, provider):
+        """Parses URL with alphanumeric project key."""
+        assert provider.parse_input("https://company.atlassian.net/browse/A1-123") == "A1-123"
+        assert provider.parse_input("https://jira.example.com/browse/A1B2-456") == "A1B2-456"
+        assert provider.parse_input("https://myorg.atlassian.net/browse/X99-1") == "X99-1"
+
+    def test_parse_alphanumeric_project_id(self, provider):
+        """Parses direct alphanumeric project ID."""
+        assert provider.parse_input("A1-123") == "A1-123"
+        assert provider.parse_input("a1b2-456") == "A1B2-456"  # lowercase normalized
 
     def test_parse_lowercase_id(self, provider):
         """Normalizes lowercase ID to uppercase."""
@@ -283,6 +313,103 @@ class TestJiraProviderNormalize:
         assert ticket.platform_metadata["components"] == []
         assert ticket.platform_metadata["fix_versions"] == []
 
+    def test_normalize_constructs_browse_url_from_self(self, provider):
+        """Normalizes and constructs browse URL from 'self' API URL."""
+        response = {
+            "key": "PROJ-123",
+            "self": "https://mycompany.atlassian.net/rest/api/2/issue/12345",
+            "fields": {"summary": "Test ticket"},
+        }
+        ticket = provider.normalize(response)
+
+        assert ticket.url == "https://mycompany.atlassian.net/browse/PROJ-123"
+        assert (
+            ticket.platform_metadata["api_url"]
+            == "https://mycompany.atlassian.net/rest/api/2/issue/12345"
+        )
+
+    def test_normalize_constructs_browse_url_self_hosted(self, provider):
+        """Constructs browse URL from self-hosted Jira 'self' API URL."""
+        response = {
+            "key": "DEV-456",
+            "self": "https://jira.internal.company.com/rest/api/2/issue/67890",
+            "fields": {"summary": "Internal ticket"},
+        }
+        ticket = provider.normalize(response)
+
+        assert ticket.url == "https://jira.internal.company.com/browse/DEV-456"
+
+    def test_normalize_fallback_url_when_no_self(self, provider):
+        """Falls back to default URL when 'self' not available."""
+        response = {
+            "key": "TEST-1",
+            "fields": {"summary": "Test ticket"},
+        }
+        ticket = provider.normalize(response)
+
+        assert ticket.url == "https://jira.atlassian.net/browse/TEST-1"
+
+    def test_normalize_handles_adf_description(self, provider):
+        """Handles Atlassian Document Format description."""
+        adf_content = {
+            "type": "doc",
+            "version": 1,
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "This is ADF content"}],
+                }
+            ],
+        }
+        response = {
+            "key": "TEST-1",
+            "self": "https://company.atlassian.net/rest/api/2/issue/123",
+            "fields": {"summary": "ADF Test", "description": adf_content},
+        }
+        ticket = provider.normalize(response)
+
+        # Description should be placeholder
+        assert ticket.description == "[Rich content - see platform_metadata.adf_description]"
+        # ADF content stored in metadata
+        assert ticket.platform_metadata.get("adf_description") == adf_content
+
+    def test_normalize_story_points_as_string(self, provider):
+        """Casts story points from string to float."""
+        response = {
+            "key": "TEST-1",
+            "self": "https://company.atlassian.net/rest/api/2/issue/123",
+            "fields": {"summary": "Test", "customfield_10016": "5"},
+        }
+        ticket = provider.normalize(response)
+
+        assert ticket.platform_metadata["story_points"] == 5.0
+
+    def test_normalize_story_points_invalid_string(self, provider):
+        """Invalid story points string defaults to 0.0."""
+        response = {
+            "key": "TEST-1",
+            "self": "https://company.atlassian.net/rest/api/2/issue/123",
+            "fields": {"summary": "Test", "customfield_10016": "not-a-number"},
+        }
+        ticket = provider.normalize(response)
+
+        assert ticket.platform_metadata["story_points"] == 0.0
+
+    def test_normalize_labels_stripped_and_converted(self, provider):
+        """Labels are stripped and converted to strings."""
+        response = {
+            "key": "TEST-1",
+            "self": "https://company.atlassian.net/rest/api/2/issue/123",
+            "fields": {
+                "summary": "Test",
+                "labels": ["  backend  ", "priority", 123, "  "],
+            },
+        }
+        ticket = provider.normalize(response)
+
+        # Empty strings after strip should be filtered out
+        assert ticket.labels == ["backend", "priority", "123"]
+
 
 class TestStatusMapping:
     """Test status mapping coverage."""
@@ -344,10 +471,21 @@ class TestJiraProviderMethods:
         assert "{ticket_id}" in template
         assert "Jira" in template
 
-    def test_fetch_ticket_raises_not_implemented(self, provider):
-        """fetch_ticket raises NotImplementedError."""
-        with pytest.raises(NotImplementedError, match="deprecated"):
-            provider.fetch_ticket("PROJ-123")
+    def test_fetch_ticket_raises_not_implemented_with_warning(self, provider):
+        """fetch_ticket raises NotImplementedError and issues DeprecationWarning."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter("always")
+            with pytest.raises(NotImplementedError, match="deprecated"):
+                provider.fetch_ticket("PROJ-123")
+
+        # Verify deprecation warning was issued
+        deprecation_warnings = [
+            w for w in caught_warnings if issubclass(w.category, DeprecationWarning)
+        ]
+        assert len(deprecation_warnings) == 1
+        assert "deprecated" in str(deprecation_warnings[0].message).lower()
 
     def test_check_connection_returns_ready(self, provider):
         """check_connection returns ready status."""

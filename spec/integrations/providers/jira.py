@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from spec.integrations.providers.base import (
     GenericTicket,
@@ -135,21 +137,16 @@ class JiraProvider(IssueTrackerProvider):
 
     PLATFORM = Platform.JIRA
 
-    # URL patterns for Jira
+    # Ticket ID pattern: Supports alphanumeric project keys (e.g., A1-123, PROJ-123)
+    # Pattern: [A-Z][A-Z0-9]*-\d+ (project must start with letter, can contain digits)
+    _TICKET_ID_REGEX = r"[A-Z][A-Z0-9]*-\d+"
+
+    # URL patterns for Jira - consolidated to use generic /browse/ pattern
+    # This handles Atlassian Cloud, self-hosted, and any other Jira instances
     _URL_PATTERNS = [
-        # Atlassian Cloud: https://company.atlassian.net/browse/PROJECT-123
+        # Generic /browse/ URL - handles all Jira instances
         re.compile(
-            r"https?://[^/]+\.atlassian\.net/browse/(?P<ticket_id>[A-Z]+-\d+)",
-            re.IGNORECASE,
-        ),
-        # Self-hosted Jira: https://jira.company.com/browse/PROJECT-123
-        re.compile(
-            r"https?://jira\.[^/]+/browse/(?P<ticket_id>[A-Z]+-\d+)",
-            re.IGNORECASE,
-        ),
-        # Generic /browse/ URL
-        re.compile(
-            r"https?://[^/]+/browse/(?P<ticket_id>[A-Z]+-\d+)",
+            rf"https?://[^/]+/browse/(?P<ticket_id>{_TICKET_ID_REGEX})",
             re.IGNORECASE,
         ),
     ]
@@ -178,9 +175,11 @@ class JiraProvider(IssueTrackerProvider):
         # currently doesn't require user interaction in the provider layer - all
         # interactive operations are handled by TicketService and TicketFetcher.
         self._user_interaction = user_interaction or CLIUserInteraction()
-        self._default_project = (
-            default_project or os.environ.get("JIRA_DEFAULT_PROJECT") or DEFAULT_PROJECT
-        )
+
+        # Track if default project was explicitly configured (for can_handle behavior)
+        env_project = os.environ.get("JIRA_DEFAULT_PROJECT")
+        self._has_explicit_default_project = default_project is not None or env_project is not None
+        self._default_project = default_project or env_project or DEFAULT_PROJECT
 
     @property
     def platform(self) -> Platform:
@@ -196,10 +195,9 @@ class JiraProvider(IssueTrackerProvider):
         """Check if this provider can handle the given input.
 
         Recognizes:
-        - Atlassian Cloud URLs: https://company.atlassian.net/browse/PROJ-123
-        - Self-hosted Jira URLs: https://jira.company.com/browse/PROJ-123
-        - Ticket IDs: PROJ-123, ABC-1, XYZ-99999 (case-insensitive)
-        - Numeric IDs: 123 (uses default project)
+        - Jira URLs: any /browse/PROJECT-123 format (Cloud or self-hosted)
+        - Ticket IDs: PROJ-123, A1-123, XYZ-99999 (case-insensitive, alphanumeric project)
+        - Numeric IDs: 123 (only if default_project is explicitly configured)
 
         Args:
             input_str: URL or ticket ID to check
@@ -214,12 +212,13 @@ class JiraProvider(IssueTrackerProvider):
             if pattern.match(input_str):
                 return True
 
-        # Check ID pattern (PROJECT-123)
+        # Check ID pattern (PROJECT-123 with alphanumeric project key)
         if self._ID_PATTERN.match(input_str):
             return True
 
-        # Check numeric-only pattern (123)
-        if self._NUMERIC_ID_PATTERN.match(input_str):
+        # Numeric-only pattern (123) - only accept if default project is explicitly configured
+        # This prevents ambiguous input from being claimed when no project context exists
+        if self._has_explicit_default_project and self._NUMERIC_ID_PATTERN.match(input_str):
             return True
 
         return False
@@ -310,19 +309,33 @@ class JiraProvider(IssueTrackerProvider):
         if isinstance(assignee_obj, dict):
             assignee = assignee_obj.get("displayName") or assignee_obj.get("name")
 
-        # Extract labels (ensure it's a list)
+        # Extract labels - ensure every element is a stripped string
+        # Filter after stripping to remove whitespace-only entries
         labels_raw = fields.get("labels")
-        labels = labels_raw if isinstance(labels_raw, list) else []
+        labels = (
+            [s for s in (str(x).strip() for x in labels_raw) if s]
+            if isinstance(labels_raw, list)
+            else []
+        )
 
         # Build project key for URL with defensive handling
         project_obj = fields.get("project")
         project_key = self._safe_nested_get(project_obj, "key", "")
 
-        # Build URL (fallback if not in raw data)
-        url = raw_data.get("self", "")
-        if not url and project_key:
-            # Construct URL from project key
-            url = f"https://jira.atlassian.net/browse/{ticket_id}"
+        # Smart URL construction: parse scheme/netloc from 'self' API URL if available
+        api_url = raw_data.get("self", "")
+        browse_url = ""
+        if api_url and ticket_id:
+            try:
+                parsed = urlparse(api_url)
+                if parsed.scheme and parsed.netloc:
+                    browse_url = f"{parsed.scheme}://{parsed.netloc}/browse/{ticket_id}"
+            except Exception:
+                pass  # Fall back to empty string
+
+        # Fallback if we couldn't construct from 'self'
+        if not browse_url and ticket_id:
+            browse_url = f"https://jira.atlassian.net/browse/{ticket_id}"
 
         # Extract priority with defensive handling
         priority_obj = fields.get("priority")
@@ -348,15 +361,34 @@ class JiraProvider(IssueTrackerProvider):
             else []
         )
 
-        # Extract story points with type coercion
+        # Extract story points with robust type coercion (handles string values like "5")
         story_points_raw = fields.get("customfield_10016")
-        story_points: float = (
-            float(story_points_raw) if isinstance(story_points_raw, int | float) else 0.0
-        )
+        story_points: float = 0.0
+        if story_points_raw is not None:
+            try:
+                story_points = float(story_points_raw)
+            except (ValueError, TypeError):
+                story_points = 0.0
 
         # Extract epic link with type safety
         epic_link_raw = fields.get("customfield_10014")
         epic_link: str = str(epic_link_raw) if epic_link_raw else ""
+
+        # Extract summary with type safety
+        summary_raw = fields.get("summary")
+        summary: str = str(summary_raw) if summary_raw else ""
+
+        # Extract description with ADF (Atlassian Document Format) handling
+        description_raw = fields.get("description")
+        adf_description: dict[str, Any] | None = None
+        if isinstance(description_raw, dict):
+            # Description is in ADF format - store raw and provide placeholder
+            adf_description = description_raw
+            description = "[Rich content - see platform_metadata.adf_description]"
+        elif description_raw:
+            description = str(description_raw)
+        else:
+            description = ""
 
         # Extract platform-specific metadata
         platform_metadata: PlatformMetadata = {
@@ -369,20 +401,17 @@ class JiraProvider(IssueTrackerProvider):
             "issue_type_id": self._safe_nested_get(issuetype_obj, "id", ""),
             "resolution": resolution_name,
             "fix_versions": fix_versions,
+            "api_url": api_url,  # Store original API URL for debugging
         }
 
-        # Extract summary with type safety
-        summary_raw = fields.get("summary")
-        summary: str = str(summary_raw) if summary_raw else ""
-
-        # Extract description with type safety
-        description_raw = fields.get("description")
-        description: str = str(description_raw) if description_raw else ""
+        # Add ADF description to metadata if present
+        if adf_description is not None:
+            platform_metadata["adf_description"] = adf_description  # type: ignore[typeddict-unknown-key]
 
         return GenericTicket(
             id=ticket_id,
             platform=Platform.JIRA,
-            url=url,
+            url=browse_url,
             title=summary,
             description=description,
             status=self._map_status(status_name),
@@ -421,7 +450,7 @@ class JiraProvider(IssueTrackerProvider):
         """Parse ISO timestamp from Jira API.
 
         Handles various timezone formats for broader Python version compatibility:
-        - Z suffix (converted to +00:00)
+        - Z suffix at end of string (converted to +00:00)
         - +0000 format without colon (converted to +00:00)
         - +00:00 format with colon (native support)
 
@@ -435,12 +464,16 @@ class JiraProvider(IssueTrackerProvider):
             return None
         try:
             # Jira uses ISO format: 2024-01-15T10:30:00.000+0000
-            # Normalize Z to +00:00
-            normalized = timestamp_str.replace("Z", "+00:00")
+            normalized = timestamp_str
+
+            # Normalize Z suffix to +00:00 (only at end of string for precision)
+            if normalized.endswith("Z"):
+                normalized = normalized[:-1] + "+00:00"
 
             # Normalize +0000 to +00:00 format (for broader Python compatibility)
             # This handles timezone offsets without colon like +0000, -0500, +0530
-            if re.match(r".*[+-]\d{4}$", normalized):
+            # Only match at end of string to avoid false positives
+            if re.search(r"[+-]\d{4}$", normalized):
                 normalized = normalized[:-2] + ":" + normalized[-2:]
 
             return datetime.fromisoformat(normalized)
@@ -458,10 +491,11 @@ class JiraProvider(IssueTrackerProvider):
     def fetch_ticket(self, ticket_id: str) -> GenericTicket:
         """Fetch ticket details from Jira.
 
-        NOTE: This method is required by IssueTrackerProvider ABC but
-        in the hybrid architecture, fetching is delegated to TicketService
-        which uses TicketFetcher implementations. This method is kept for
-        backward compatibility and direct provider usage.
+        .. deprecated::
+            This method is required by IssueTrackerProvider ABC but
+            in the hybrid architecture, fetching is delegated to TicketService
+            which uses TicketFetcher implementations. Use TicketService.get_ticket()
+            with AuggieMediatedFetcher or DirectAPIFetcher instead.
 
         Args:
             ticket_id: Normalized ticket ID from parse_input()
@@ -472,6 +506,13 @@ class JiraProvider(IssueTrackerProvider):
         Raises:
             NotImplementedError: Fetching should use TicketService
         """
+        warnings.warn(
+            "JiraProvider.fetch_ticket() is deprecated in hybrid architecture. "
+            "Use TicketService.get_ticket() with AuggieMediatedFetcher or "
+            "DirectAPIFetcher instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         raise NotImplementedError(
             "JiraProvider.fetch_ticket() is deprecated in hybrid architecture. "
             "Use TicketService.get_ticket() with AuggieMediatedFetcher or "

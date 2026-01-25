@@ -339,8 +339,11 @@ class TestJiraProviderNormalize:
 
         assert ticket.url == "https://jira.internal.company.com/browse/DEV-456"
 
-    def test_normalize_fallback_url_when_no_self(self, provider):
+    def test_normalize_fallback_url_when_no_self(self, provider, monkeypatch):
         """Falls back to empty URL when 'self' not available and no JIRA_BASE_URL."""
+        # Explicitly ensure JIRA_BASE_URL is not set in the test environment
+        monkeypatch.delenv("JIRA_BASE_URL", raising=False)
+
         response = {
             "key": "TEST-1",
             "fields": {"summary": "Test ticket"},

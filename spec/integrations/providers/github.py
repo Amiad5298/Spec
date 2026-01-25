@@ -193,10 +193,17 @@ class GitHubProvider(IssueTrackerProvider):
         allowed = {"github.com"}
         github_base_url = os.environ.get("GITHUB_BASE_URL")
         if github_base_url:
-            # Extract host from base URL (e.g., "https://github.mycompany.com" -> "github.mycompany.com")
-            base_host_match = re.match(r"https?://([^/]+)", github_base_url)
-            if base_host_match:
-                allowed.add(base_host_match.group(1).lower())
+            # Handle URLs with or without scheme (e.g., "https://github.mycompany.com" or "github.mycompany.com")
+            # Strip scheme if present
+            host = github_base_url
+            if host.startswith("https://"):
+                host = host[8:]
+            elif host.startswith("http://"):
+                host = host[7:]
+            # Strip trailing slashes and take the host part (before any path)
+            host = host.rstrip("/").split("/")[0]
+            if host:
+                allowed.add(host.lower())
         return allowed
 
     def _is_allowed_url(self, input_str: str) -> tuple[bool, re.Match | None]:
@@ -206,7 +213,10 @@ class GitHubProvider(IssueTrackerProvider):
             input_str: URL to check
 
         Returns:
-            Tuple of (is_allowed, match_object). match_object is None if not allowed.
+            Tuple of (is_allowed, match_object).
+            - (True, match) when URL matches and host is allowed
+            - (False, match) when URL matches generic pattern but host is not allowed
+            - (False, None) when input doesn't look like a valid URL
         """
         # First try github.com pattern (always allowed)
         match = self._GITHUB_COM_PATTERN.match(input_str)
@@ -220,6 +230,9 @@ class GitHubProvider(IssueTrackerProvider):
             allowed_hosts = self._get_allowed_hosts()
             if host in allowed_hosts:
                 return True, match
+            # URL structure matches but host is not allowed - return the match
+            # so caller can report which domain was rejected
+            return False, match
 
         return False, None
 
@@ -290,15 +303,6 @@ class GitHubProvider(IssueTrackerProvider):
             number = match.group("number")
             return f"{owner}/{repo}#{number}"
 
-        # Check if it looks like a URL but didn't match allowed hosts
-        generic_match = self._GENERIC_URL_PATTERN.match(input_str)
-        if generic_match:
-            host = generic_match.group("host")
-            raise ValueError(
-                f"Domain '{host}' is not allowed. Only github.com or explicitly "
-                f"configured GITHUB_BASE_URL hosts are accepted."
-            )
-
         # Try short reference pattern (owner/repo#123)
         match = self._SHORT_REF_PATTERN.match(input_str)
         if match:
@@ -339,7 +343,8 @@ class GitHubProvider(IssueTrackerProvider):
         # Fallback: construct from html_url if repository not provided
         if not repo_full_name:
             # Use pre-compiled class constant pattern for performance
-            url_match = self._REPO_FROM_URL_PATTERN.match(html_url)
+            # Use search() instead of match() for resilience to leading whitespace/noise
+            url_match = self._REPO_FROM_URL_PATTERN.search(html_url)
             if url_match:
                 repo_full_name = f"{url_match.group(1)}/{url_match.group(2)}"
 

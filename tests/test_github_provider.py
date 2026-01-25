@@ -185,6 +185,59 @@ class TestGitHubEnterpriseWithConfig:
         with pytest.raises(ValueError, match="not allowed"):
             provider_with_ghe.parse_input(url)
 
+    def test_domain_not_allowed_error_is_reachable(self, provider_with_ghe):
+        """Verify that 'Domain not allowed' ValueError is properly raised.
+
+        This test ensures the refactored _is_allowed_url returns (False, match)
+        for URLs with valid structure but disallowed hosts, making the error
+        handling in parse_input reachable.
+        """
+        # URL has valid GitHub-like structure but host is not in allowed list
+        url = "https://github.unauthorized.com/owner/repo/issues/42"
+        with pytest.raises(ValueError) as exc_info:
+            provider_with_ghe.parse_input(url)
+
+        # Verify the error message mentions the specific disallowed domain
+        assert "github.unauthorized.com" in str(exc_info.value)
+        assert "not allowed" in str(exc_info.value)
+
+
+class TestGitHubEnterpriseWithoutScheme:
+    """Test GITHUB_BASE_URL parsing when set without http:// or https:// scheme."""
+
+    @pytest.fixture
+    def provider_with_ghe_no_scheme(self, monkeypatch):
+        """Create a GitHubProvider with GITHUB_BASE_URL set without scheme."""
+        monkeypatch.setenv("GITHUB_BASE_URL", "github.mycompany.com")
+        return GitHubProvider()
+
+    def test_can_handle_enterprise_url_without_scheme_config(self, provider_with_ghe_no_scheme):
+        """Provider accepts Enterprise URL when GITHUB_BASE_URL is set without scheme."""
+        url = "https://github.mycompany.com/owner/repo/issues/99"
+        assert provider_with_ghe_no_scheme.can_handle(url) is True
+
+    def test_parse_enterprise_url_without_scheme_config(self, provider_with_ghe_no_scheme):
+        """Parse Enterprise URL when GITHUB_BASE_URL is set without scheme."""
+        url = "https://github.mycompany.com/org/project/issues/42"
+        assert provider_with_ghe_no_scheme.parse_input(url) == "org/project#42"
+
+    def test_github_com_still_works_without_scheme_config(self, provider_with_ghe_no_scheme):
+        """github.com URLs still work when GITHUB_BASE_URL has no scheme."""
+        url = "https://github.com/owner/repo/issues/123"
+        assert provider_with_ghe_no_scheme.can_handle(url) is True
+        assert provider_with_ghe_no_scheme.parse_input(url) == "owner/repo#123"
+
+    @pytest.fixture
+    def provider_with_ghe_trailing_slash(self, monkeypatch):
+        """Create a GitHubProvider with GITHUB_BASE_URL with trailing slash."""
+        monkeypatch.setenv("GITHUB_BASE_URL", "github.mycompany.com/")
+        return GitHubProvider()
+
+    def test_handles_trailing_slash_in_base_url(self, provider_with_ghe_trailing_slash):
+        """Provider handles GITHUB_BASE_URL with trailing slash."""
+        url = "https://github.mycompany.com/owner/repo/issues/99"
+        assert provider_with_ghe_trailing_slash.can_handle(url) is True
+
 
 class TestGitHubProviderParseInput:
     """Test parse_input() method."""

@@ -200,54 +200,57 @@ class TestDirectAPIFetcherPlatformResolution:
 
 
 class TestDirectAPIFetcherHandlers:
-    """Tests for _get_platform_handler method."""
+    """Tests for _get_platform_handler method.
 
-    def test_get_handler_jira(self, fetcher):
+    Note: _get_platform_handler is async for concurrency-safe lazy initialization.
+    """
+
+    async def test_get_handler_jira(self, fetcher):
         """Returns JiraHandler for JIRA platform."""
         from spec.integrations.fetchers.handlers import JiraHandler
 
-        handler = fetcher._get_platform_handler(Platform.JIRA)
+        handler = await fetcher._get_platform_handler(Platform.JIRA)
         assert isinstance(handler, JiraHandler)
 
-    def test_get_handler_linear(self, fetcher):
+    async def test_get_handler_linear(self, fetcher):
         """Returns LinearHandler for LINEAR platform."""
         from spec.integrations.fetchers.handlers import LinearHandler
 
-        handler = fetcher._get_platform_handler(Platform.LINEAR)
+        handler = await fetcher._get_platform_handler(Platform.LINEAR)
         assert isinstance(handler, LinearHandler)
 
-    def test_get_handler_github(self, fetcher):
+    async def test_get_handler_github(self, fetcher):
         """Returns GitHubHandler for GITHUB platform."""
         from spec.integrations.fetchers.handlers import GitHubHandler
 
-        handler = fetcher._get_platform_handler(Platform.GITHUB)
+        handler = await fetcher._get_platform_handler(Platform.GITHUB)
         assert isinstance(handler, GitHubHandler)
 
-    def test_get_handler_azure_devops(self, fetcher):
+    async def test_get_handler_azure_devops(self, fetcher):
         """Returns AzureDevOpsHandler for AZURE_DEVOPS platform."""
         from spec.integrations.fetchers.handlers import AzureDevOpsHandler
 
-        handler = fetcher._get_platform_handler(Platform.AZURE_DEVOPS)
+        handler = await fetcher._get_platform_handler(Platform.AZURE_DEVOPS)
         assert isinstance(handler, AzureDevOpsHandler)
 
-    def test_get_handler_trello(self, fetcher):
+    async def test_get_handler_trello(self, fetcher):
         """Returns TrelloHandler for TRELLO platform."""
         from spec.integrations.fetchers.handlers import TrelloHandler
 
-        handler = fetcher._get_platform_handler(Platform.TRELLO)
+        handler = await fetcher._get_platform_handler(Platform.TRELLO)
         assert isinstance(handler, TrelloHandler)
 
-    def test_get_handler_monday(self, fetcher):
+    async def test_get_handler_monday(self, fetcher):
         """Returns MondayHandler for MONDAY platform."""
         from spec.integrations.fetchers.handlers import MondayHandler
 
-        handler = fetcher._get_platform_handler(Platform.MONDAY)
+        handler = await fetcher._get_platform_handler(Platform.MONDAY)
         assert isinstance(handler, MondayHandler)
 
-    def test_handlers_are_cached(self, fetcher):
+    async def test_handlers_are_cached(self, fetcher):
         """Handlers are lazily created and cached."""
-        handler1 = fetcher._get_platform_handler(Platform.JIRA)
-        handler2 = fetcher._get_platform_handler(Platform.JIRA)
+        handler1 = await fetcher._get_platform_handler(Platform.JIRA)
+        handler2 = await fetcher._get_platform_handler(Platform.JIRA)
 
         assert handler1 is handler2
 

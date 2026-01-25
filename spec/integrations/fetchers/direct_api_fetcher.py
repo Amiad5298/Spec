@@ -24,6 +24,7 @@ Testability:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import random
 import weakref
@@ -34,11 +35,12 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from spec.config.fetch_config import FetchPerformanceConfig
+from spec.config.fetch_config import MAX_RETRY_DELAY_SECONDS, FetchPerformanceConfig
 from spec.integrations.fetchers.base import TicketFetcher
 from spec.integrations.fetchers.exceptions import (
     AgentFetchError,
     AgentIntegrationError,
+    AgentResponseParseError,
     CredentialValidationError,
     PlatformApiError,
     PlatformNotFoundError,
@@ -59,6 +61,10 @@ HTTP_TOO_MANY_REQUESTS = 429
 # Maximum length for error response body in exception messages
 # Prevents PII leakage and huge HTML payloads in logs
 MAX_ERROR_BODY_LENGTH = 200
+
+# Maximum length for debug log messages (sanitization)
+# Applied to all DEBUG-level logs to prevent PII leakage even in debug mode
+MAX_DEBUG_LOG_LENGTH = 1000
 
 # Type alias for async sleep functions (for dependency injection in tests)
 AsyncSleeper = Callable[[float], Awaitable[None]]
@@ -153,6 +159,10 @@ class DirectAPIFetcher(TicketFetcher):
         # Lock for thread-safe client initialization
         self._client_lock = asyncio.Lock()
 
+        # Lock for thread-safe handler creation (concurrency safety)
+        # Prevents race conditions when multiple concurrent calls try to create the same handler
+        self._handler_lock = asyncio.Lock()
+
         # Get performance config for defaults
         if config_manager:
             self._performance = config_manager.get_fetch_performance_config()
@@ -183,20 +193,45 @@ class DirectAPIFetcher(TicketFetcher):
             Uses weakref.finalize to detect when the fetcher is garbage collected
             without close() being called. This helps identify resource leaks during
             development without breaking production code.
+
+        Memory Leak Fix (Critical):
+            The finalizer callback MUST NOT capture `self` directly, as this would
+            create a strong reference that prevents garbage collection. Instead, we:
+            1. Capture `id(self)` for the warning message (immutable, no reference)
+            2. Use a mutable list `closed_flag` to track closure state (shared with close())
+
+            When close() is called, it sets closed_flag[0] = True. The finalizer
+            callback checks this flag without referencing the instance, allowing
+            proper garbage collection while still detecting leaks.
         """
-        # Capture only the data we need for the warning, not self
-        client_ref = id(self)
+        # Capture instance ID for the warning message (does not hold reference to self)
+        instance_id = id(self)
+
+        # Mutable flag to track closure state without referencing self
+        # This list is shared between close() and the finalizer callback
+        # Using a list allows mutation from within the closure
+        closed_flag: list[bool] = [False]
+
+        # Store reference to closed_flag so close() can update it
+        self._closed_flag = closed_flag
 
         def _warn_on_gc() -> None:
-            if not self._closed:
+            """Callback invoked when the object is garbage collected.
+
+            This callback does NOT reference self, avoiding the reference cycle.
+            It only reads the mutable closed_flag to determine if close() was called.
+            """
+            if not closed_flag[0]:
                 logger.warning(
                     "DirectAPIFetcher (id=%s) was garbage collected without close() being called. "
                     "This may indicate a resource leak. Use 'async with' context manager "
                     "or call close() explicitly.",
-                    client_ref,
+                    instance_id,
                 )
 
-        # Note: weakref.finalize holds a weak reference to self
+        # weakref.finalize registers _warn_on_gc to be called when self is about to be
+        # garbage collected. Since _warn_on_gc doesn't capture self, the finalizer
+        # won't prevent garbage collection.
         weakref.finalize(self, _warn_on_gc)
 
     async def __aenter__(self) -> DirectAPIFetcher:
@@ -213,8 +248,15 @@ class DirectAPIFetcher(TicketFetcher):
 
         Call this when done using the fetcher to release resources.
         Safe to call multiple times.
+
+        Also updates the mutable closed_flag used by the weakref finalizer
+        to prevent the "garbage collected without close()" warning.
         """
         self._closed = True
+        # Update the mutable flag for the weakref finalizer
+        # This prevents the warning when the object is garbage collected after close()
+        if hasattr(self, "_closed_flag"):
+            self._closed_flag[0] = True
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None
@@ -309,8 +351,8 @@ class DirectAPIFetcher(TicketFetcher):
                 agent_name=self.name,
             )
 
-        # Get platform-specific handler
-        handler = self._get_platform_handler(platform)
+        # Get platform-specific handler (async for concurrency-safe lazy loading)
+        handler = await self._get_platform_handler(platform)
 
         # Determine effective timeout
         effective_timeout = (
@@ -342,11 +384,23 @@ class DirectAPIFetcher(TicketFetcher):
             - Retries on 429 Too Many Requests (respects Retry-After header)
             - Does NOT retry on other client errors (4xx except 429)
 
+        Backoff Cap:
+            Exponential backoff is capped at MAX_RETRY_DELAY_SECONDS (from config)
+            to prevent excessively long waits.
+
         Testability:
             Uses injected sleeper and jitter_generator for deterministic testing.
 
         Security:
-            Truncates error response bodies to prevent PII leakage in logs.
+            Truncates error response bodies to prevent PII leakage in logs,
+            including DEBUG-level logs.
+
+        Exception Hierarchy Compliance:
+            All internal Platform* exceptions are mapped to Agent* exceptions
+            to comply with TicketFetcher contract:
+            - json.JSONDecodeError -> AgentResponseParseError
+            - PlatformApiError -> AgentFetchError
+            - PlatformNotFoundError -> AgentFetchError
         """
         last_error: Exception | None = None
         http_client = await self._get_http_client()
@@ -371,20 +425,32 @@ class DirectAPIFetcher(TicketFetcher):
                     original_error=e,
                 ) from e
             except PlatformNotFoundError as e:
-                # Ticket not found - semantic "not found" error, don't retry
+                # Exception Hierarchy Compliance: PlatformNotFoundError is a semantic
+                # "not found" error. Map to AgentFetchError (not AgentResponseParseError)
+                # because the response was valid, the ticket just doesn't exist.
                 raise AgentFetchError(
-                    message=str(e),
+                    message=f"Ticket not found: {e}",
                     agent_name=self.name,
                     original_error=e,
                 ) from e
             except PlatformApiError as e:
-                # Semantic Exception Mapping: PlatformApiError represents logical API errors
-                # (e.g., GraphQL errors, validation failures). These are fetch failures,
-                # not parse errors - the response was successfully parsed but indicated a
-                # platform-level problem. Map to AgentFetchError for correct semantics.
+                # Exception Hierarchy Compliance: PlatformApiError represents logical
+                # API errors (e.g., GraphQL errors, validation failures). These are
+                # fetch failures - the response was parsed but indicated a platform-level
+                # problem. Map to AgentFetchError to prevent Platform* leakage to caller.
                 raise AgentFetchError(
                     message=f"Platform API error: {e}",
                     agent_name=self.name,
+                    original_error=e,
+                ) from e
+            except json.JSONDecodeError as e:
+                # Exception Hierarchy Compliance: JSONDecodeError indicates the API
+                # returned invalid JSON. Map to AgentResponseParseError as specified
+                # in the TicketFetcher contract.
+                raise AgentResponseParseError(
+                    message="Failed to parse API response",
+                    agent_name=self.name,
+                    raw_response=getattr(e, "doc", None),
                     original_error=e,
                 ) from e
             except httpx.TimeoutException as e:
@@ -419,15 +485,17 @@ class DirectAPIFetcher(TicketFetcher):
                 # ensuring 429 is always retried regardless of code structure.
                 if 400 <= status_code < 500 and status_code != HTTP_TOO_MANY_REQUESTS:
                     # Security: Truncate error body to prevent PII leakage
-                    # Full body is logged at DEBUG level for troubleshooting
                     error_body = e.response.text
                     truncated_body = self._truncate_error_body(error_body)
 
+                    # Security Fix: Sanitize DEBUG logs as well to prevent PII leakage
+                    # even in debug mode. Use MAX_DEBUG_LOG_LENGTH for debug truncation.
+                    sanitized_debug_body = self._sanitize_debug_log(error_body)
                     logger.debug(
-                        "Full API error response for %s/%s: %s",
+                        "API error response for %s/%s: %s",
                         platform,
                         ticket_id,
-                        error_body,
+                        sanitized_debug_body,
                     )
 
                     raise AgentFetchError(
@@ -458,9 +526,12 @@ class DirectAPIFetcher(TicketFetcher):
             # Calculate delay with jitter for next retry
             # Uses injected sleeper and jitter_generator for testability
             if attempt < self._performance.max_retries:
-                delay = self._performance.retry_delay_seconds * (2**attempt)
-                jitter = self._jitter_generator(delay * 0.1)
-                await self._sleeper(delay + jitter)
+                # Backoff Cap Fix: Clamp calculated delay to MAX_RETRY_DELAY_SECONDS
+                # to prevent excessively long waits with exponential backoff
+                calculated_delay = self._performance.retry_delay_seconds * (2**attempt)
+                capped_delay = min(calculated_delay, MAX_RETRY_DELAY_SECONDS)
+                jitter = self._jitter_generator(capped_delay * 0.1)
+                await self._sleeper(capped_delay + jitter)
 
         # All retries exhausted
         raise AgentFetchError(
@@ -489,6 +560,29 @@ class DirectAPIFetcher(TicketFetcher):
             return body
         return body[:MAX_ERROR_BODY_LENGTH] + "... [truncated]"
 
+    def _sanitize_debug_log(self, content: str) -> str:
+        """Sanitize content for DEBUG-level logging.
+
+        Security Fix: Debug Log Sanitization
+            Even DEBUG logs should not contain unbounded PII/tokens. This method
+            applies truncation (MAX_DEBUG_LOG_LENGTH chars) to prevent:
+            1. PII leakage even when debugging is enabled
+            2. Accidental exposure of API tokens in log files
+            3. Log file bloat from large error responses
+
+            Note: MAX_DEBUG_LOG_LENGTH (1000) is larger than MAX_ERROR_BODY_LENGTH (200)
+            to allow more context for debugging while still providing protection.
+
+        Args:
+            content: Raw content to sanitize
+
+        Returns:
+            Sanitized content (max MAX_DEBUG_LOG_LENGTH chars) with indicator if truncated
+        """
+        if len(content) <= MAX_DEBUG_LOG_LENGTH:
+            return content
+        return content[:MAX_DEBUG_LOG_LENGTH] + "... [truncated for security]"
+
     def _get_retry_after_delay(self, response: httpx.Response, attempt: int) -> float:
         """Extract Retry-After delay from response, or calculate default.
 
@@ -497,18 +591,24 @@ class DirectAPIFetcher(TicketFetcher):
             - delay-seconds: Integer number of seconds (e.g., "120")
             - HTTP-date: RFC 1123 date format (e.g., "Sun, 26 Jan 2026 12:00:00 GMT")
 
+        Backoff Cap:
+            All delays (including Retry-After) are capped at MAX_RETRY_DELAY_SECONDS
+            to prevent excessively long waits from malicious or misconfigured servers.
+
         Args:
             response: HTTP response with 429 status
             attempt: Current attempt number (0-based)
 
         Returns:
-            Number of seconds to wait before retrying
+            Number of seconds to wait before retrying (capped at MAX_RETRY_DELAY_SECONDS)
         """
         retry_after = response.headers.get("Retry-After")
         if retry_after:
             # Try parsing as integer (delay-seconds format)
             try:
-                return float(retry_after)
+                parsed_delay = float(retry_after)
+                # Cap the Retry-After delay to prevent excessively long waits
+                return min(parsed_delay, MAX_RETRY_DELAY_SECONDS)
             except ValueError:
                 pass
 
@@ -518,7 +618,8 @@ class DirectAPIFetcher(TicketFetcher):
                 now = datetime.now(UTC)
                 http_date_delay: float = (retry_date - now).total_seconds()
                 # Ensure we don't return a negative delay if the date is in the past
-                return max(0.0, http_date_delay)
+                # Cap the delay to prevent excessively long waits
+                return min(max(0.0, http_date_delay), MAX_RETRY_DELAY_SECONDS)
             except (ValueError, TypeError) as e:
                 # Log warning on parse failure but continue with default backoff
                 logger.warning(
@@ -528,30 +629,48 @@ class DirectAPIFetcher(TicketFetcher):
                     e,
                 )
 
-        # Default: exponential backoff
+        # Default: exponential backoff (also capped)
         default_delay: float = self._performance.retry_delay_seconds * (2**attempt)
-        return default_delay
+        return min(default_delay, MAX_RETRY_DELAY_SECONDS)
 
-    def _get_platform_handler(self, platform: Platform) -> PlatformHandler:
+    async def _get_platform_handler(self, platform: Platform) -> PlatformHandler:
         """Get the handler for a specific platform.
 
         True lazy loading: Only instantiates the requested handler,
         not all handlers at once.
+
+        Concurrency Safety Fix:
+            Uses an asyncio.Lock to prevent race conditions when multiple
+            concurrent calls try to create the same handler. Without the lock,
+            concurrent calls could:
+            1. Both check if handler exists (both see it doesn't)
+            2. Both create new handler instances
+            3. One overwrites the other's handler
+
+            The double-check locking pattern ensures thread-safe lazy initialization
+            while minimizing lock contention for the common case (handler exists).
         """
-        # Check if handler already exists
+        # Fast path: Check if handler already exists (no lock needed)
         if platform in self._handlers:
             return self._handlers[platform]
 
-        # Create handler on demand (true lazy loading)
-        handler = self._create_handler(platform)
-        if handler is None:
-            raise AgentIntegrationError(
-                message=f"No handler for platform: {platform.name}",
-                agent_name=self.name,
-            )
+        # Slow path: Acquire lock for thread-safe handler creation
+        async with self._handler_lock:
+            # Double-check locking pattern: Check again inside the lock
+            # Another coroutine may have created the handler while we waited
+            if platform in self._handlers:
+                return self._handlers[platform]
 
-        self._handlers[platform] = handler
-        return handler
+            # Create handler on demand (true lazy loading)
+            handler = self._create_handler(platform)
+            if handler is None:
+                raise AgentIntegrationError(
+                    message=f"No handler for platform: {platform.name}",
+                    agent_name=self.name,
+                )
+
+            self._handlers[platform] = handler
+            return handler
 
     def _create_handler(self, platform: Platform) -> PlatformHandler | None:
         """Create a handler instance for the given platform.

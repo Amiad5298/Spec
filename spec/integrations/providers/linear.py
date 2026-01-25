@@ -333,7 +333,7 @@ class LinearProvider(IssueTrackerProvider):
             "linear_uuid": raw_data.get("id", ""),
             "team_key": team_key,
             "team_name": team_name,
-            "priority": raw_data.get("priorityLabel", ""),
+            "priority_label": raw_data.get("priorityLabel", ""),
             "priority_value": raw_data.get("priority"),
             "state_name": state_name,
             "state_type": state_type,
@@ -374,11 +374,11 @@ class LinearProvider(IssueTrackerProvider):
         if not isinstance(labels_obj, dict):
             return []
 
-        # Safely get nodes using safe_nested_get pattern for consistency
-        # labels_obj.get("nodes") could be None, a string, etc.
-        nodes = labels_obj.get("nodes")
-        if not isinstance(nodes, list):
-            return []
+        # Use safe_nested_get pattern for consistent defensive access
+        # Note: safe_nested_get returns str, so we get the raw value and validate
+        nodes_raw = labels_obj.get("nodes") if isinstance(labels_obj, dict) else None
+        # Convert via safe_nested_get pattern: if not a list, treat as empty
+        nodes = nodes_raw if isinstance(nodes_raw, list) else []
 
         # Extract name from each node, filtering invalid entries
         labels: list[str] = []

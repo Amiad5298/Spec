@@ -169,7 +169,7 @@ class PlatformMetadata(TypedDict, total=False):
     # Common fields
     raw_response: dict[str, Any]
     project_key: str
-    priority: str
+    priority_label: str
     epic_link: str
     sprint: str
     story_points: float

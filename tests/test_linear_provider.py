@@ -269,7 +269,7 @@ class TestLinearProviderNormalize:
         assert ticket.platform_metadata["linear_uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         assert ticket.platform_metadata["team_key"] == "ENG"
         assert ticket.platform_metadata["team_name"] == "Engineering"
-        assert ticket.platform_metadata["priority"] == "High"
+        assert ticket.platform_metadata["priority_label"] == "High"
         assert ticket.platform_metadata["priority_value"] == 2
         assert ticket.platform_metadata["state_type"] == "started"
         assert ticket.platform_metadata["state_name"] == "In Progress"

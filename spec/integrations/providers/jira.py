@@ -384,7 +384,7 @@ class JiraProvider(IssueTrackerProvider):
         platform_metadata: PlatformMetadata = {
             "raw_response": raw_data,
             "project_key": project_key,
-            "priority": priority_name,
+            "priority_label": priority_name,
             "epic_link": epic_link,
             "story_points": story_points,
             "components": components,

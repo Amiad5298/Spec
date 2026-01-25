@@ -1,14 +1,16 @@
 """Tests for LinearProvider in spec.integrations.providers.linear module.
 
 Tests cover:
-- Provider registration with ProviderRegistry
-- can_handle() for URLs and ticket IDs
-- parse_input() for URL and ID parsing
+- Provider registration with ProviderRegistry (with explicit registration)
+- can_handle() for URLs and ticket IDs (including alphanumeric teams like G2)
+- parse_input() for URL and ID parsing with strict fullmatch
 - normalize() for raw Linear GraphQL data conversion
+- ID validation (ValueError on empty/missing identifier)
 - Defensive field handling for malformed responses
-- Status and type mapping
+- Status mapping (state.name priority over state.type for "In Review")
+- Type mapping (default to FEATURE, not UNKNOWN)
 - get_prompt_template() and other methods
-- fetch_ticket() deprecation warning
+- fetch_ticket() and check_connection() deprecation warnings
 """
 
 import warnings
@@ -28,7 +30,16 @@ from spec.integrations.providers.registry import ProviderRegistry
 
 @pytest.fixture(autouse=True)
 def reset_registry():
-    """Reset registry before and after each test."""
+    """Reset registry before and after each test.
+
+    This fixture ensures proper test isolation by:
+    1. Clearing the registry before each test
+    2. Clearing after each test for cleanup
+
+    NOTE: Tests that need a registered provider should explicitly call
+    ProviderRegistry.register(LinearProvider) to avoid relying on
+    import side-effects which can cause flaky tests.
+    """
     ProviderRegistry.clear()
     yield
     ProviderRegistry.clear()
@@ -80,9 +91,9 @@ class TestLinearProviderProperties:
 
 
 class TestLinearProviderCanHandle:
-    """Test can_handle() method."""
+    """Test can_handle() method with strict fullmatch patterns."""
 
-    # Valid URLs
+    # Valid URLs (including alphanumeric team keys like G2)
     @pytest.mark.parametrize(
         "url",
         [
@@ -92,13 +103,17 @@ class TestLinearProviderCanHandle:
             "https://linear.app/team/issue/ENG-123/implement-feature",
             "https://linear.app/team/issue/ENG-123/some-title-slug",
             "http://linear.app/team/issue/TEST-99",  # http also works
+            # Alphanumeric team keys (G2, A1, etc.)
+            "https://linear.app/org/issue/G2-42",
+            "https://linear.app/org/issue/A1-1",
+            "https://linear.app/org/issue/X99-999/with-slug",
         ],
     )
     def test_can_handle_valid_urls(self, provider, url):
         """can_handle returns True for valid Linear URLs."""
         assert provider.can_handle(url) is True
 
-    # Valid IDs (TEAM-123 format)
+    # Valid IDs (TEAM-123 format with alphanumeric team support)
     @pytest.mark.parametrize(
         "ticket_id",
         [
@@ -108,33 +123,37 @@ class TestLinearProviderCanHandle:
             "XYZ-99999",
             "eng-123",  # lowercase
             "A1-1",  # alphanumeric team
+            "G2-42",  # alphanumeric team (common in Linear)
+            "X99-999",  # multiple digits in team key
         ],
     )
     def test_can_handle_valid_ids(self, provider, ticket_id):
-        """can_handle returns True for valid ticket IDs."""
+        """can_handle returns True for valid ticket IDs including alphanumeric teams."""
         assert provider.can_handle(ticket_id) is True
 
-    # Invalid inputs
+    # Invalid inputs - strict fullmatch rejects partial matches
     @pytest.mark.parametrize(
         "input_str",
         [
             "https://github.com/owner/repo/issues/123",
             "https://company.atlassian.net/browse/PROJ-123",
             "owner/repo#123",
-            "AMI-18-implement-feature",  # Not just ticket ID
+            "AMI-18-implement-feature",  # Not just ticket ID (partial match rejected)
+            "ENG-123abc",  # Trailing characters (fullmatch rejects this)
             "PROJECT",  # No number
             "",  # Empty
             "abc",  # Letters only, no dash
             "123",  # Numeric only (not supported for Linear)
+            "1ABC-123",  # Team key must start with letter
         ],
     )
     def test_can_handle_invalid_inputs(self, provider, input_str):
-        """can_handle returns False for invalid inputs."""
+        """can_handle returns False for invalid inputs (fullmatch rejects partials)."""
         assert provider.can_handle(input_str) is False
 
 
 class TestLinearProviderParseInput:
-    """Test parse_input() method."""
+    """Test parse_input() method with strict fullmatch patterns."""
 
     def test_parse_linear_url(self, provider):
         """parse_input extracts ticket ID from Linear URL."""
@@ -146,9 +165,21 @@ class TestLinearProviderParseInput:
         url = "https://linear.app/team/issue/DESIGN-456/implement-new-feature"
         assert provider.parse_input(url) == "DESIGN-456"
 
+    def test_parse_alphanumeric_team_id(self, provider):
+        """parse_input handles alphanumeric team keys like G2, A1."""
+        assert provider.parse_input("G2-42") == "G2-42"
+        assert provider.parse_input("A1-1") == "A1-1"
+        assert provider.parse_input("X99-999") == "X99-999"
+
+    def test_parse_alphanumeric_team_url(self, provider):
+        """parse_input handles URLs with alphanumeric team keys."""
+        url = "https://linear.app/org/issue/G2-42/some-title"
+        assert provider.parse_input(url) == "G2-42"
+
     def test_parse_lowercase_id(self, provider):
         """parse_input normalizes lowercase IDs to uppercase."""
         assert provider.parse_input("eng-123") == "ENG-123"
+        assert provider.parse_input("g2-42") == "G2-42"
 
     def test_parse_with_whitespace(self, provider):
         """parse_input strips whitespace."""
@@ -164,9 +195,19 @@ class TestLinearProviderParseInput:
         with pytest.raises(ValueError, match="Cannot parse Linear ticket"):
             provider.parse_input("123")
 
+    def test_parse_partial_match_rejected(self, provider):
+        """parse_input uses fullmatch to reject partial matches like ENG-123abc."""
+        with pytest.raises(ValueError, match="Cannot parse Linear ticket"):
+            provider.parse_input("ENG-123abc")
+
+    def test_parse_ticket_with_suffix_rejected(self, provider):
+        """parse_input rejects ticket ID with trailing text."""
+        with pytest.raises(ValueError, match="Cannot parse Linear ticket"):
+            provider.parse_input("AMI-18-implement-feature")
+
 
 class TestLinearProviderNormalize:
-    """Test normalize() method."""
+    """Test normalize() method with ID validation and metadata handling."""
 
     @pytest.fixture
     def sample_linear_response(self):
@@ -222,7 +263,7 @@ class TestLinearProviderNormalize:
         assert ticket.updated_at is not None
 
     def test_normalize_platform_metadata(self, provider, sample_linear_response):
-        """normalize populates platform_metadata correctly."""
+        """normalize populates platform_metadata correctly (without raw_response)."""
         ticket = provider.normalize(sample_linear_response)
 
         assert ticket.platform_metadata["linear_uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
@@ -234,9 +275,11 @@ class TestLinearProviderNormalize:
         assert ticket.platform_metadata["state_name"] == "In Progress"
         assert ticket.platform_metadata["cycle"] == "Sprint 42"
         assert ticket.platform_metadata["parent_id"] is None
+        # raw_response should NOT be in metadata (removed to avoid log/cache bloat)
+        assert "raw_response" not in ticket.platform_metadata
 
     def test_normalize_minimal_response(self, provider):
-        """normalize handles minimal response gracefully."""
+        """normalize handles minimal response - defaults to FEATURE type."""
         minimal = {
             "identifier": "TEST-1",
             "title": "Minimal issue",
@@ -248,7 +291,8 @@ class TestLinearProviderNormalize:
         assert ticket.id == "TEST-1"
         assert ticket.title == "Minimal issue"
         assert ticket.status == TicketStatus.UNKNOWN
-        assert ticket.type == TicketType.UNKNOWN
+        # Default type is FEATURE (not UNKNOWN) per requirements
+        assert ticket.type == TicketType.FEATURE
 
     def test_normalize_with_parent(self, provider, sample_linear_response):
         """normalize extracts parent_id from parent object."""
@@ -256,6 +300,40 @@ class TestLinearProviderNormalize:
         ticket = provider.normalize(sample_linear_response)
 
         assert ticket.platform_metadata["parent_id"] == "ENG-100"
+
+
+class TestIDValidation:
+    """Test ID validation - must raise ValueError for missing/empty identifier."""
+
+    def test_normalize_missing_identifier_raises(self, provider):
+        """normalize raises ValueError when identifier field is missing."""
+        data = {"title": "Test", "state": {}, "labels": {"nodes": []}}
+        with pytest.raises(ValueError, match="identifier.*missing or empty"):
+            provider.normalize(data)
+
+    def test_normalize_empty_identifier_raises(self, provider):
+        """normalize raises ValueError when identifier is empty string."""
+        data = {"identifier": "", "title": "Test", "state": {}, "labels": {"nodes": []}}
+        with pytest.raises(ValueError, match="identifier.*missing or empty"):
+            provider.normalize(data)
+
+    def test_normalize_whitespace_only_identifier_raises(self, provider):
+        """normalize raises ValueError when identifier is whitespace only."""
+        data = {"identifier": "   ", "title": "Test", "state": {}, "labels": {"nodes": []}}
+        with pytest.raises(ValueError, match="identifier.*missing or empty"):
+            provider.normalize(data)
+
+    def test_normalize_none_identifier_raises(self, provider):
+        """normalize raises ValueError when identifier is None."""
+        data = {"identifier": None, "title": "Test", "state": {}, "labels": {"nodes": []}}
+        with pytest.raises(ValueError, match="identifier.*missing or empty"):
+            provider.normalize(data)
+
+    def test_normalize_non_string_identifier_raises(self, provider):
+        """normalize raises ValueError when identifier is not a string."""
+        data = {"identifier": 123, "title": "Test", "state": {}, "labels": {"nodes": []}}
+        with pytest.raises(ValueError, match="identifier.*missing or empty"):
+            provider.normalize(data)
 
 
 class TestDefensiveFieldHandling:
@@ -405,7 +483,7 @@ class TestDefensiveFieldHandling:
 
 
 class TestStatusMapping:
-    """Test status mapping coverage."""
+    """Test status mapping - state.name takes PRIORITY over state.type."""
 
     @pytest.mark.parametrize(
         "state_type,expected",
@@ -418,7 +496,7 @@ class TestStatusMapping:
         ],
     )
     def test_state_type_mapping(self, provider, state_type, expected):
-        """Test mapping by state.type (preferred)."""
+        """Test mapping by state.type when state.name is empty."""
         assert provider._map_status(state_type, "") == expected
 
     @pytest.mark.parametrize(
@@ -429,21 +507,44 @@ class TestStatusMapping:
             ("Todo", TicketStatus.OPEN),
             ("In Progress", TicketStatus.IN_PROGRESS),
             ("In Review", TicketStatus.REVIEW),
+            ("Review", TicketStatus.REVIEW),
+            ("Code Review", TicketStatus.REVIEW),
+            ("Pending Review", TicketStatus.REVIEW),
             ("Done", TicketStatus.DONE),
             ("Canceled", TicketStatus.CLOSED),
         ],
     )
-    def test_state_name_fallback(self, provider, state_name, expected):
-        """Test fallback to state.name when state.type is unavailable."""
+    def test_state_name_mapping(self, provider, state_name, expected):
+        """Test state.name mapping (checked FIRST before state.type)."""
         assert provider._map_status("", state_name) == expected
 
+    def test_state_name_priority_over_type(self, provider):
+        """CRITICAL: state.name 'In Review' should map to REVIEW, not IN_PROGRESS.
+
+        Linear's 'In Review' status often has type='started', but it should
+        map to TicketStatus.REVIEW, not IN_PROGRESS. This verifies that
+        state.name is checked BEFORE state.type.
+        """
+        # "In Review" with type="started" - should map to REVIEW, not IN_PROGRESS
+        assert provider._map_status("started", "In Review") == TicketStatus.REVIEW
+
+        # Verify other review states also take priority
+        assert provider._map_status("started", "Code Review") == TicketStatus.REVIEW
+        assert provider._map_status("started", "Pending Review") == TicketStatus.REVIEW
+
+    def test_state_type_fallback_when_name_unrecognized(self, provider):
+        """When state.name is unrecognized, fall back to state.type."""
+        # Custom state name with valid type should use type mapping
+        assert provider._map_status("started", "Custom Work State") == TicketStatus.IN_PROGRESS
+        assert provider._map_status("completed", "My Done State") == TicketStatus.DONE
+
     def test_unknown_status(self, provider):
-        """Unknown state returns UNKNOWN."""
+        """Unknown state returns UNKNOWN when neither name nor type match."""
         assert provider._map_status("custom", "Custom State") == TicketStatus.UNKNOWN
 
 
 class TestTypeMapping:
-    """Test type mapping coverage."""
+    """Test type mapping - defaults to FEATURE (not UNKNOWN)."""
 
     @pytest.mark.parametrize(
         "labels,expected",
@@ -456,13 +557,25 @@ class TestTypeMapping:
             (["chore"], TicketType.TASK),
             (["tech-debt"], TicketType.MAINTENANCE),
             (["Infrastructure"], TicketType.MAINTENANCE),
-            (["priority", "backend"], TicketType.UNKNOWN),  # No type keywords
-            ([], TicketType.UNKNOWN),
         ],
     )
     def test_type_mapping_from_labels(self, provider, labels, expected):
         """Test type inference from labels."""
         assert provider._map_type(labels) == expected
+
+    def test_default_type_is_feature(self, provider):
+        """CRITICAL: Default type is FEATURE when no type keywords found.
+
+        Per requirements, default ticket type must be TicketType.FEATURE
+        (not UNKNOWN) when no type-specific labels are present.
+        """
+        # Empty labels -> FEATURE
+        assert provider._map_type([]) == TicketType.FEATURE
+
+        # Labels without type keywords -> FEATURE
+        assert provider._map_type(["priority", "backend"]) == TicketType.FEATURE
+        assert provider._map_type(["urgent", "q1"]) == TicketType.FEATURE
+        assert provider._map_type(["team-a", "frontend"]) == TicketType.FEATURE
 
     def test_first_matching_label_wins(self, provider):
         """If multiple labels match, first one in list wins."""
@@ -502,11 +615,20 @@ class TestFetchTicketDeprecation:
                 provider.fetch_ticket("ENG-123")
 
 
-class TestCheckConnection:
-    """Test check_connection() method."""
+class TestCheckConnectionDeprecation:
+    """Test check_connection() deprecation warning."""
+
+    def test_check_connection_raises_deprecation_warning(self, provider):
+        """check_connection() should emit DeprecationWarning."""
+        with pytest.warns(DeprecationWarning, match="deprecated"):
+            success, message = provider.check_connection()
+            assert success is True
 
     def test_check_connection_returns_ready(self, provider):
-        """check_connection returns ready status."""
-        success, message = provider.check_connection()
-        assert success is True
-        assert "ready" in message.lower() or "LinearProvider" in message
+        """check_connection returns ready status (with deprecation warning)."""
+        # Suppress the warning to test the return value
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            success, message = provider.check_connection()
+            assert success is True
+            assert "ready" in message.lower() or "LinearProvider" in message

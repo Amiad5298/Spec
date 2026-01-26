@@ -584,6 +584,7 @@ class TestGenericTicketSafeBranchNameEdgeCases:
     def test_output_contains_only_safe_characters(self):
         """Branch name contains only [a-z0-9/-] characters."""
         import re
+
         ticket = GenericTicket(
             id="PROJ@123",
             platform=Platform.JIRA,
@@ -626,6 +627,7 @@ class TestGenericTicketSafeBranchNameEdgeCases:
         branch = ticket.safe_branch_name
         # Unicode should be replaced, result should be safe
         import re
+
         assert re.match(r"^[a-z0-9]+/[a-z0-9-]+$", branch), f"Invalid branch: {branch}"
 
     def test_complex_github_style_id(self):
@@ -703,16 +705,21 @@ class TestIssueTrackerProviderABC:
 
     def test_requires_platform_property(self):
         """Subclass must implement platform property."""
+
         class IncompleteProv(IssueTrackerProvider):
             @property
             def name(self):
                 return "Test"
+
             def can_handle(self, input_str):
                 return False
+
             def parse_input(self, input_str):
                 return None
+
             def fetch_ticket(self, ticket_id):
                 return None
+
             def check_connection(self):
                 return True
 
@@ -721,16 +728,21 @@ class TestIssueTrackerProviderABC:
 
     def test_requires_name_property(self):
         """Subclass must implement name property."""
+
         class IncompleteProv(IssueTrackerProvider):
             @property
             def platform(self):
                 return Platform.JIRA
+
             def can_handle(self, input_str):
                 return False
+
             def parse_input(self, input_str):
                 return None
+
             def fetch_ticket(self, ticket_id):
                 return None
+
             def check_connection(self):
                 return True
 
@@ -739,6 +751,7 @@ class TestIssueTrackerProviderABC:
 
     def test_complete_implementation_works(self):
         """Complete implementation can be instantiated."""
+
         class CompleteProv(IssueTrackerProvider):
             @property
             def platform(self):
@@ -765,6 +778,14 @@ class TestIssueTrackerProviderABC:
             def check_connection(self):
                 return (True, "Connected")
 
+            def normalize(self, raw_data, ticket_id=None):
+                return GenericTicket(
+                    id=raw_data.get("key", ticket_id or "TEST-1"),
+                    platform=Platform.JIRA,
+                    url=f"https://jira.example.com/{raw_data.get('key', ticket_id)}",
+                    title=raw_data.get("summary", "Test ticket"),
+                )
+
         provider = CompleteProv()
         assert provider.platform == Platform.JIRA
         assert provider.name == "Test Provider"
@@ -778,6 +799,7 @@ class TestIssueTrackerProviderGenerateBranchSummary:
     @pytest.fixture
     def provider(self):
         """Create a test provider with default implementation."""
+
         class TestProvider(IssueTrackerProvider):
             @property
             def platform(self):
@@ -803,6 +825,14 @@ class TestIssueTrackerProviderGenerateBranchSummary:
 
             def check_connection(self):
                 return (True, "Connected")
+
+            def normalize(self, raw_data, ticket_id=None):
+                return GenericTicket(
+                    id=raw_data.get("key", ticket_id or "TEST-1"),
+                    platform=Platform.JIRA,
+                    url=f"https://jira.example.com/{raw_data.get('key', ticket_id)}",
+                    title=raw_data.get("summary", "Test"),
+                )
 
         return TestProvider()
 
@@ -879,6 +909,7 @@ class TestIssueTrackerProviderMethodSignatures:
     def test_can_handle_takes_string(self, provider_class):
         """can_handle method takes a string parameter."""
         import inspect
+
         sig = inspect.signature(provider_class.can_handle)
         params = list(sig.parameters.keys())
         assert "input_str" in params
@@ -886,6 +917,7 @@ class TestIssueTrackerProviderMethodSignatures:
     def test_parse_input_takes_string(self, provider_class):
         """parse_input method takes a string parameter."""
         import inspect
+
         sig = inspect.signature(provider_class.parse_input)
         params = list(sig.parameters.keys())
         assert "input_str" in params
@@ -893,6 +925,7 @@ class TestIssueTrackerProviderMethodSignatures:
     def test_fetch_ticket_takes_ticket_id(self, provider_class):
         """fetch_ticket method takes a ticket_id parameter."""
         import inspect
+
         sig = inspect.signature(provider_class.fetch_ticket)
         params = list(sig.parameters.keys())
         assert "ticket_id" in params
@@ -908,6 +941,7 @@ class TestProviderPlatformAttribute:
 
     def test_provider_with_platform_attribute(self):
         """Provider class can declare PLATFORM class attribute."""
+
         class MockProvider(IssueTrackerProvider):
             PLATFORM = Platform.JIRA  # Class attribute
 
@@ -932,11 +966,12 @@ class TestProviderPlatformAttribute:
                 return (True, "OK")
 
         # PLATFORM should be accessible on the class without instantiation
-        assert hasattr(MockProvider, 'PLATFORM')
+        assert hasattr(MockProvider, "PLATFORM")
         assert MockProvider.PLATFORM == Platform.JIRA
 
     def test_platform_attribute_accessible_without_instantiation(self):
         """PLATFORM attribute is accessible without calling __init__."""
+
         class MockProvider(IssueTrackerProvider):
             PLATFORM = Platform.GITHUB
 
@@ -1010,7 +1045,7 @@ class TestProviderPlatformAttribute:
 
         # Simulating what ProviderRegistry.register() should do:
         # Access PLATFORM without instantiation
-        if hasattr(RegistryCompatibleProvider, 'PLATFORM'):
+        if hasattr(RegistryCompatibleProvider, "PLATFORM"):
             platform = RegistryCompatibleProvider.PLATFORM
         else:
             raise TypeError("Provider must declare PLATFORM class attribute")
@@ -1302,4 +1337,3 @@ class TestGenericTicketSafeBranchNameNoMalformed:
         assert branch.startswith("chore/test-123")
         # Should not have trailing hyphen
         assert not branch.endswith("-")
-

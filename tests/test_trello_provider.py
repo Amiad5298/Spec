@@ -14,7 +14,7 @@ Tests cover:
 """
 
 import warnings
-from datetime import timezone
+from datetime import UTC
 
 import pytest
 
@@ -335,7 +335,7 @@ class TestCreatedAtExtraction:
         created_at = provider._get_created_at("5f9e8d7c6b5a4321")
         assert created_at.year == 2020
         assert created_at.month == 11
-        assert created_at.tzinfo == timezone.utc
+        assert created_at.tzinfo == UTC
 
     def test_get_created_at_invalid_objectid(self, provider):
         """Returns None for invalid ObjectId (too short)."""

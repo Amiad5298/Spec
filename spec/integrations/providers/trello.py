@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 import warnings
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any
 
@@ -233,7 +233,7 @@ class TrelloProvider(IssueTrackerProvider):
         try:
             timestamp_hex = card_id[:8]
             timestamp = int(timestamp_hex, 16)
-            return datetime.fromtimestamp(timestamp, tz=UTC)
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
         except (ValueError, IndexError, OSError):
             return None
 

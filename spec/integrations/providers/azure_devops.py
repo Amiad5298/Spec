@@ -213,10 +213,8 @@ class AzureDevOpsProvider(IssueTrackerProvider):
             raw_data: Raw API response from Azure DevOps REST API.
             ticket_id: Optional ticket ID from parse_input (unused, for LSP compliance).
         """
-        # Safely extract fields dict
-        fields = raw_data.get("fields") if isinstance(raw_data, dict) else None
-        if not isinstance(fields, dict):
-            fields = {}
+        # Safely extract fields dict using _safe_get_dict
+        fields = self._safe_get_dict(raw_data, "fields")
 
         # Extract work item ID using safe_nested_get
         work_item_id = self.safe_nested_get(raw_data, "id", "")
@@ -240,8 +238,8 @@ class AzureDevOpsProvider(IssueTrackerProvider):
         state = self.safe_nested_get(fields, "System.State", "")
         work_item_type = self.safe_nested_get(fields, "System.WorkItemType", "")
 
-        # Assignee - safely extract nested object
-        assigned_to = fields.get("System.AssignedTo") if isinstance(fields, dict) else None
+        # Assignee - safely extract nested object using _safe_get_dict
+        assigned_to = self._safe_get_dict(fields, "System.AssignedTo")
         assignee = self.safe_nested_get(assigned_to, "displayName", "") or None
 
         # Tags (semicolon-separated)
@@ -260,12 +258,12 @@ class AzureDevOpsProvider(IssueTrackerProvider):
             "area_path": self.safe_nested_get(fields, "System.AreaPath", ""),
             "iteration_path": self.safe_nested_get(fields, "System.IterationPath", ""),
             "assigned_to_email": self.safe_nested_get(assigned_to, "uniqueName", ""),
-            "revision": raw_data.get("rev") if isinstance(raw_data, dict) else None,
+            "revision": raw_data.get("rev"),
         }
 
         # Construct browse URL - prefer _links.html.href (human-friendly browse URL)
-        links = raw_data.get("_links") if isinstance(raw_data, dict) else None
-        html_link = links.get("html") if isinstance(links, dict) else None
+        links = self._safe_get_dict(raw_data, "_links")
+        html_link = self._safe_get_dict(links, "html")
         browse_url = self.safe_nested_get(html_link, "href", "")
 
         # Fallback logic: only use raw_url if it doesn't look like an API endpoint
@@ -295,6 +293,28 @@ class AzureDevOpsProvider(IssueTrackerProvider):
             branch_summary=sanitize_title_for_branch(title),
             platform_metadata=platform_metadata,
         )
+
+    @staticmethod
+    def _safe_get_dict(obj: Any, key: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Safely get a dict value from an object that might not be a dict.
+
+        Args:
+            obj: The object to get the key from (may be None, dict, or other type)
+            key: The key to retrieve
+            default: Default value if key not found or result is not a dict
+
+        Returns:
+            The dict value at key if obj is a dict and key exists and value is dict,
+            otherwise the default value (empty dict if not provided).
+        """
+        if default is None:
+            default = {}
+        if not isinstance(obj, dict):
+            return default
+        value = obj.get(key)
+        if not isinstance(value, dict):
+            return default
+        return value
 
     def _map_status(self, state: str) -> TicketStatus:
         """Map Azure DevOps state to TicketStatus enum."""

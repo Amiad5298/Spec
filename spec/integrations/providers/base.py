@@ -618,6 +618,27 @@ class IssueTrackerProvider(ABC):
         """
         pass
 
+    @abstractmethod
+    def normalize(self, raw_data: dict[str, Any], ticket_id: str | None = None) -> GenericTicket:
+        """Convert raw platform API data to GenericTicket.
+
+        This is the normalization layer that transforms platform-specific
+        API responses into the unified GenericTicket format.
+
+        Args:
+            raw_data: Raw API response from the platform.
+            ticket_id: Optional ticket ID from parse_input(). Some providers
+                       (e.g., MondayProvider) need this to extract context
+                       like account slug for URL construction.
+
+        Returns:
+            Populated GenericTicket with normalized fields.
+
+        Raises:
+            ValueError: If required fields are missing from raw_data.
+        """
+        pass
+
     def generate_branch_summary(self, ticket: GenericTicket) -> str:
         """Generate a git-friendly branch summary.
 

@@ -118,11 +118,15 @@ class TrelloProvider(IssueTrackerProvider):
             return input_str
         raise ValueError(f"Cannot parse Trello card from input: {input_str}")
 
-    def normalize(self, raw_data: dict[str, Any]) -> GenericTicket:
+    def normalize(self, raw_data: dict[str, Any], ticket_id: str | None = None) -> GenericTicket:
         """Convert raw Trello API data to GenericTicket.
 
         Uses safe_nested_get for all nested field access to handle
         malformed API responses gracefully.
+
+        Args:
+            raw_data: Raw API response from Trello REST API.
+            ticket_id: Optional ticket ID from parse_input (unused, for LSP compliance).
         """
         # Use safe_nested_get for all direct field access
         short_link = self.safe_nested_get(raw_data, "shortLink", "")

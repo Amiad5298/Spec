@@ -203,11 +203,15 @@ class AzureDevOpsProvider(IssueTrackerProvider):
 
         raise ValueError(f"Cannot parse Azure DevOps work item from input: {input_str}")
 
-    def normalize(self, raw_data: dict[str, Any]) -> GenericTicket:
+    def normalize(self, raw_data: dict[str, Any], ticket_id: str | None = None) -> GenericTicket:
         """Convert raw Azure DevOps API data to GenericTicket.
 
         Uses safe_nested_get for all nested field access to handle
         malformed API responses gracefully.
+
+        Args:
+            raw_data: Raw API response from Azure DevOps REST API.
+            ticket_id: Optional ticket ID from parse_input (unused, for LSP compliance).
         """
         # Safely extract fields dict
         fields = raw_data.get("fields") if isinstance(raw_data, dict) else None

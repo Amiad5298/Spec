@@ -338,17 +338,15 @@ class TestCreatedAtExtraction:
         assert created_at.tzinfo == UTC
 
     def test_get_created_at_invalid_objectid(self, provider):
-        """Returns current time for invalid ObjectId."""
-        # Too short ID should return current time
+        """Returns None for invalid ObjectId (too short)."""
+        # Too short ID should return None (not misleading datetime.now())
         created_at = provider._get_created_at("abc")
-        assert created_at is not None
-        assert created_at.tzinfo == UTC
+        assert created_at is None
 
     def test_get_created_at_non_hex_objectid(self, provider):
-        """Returns current time for non-hex ObjectId prefix."""
+        """Returns None for non-hex ObjectId prefix."""
         created_at = provider._get_created_at("xxxxxxxx")
-        assert created_at is not None
-        assert created_at.tzinfo == UTC
+        assert created_at is None
 
 
 class TestClosedCardHandling:

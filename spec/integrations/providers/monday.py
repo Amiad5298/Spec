@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import re
 import warnings
-from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
@@ -66,17 +65,24 @@ class MondayProvider(IssueTrackerProvider):
     Data fetching is delegated to TicketFetcher implementations.
 
     Supports:
-    - monday.com board/pulse URLs
+    - monday.com board/pulse URLs (with or without subdomain)
     - monday.com board/views/pulse URLs
+    - view.monday.com URLs
 
     Class Attributes:
         PLATFORM: Platform.MONDAY for registry registration
+
+    Note:
+        This provider is registered as a Singleton. To avoid race conditions,
+        no request-specific state is stored as instance attributes. The account
+        slug is embedded in the composite ticket ID returned by parse_input.
     """
 
     PLATFORM = Platform.MONDAY
 
+    # Updated regex to handle optional subdomain (including view.monday.com and bare monday.com)
     _URL_PATTERN = re.compile(
-        r"https?://(?P<slug>[^.]+)\.monday\.com/boards/(?P<board>\d+)(?:/views/\d+)?/pulses/(?P<item>\d+)",
+        r"https?://(?:(?P<slug>[^.]+)\.)?monday\.com/boards/(?P<board>\d+)(?:/views/\d+)?/pulses/(?P<item>\d+)",
         re.IGNORECASE,
     )
 
@@ -87,7 +93,7 @@ class MondayProvider(IssueTrackerProvider):
             user_interaction: Optional user interaction interface for DI.
         """
         self._user_interaction = user_interaction or CLIUserInteraction()
-        self._account_slug: str | None = None
+        # Note: No request-specific state stored here (Singleton-safe)
 
     @property
     def platform(self) -> Platform:
@@ -104,51 +110,86 @@ class MondayProvider(IssueTrackerProvider):
         return bool(self._URL_PATTERN.match(input_str.strip()))
 
     def parse_input(self, input_str: str) -> str:
-        """Parse Monday.com item URL."""
+        """Parse Monday.com item URL.
+
+        Returns a composite ID in the format: slug:board_id:item_id
+        The slug may be empty for URLs like view.monday.com or bare monday.com.
+
+        This design avoids storing request-specific state in the Singleton provider.
+        """
         match = self._URL_PATTERN.match(input_str.strip())
         if match:
-            self._account_slug = match.group("slug")
-            return f"{match.group('board')}:{match.group('item')}"
+            slug = match.group("slug") or ""
+            board_id = match.group("board")
+            item_id = match.group("item")
+            # Return composite ID: slug:board_id:item_id
+            return f"{slug}:{board_id}:{item_id}"
         raise ValueError(f"Cannot parse Monday.com item from input: {input_str}")
 
-    def normalize(self, raw_data: dict[str, Any]) -> GenericTicket:
-        """Convert raw Monday.com API data to GenericTicket."""
-        item_id = str(raw_data.get("id", ""))
+    def normalize(self, raw_data: dict[str, Any], ticket_id: str | None = None) -> GenericTicket:
+        """Convert raw Monday.com API data to GenericTicket.
+
+        Args:
+            raw_data: Raw API response from Monday.com GraphQL API.
+            ticket_id: Optional composite ID from parse_input (slug:board_id:item_id).
+                       Used to extract account slug for URL construction.
+        """
+        item_id = str(self.safe_nested_get(raw_data, "id", ""))
         if not item_id:
             raise ValueError("Cannot normalize Monday.com item: 'id' field missing")
 
-        board = raw_data.get("board", {})
+        # Extract board info using safe_nested_get
+        board = raw_data.get("board") if isinstance(raw_data, dict) else None
         board_id = self.safe_nested_get(board, "id", "")
-        ticket_id = f"{board_id}:{item_id}" if board_id else item_id
+        board_name = self.safe_nested_get(board, "name", "")
 
-        columns = raw_data.get("column_values", [])
+        # Parse account slug from composite ticket_id if provided
+        account_slug: str | None = None
+        if ticket_id:
+            parts = ticket_id.split(":")
+            if len(parts) >= 3 and parts[0]:
+                account_slug = parts[0]
+
+        # Build normalized ticket ID (board_id:item_id)
+        normalized_id = f"{board_id}:{item_id}" if board_id else item_id
+
+        columns = raw_data.get("column_values", []) if isinstance(raw_data, dict) else []
         status_label = self._find_column_text(columns, "status")
         assignee = self._find_column_text(columns, "people")
         tags_text = self._find_column_text(columns, "tag")
         labels = [t.strip() for t in tags_text.split(",") if t.strip()] if tags_text else []
 
         description = self._extract_description(raw_data, columns)
-        created_at = self._parse_timestamp(raw_data.get("created_at"))
-        updated_at = self._parse_timestamp(raw_data.get("updated_at"))
+        created_at = self.parse_timestamp(self.safe_nested_get(raw_data, "created_at", ""))
+        updated_at = self.parse_timestamp(self.safe_nested_get(raw_data, "updated_at", ""))
 
-        url = f"https://monday.com/boards/{board_id}/pulses/{item_id}"
-        if self._account_slug:
-            url = f"https://{self._account_slug}.monday.com/boards/{board_id}/pulses/{item_id}"
+        # Construct URL - use subdomain if available
+        if account_slug:
+            url = f"https://{account_slug}.monday.com/boards/{board_id}/pulses/{item_id}"
+        else:
+            url = f"https://monday.com/boards/{board_id}/pulses/{item_id}"
+
+        # Extract group and creator info using safe_nested_get
+        group = raw_data.get("group") if isinstance(raw_data, dict) else None
+        creator = raw_data.get("creator") if isinstance(raw_data, dict) else None
 
         platform_metadata: PlatformMetadata = {
             "board_id": board_id,
-            "board_name": self.safe_nested_get(board, "name", ""),
-            "group_title": self.safe_nested_get(raw_data.get("group", {}), "title", ""),
-            "creator_name": self.safe_nested_get(raw_data.get("creator", {}), "name", ""),
+            "board_name": board_name,
+            "group_title": self.safe_nested_get(group, "title", ""),
+            "creator_name": self.safe_nested_get(creator, "name", ""),
             "status_label": status_label,
-            "account_slug": self._account_slug,
+            "account_slug": account_slug,
         }
 
+        # Extract and sanitize title
+        title = self.safe_nested_get(raw_data, "name", "")
+
         return GenericTicket(
-            id=ticket_id,
+            id=normalized_id,
             platform=Platform.MONDAY,
             url=url,
-            title=raw_data.get("name", ""),
+            title=title,
             description=description,
             status=self._map_status(status_label),
             type=self._map_type(labels),
@@ -156,7 +197,7 @@ class MondayProvider(IssueTrackerProvider):
             labels=labels,
             created_at=created_at,
             updated_at=updated_at,
-            branch_summary=sanitize_title_for_branch(raw_data.get("name", "")),
+            branch_summary=sanitize_title_for_branch(title),
             platform_metadata=platform_metadata,
         )
 
@@ -187,30 +228,28 @@ class MondayProvider(IssueTrackerProvider):
         return ""
 
     def _map_status(self, label: str) -> TicketStatus:
-        """Map Monday.com status label to TicketStatus enum."""
+        """Map Monday.com status label to TicketStatus enum.
+
+        Uses case-insensitive substring matching to handle variations
+        like "Working on it" matching "working" keyword.
+        """
         label_lower = label.lower().strip()
         for status, keywords in STATUS_KEYWORDS.items():
-            if label_lower in keywords:
+            if any(kw in label_lower for kw in keywords):
                 return status
         return TicketStatus.UNKNOWN
 
     def _map_type(self, labels: list[str]) -> TicketType:
-        """Map Monday.com labels to TicketType enum."""
+        """Map Monday.com labels to TicketType enum.
+
+        Uses case-insensitive substring matching.
+        """
         for label in labels:
             label_lower = label.lower().strip()
             for ticket_type, keywords in TYPE_KEYWORDS.items():
                 if any(kw in label_lower for kw in keywords):
                     return ticket_type
         return TicketType.UNKNOWN
-
-    def _parse_timestamp(self, timestamp_str: str | None) -> datetime | None:
-        """Parse ISO timestamp from Monday.com API."""
-        if not timestamp_str:
-            return None
-        try:
-            return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
 
     def get_prompt_template(self) -> str:
         """Return empty string - agent-mediated fetch not supported.

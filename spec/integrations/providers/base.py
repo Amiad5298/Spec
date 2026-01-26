@@ -515,6 +515,28 @@ class IssueTrackerProvider(ABC):
             return str(value) if value is not None else default
         return default
 
+    @staticmethod
+    def parse_timestamp(timestamp_str: str | None) -> datetime | None:
+        """Parse ISO timestamp from platform API response.
+
+        This is a shared utility method for parsing ISO 8601 timestamps
+        commonly returned by issue tracker APIs. Handles both 'Z' suffix
+        and explicit timezone offsets.
+
+        Args:
+            timestamp_str: ISO 8601 timestamp string (e.g., "2024-01-15T10:30:00Z")
+
+        Returns:
+            Parsed datetime object with timezone info, or None if parsing fails
+            or input is None/empty.
+        """
+        if not timestamp_str:
+            return None
+        try:
+            return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
     @property
     @abstractmethod
     def platform(self) -> Platform:

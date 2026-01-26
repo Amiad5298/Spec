@@ -14,7 +14,6 @@ from __future__ import annotations
 import os
 import re
 import warnings
-from datetime import datetime
 from html.parser import HTMLParser
 from io import StringIO
 from types import MappingProxyType
@@ -205,64 +204,77 @@ class AzureDevOpsProvider(IssueTrackerProvider):
         raise ValueError(f"Cannot parse Azure DevOps work item from input: {input_str}")
 
     def normalize(self, raw_data: dict[str, Any]) -> GenericTicket:
-        """Convert raw Azure DevOps API data to GenericTicket."""
-        fields = raw_data.get("fields", {})
+        """Convert raw Azure DevOps API data to GenericTicket.
 
-        # Extract work item ID
-        work_item_id = str(raw_data.get("id", ""))
+        Uses safe_nested_get for all nested field access to handle
+        malformed API responses gracefully.
+        """
+        # Safely extract fields dict
+        fields = raw_data.get("fields") if isinstance(raw_data, dict) else None
+        if not isinstance(fields, dict):
+            fields = {}
+
+        # Extract work item ID using safe_nested_get
+        work_item_id = self.safe_nested_get(raw_data, "id", "")
         if not work_item_id:
             raise ValueError("Cannot normalize Azure DevOps work item: 'id' field missing")
 
         # Extract org/project from URL if available
-        url = raw_data.get("url", "")
+        raw_url = self.safe_nested_get(raw_data, "url", "")
         org, project = "", ""
-        if url:
-            match = self._DEV_AZURE_PATTERN.match(url)
+        if raw_url:
+            match = self._DEV_AZURE_PATTERN.match(raw_url)
             if match:
                 org, project = match.group("org"), match.group("project")
 
         ticket_id = f"{org}/{project}#{work_item_id}" if org and project else work_item_id
 
-        # Extract fields with defensive handling
-        title = fields.get("System.Title", "")
-        description_html = fields.get("System.Description", "") or ""
+        # Extract fields with defensive handling using safe_nested_get pattern
+        title = self.safe_nested_get(fields, "System.Title", "")
+        description_html = self.safe_nested_get(fields, "System.Description", "")
         description = strip_html(description_html)
-        state = fields.get("System.State", "")
-        work_item_type = fields.get("System.WorkItemType", "")
+        state = self.safe_nested_get(fields, "System.State", "")
+        work_item_type = self.safe_nested_get(fields, "System.WorkItemType", "")
 
-        # Assignee
-        assigned_to = fields.get("System.AssignedTo", {})
+        # Assignee - safely extract nested object
+        assigned_to = fields.get("System.AssignedTo") if isinstance(fields, dict) else None
         assignee = self.safe_nested_get(assigned_to, "displayName", "") or None
 
         # Tags (semicolon-separated)
-        tags_str = fields.get("System.Tags", "") or ""
+        tags_str = self.safe_nested_get(fields, "System.Tags", "")
         labels = [t.strip() for t in tags_str.split(";") if t.strip()]
 
-        # Timestamps
-        created_at = self._parse_timestamp(fields.get("System.CreatedDate"))
-        updated_at = self._parse_timestamp(fields.get("System.ChangedDate"))
+        # Timestamps using inherited parse_timestamp
+        created_at = self.parse_timestamp(self.safe_nested_get(fields, "System.CreatedDate", ""))
+        updated_at = self.parse_timestamp(self.safe_nested_get(fields, "System.ChangedDate", ""))
 
         platform_metadata: PlatformMetadata = {
             "organization": org,
             "project": project,
             "work_item_type": work_item_type,
             "state_name": state,
-            "area_path": fields.get("System.AreaPath", ""),
-            "iteration_path": fields.get("System.IterationPath", ""),
+            "area_path": self.safe_nested_get(fields, "System.AreaPath", ""),
+            "iteration_path": self.safe_nested_get(fields, "System.IterationPath", ""),
             "assigned_to_email": self.safe_nested_get(assigned_to, "uniqueName", ""),
-            "revision": raw_data.get("rev"),
+            "revision": raw_data.get("rev") if isinstance(raw_data, dict) else None,
         }
 
         # Construct browse URL - prefer _links.html.href (human-friendly browse URL)
-        links = raw_data.get("_links", {})
-        html_link = links.get("html", {}) if isinstance(links, dict) else {}
+        links = raw_data.get("_links") if isinstance(raw_data, dict) else None
+        html_link = links.get("html") if isinstance(links, dict) else None
         browse_url = self.safe_nested_get(html_link, "href", "")
-        # Fallback to raw url field (may be API URL)
+
+        # Fallback logic: only use raw_url if it doesn't look like an API endpoint
         if not browse_url:
-            browse_url = url
-        # Final fallback: construct from org/project
-        if not browse_url and org and project:
-            browse_url = f"https://dev.azure.com/{org}/{project}/_workitems/edit/{work_item_id}"
+            # Check if raw_url looks like an API endpoint (contains _apis)
+            if raw_url and "_apis" not in raw_url:
+                browse_url = raw_url
+            elif org and project:
+                # Construct browser URL from org/project if available
+                browse_url = f"https://dev.azure.com/{org}/{project}/_workitems/edit/{work_item_id}"
+            else:
+                # No valid URL available
+                browse_url = ""
 
         return GenericTicket(
             id=ticket_id,
@@ -287,15 +299,6 @@ class AzureDevOpsProvider(IssueTrackerProvider):
     def _map_type(self, work_item_type: str) -> TicketType:
         """Map Azure DevOps work item type to TicketType enum."""
         return TYPE_MAPPING.get(work_item_type.lower(), TicketType.UNKNOWN)
-
-    def _parse_timestamp(self, timestamp_str: str | None) -> datetime | None:
-        """Parse ISO timestamp from Azure DevOps API."""
-        if not timestamp_str:
-            return None
-        try:
-            return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return None
 
     def get_prompt_template(self) -> str:
         """Return empty string - agent-mediated fetch not supported.

@@ -119,74 +119,99 @@ class TrelloProvider(IssueTrackerProvider):
         raise ValueError(f"Cannot parse Trello card from input: {input_str}")
 
     def normalize(self, raw_data: dict[str, Any]) -> GenericTicket:
-        """Convert raw Trello API data to GenericTicket."""
-        short_link = raw_data.get("shortLink", "")
-        card_id = raw_data.get("id", "")
+        """Convert raw Trello API data to GenericTicket.
+
+        Uses safe_nested_get for all nested field access to handle
+        malformed API responses gracefully.
+        """
+        # Use safe_nested_get for all direct field access
+        short_link = self.safe_nested_get(raw_data, "shortLink", "")
+        card_id = self.safe_nested_get(raw_data, "id", "")
         ticket_id = short_link or card_id
         if not ticket_id:
             raise ValueError("Cannot normalize Trello card: 'id' and 'shortLink' missing")
 
-        list_info = raw_data.get("list", {})
+        # Extract list info using safe_nested_get
+        list_info = raw_data.get("list") if isinstance(raw_data, dict) else None
         list_name = self.safe_nested_get(list_info, "name", "")
         status = self._map_list_to_status(list_name)
 
         # Closed cards override list-based status
-        if raw_data.get("closed"):
+        if raw_data.get("closed") if isinstance(raw_data, dict) else False:
             status = TicketStatus.CLOSED
 
         # Defensive handling for members list - may contain non-dict elements
-        members = raw_data.get("members", [])
+        members = raw_data.get("members", []) if isinstance(raw_data, dict) else []
         assignee = None
         if members and isinstance(members, list) and len(members) > 0:
             first_member = members[0]
             assignee = self.safe_nested_get(first_member, "fullName", "") or None
 
-        labels_raw = raw_data.get("labels", [])
+        labels_raw = raw_data.get("labels", []) if isinstance(raw_data, dict) else []
         labels: list[str] = [
             str(lbl.get("name")) for lbl in labels_raw if isinstance(lbl, dict) and lbl.get("name")
         ]
 
-        board = raw_data.get("board", {})
+        # Extract board info using safe_nested_get
+        board = raw_data.get("board") if isinstance(raw_data, dict) else None
         created_at = self._get_created_at(card_id)
-        updated_at = self._parse_timestamp(raw_data.get("dateLastActivity"))
+        updated_at = self.parse_timestamp(self.safe_nested_get(raw_data, "dateLastActivity", ""))
 
+        # Use safe_nested_get for platform metadata fields
         platform_metadata: PlatformMetadata = {
-            "board_id": str(raw_data.get("idBoard") or ""),
+            "board_id": self.safe_nested_get(raw_data, "idBoard", ""),
             "board_name": self.safe_nested_get(board, "name", ""),
-            "list_id": str(raw_data.get("idList") or ""),
+            "list_id": self.safe_nested_get(raw_data, "idList", ""),
             "list_name": list_name,
-            "due_date": raw_data.get("due"),
-            "due_complete": bool(raw_data.get("dueComplete", False)),
-            "is_closed": bool(raw_data.get("closed", False)),
+            "due_date": raw_data.get("due") if isinstance(raw_data, dict) else None,
+            "due_complete": bool(raw_data.get("dueComplete", False))
+            if isinstance(raw_data, dict)
+            else False,
+            "is_closed": bool(raw_data.get("closed", False))
+            if isinstance(raw_data, dict)
+            else False,
             "short_link": short_link,
         }
+
+        # Extract and sanitize title
+        title = self.safe_nested_get(raw_data, "name", "")
+        url = self.safe_nested_get(raw_data, "url", "") or self.safe_nested_get(
+            raw_data, "shortUrl", ""
+        )
 
         return GenericTicket(
             id=ticket_id,
             platform=Platform.TRELLO,
-            url=raw_data.get("url") or raw_data.get("shortUrl", ""),
-            title=raw_data.get("name", ""),
-            description=raw_data.get("desc", ""),
+            url=url,
+            title=title,
+            description=self.safe_nested_get(raw_data, "desc", ""),
             status=status,
             type=self._map_type(labels),
             assignee=assignee,
             labels=labels,
             created_at=created_at,
             updated_at=updated_at,
-            branch_summary=sanitize_title_for_branch(raw_data.get("name", "")),
+            branch_summary=sanitize_title_for_branch(title),
             platform_metadata=platform_metadata,
         )
 
     def _map_list_to_status(self, list_name: str) -> TicketStatus:
-        """Map Trello list name to TicketStatus enum."""
+        """Map Trello list name to TicketStatus enum.
+
+        Uses case-insensitive substring matching to handle variations
+        like "In Progress (Dev)" matching "in progress" keyword.
+        """
         name_lower = list_name.lower().strip()
         for status, keywords in LIST_STATUS_MAPPING.items():
-            if name_lower in keywords:
+            if any(kw in name_lower for kw in keywords):
                 return status
         return TicketStatus.UNKNOWN
 
     def _map_type(self, labels: list[str]) -> TicketType:
-        """Map Trello labels to TicketType enum."""
+        """Map Trello labels to TicketType enum.
+
+        Uses case-insensitive substring matching.
+        """
         for label in labels:
             label_lower = label.lower().strip()
             for ticket_type, keywords in TYPE_KEYWORDS.items():
@@ -194,22 +219,18 @@ class TrelloProvider(IssueTrackerProvider):
                     return ticket_type
         return TicketType.UNKNOWN
 
-    def _get_created_at(self, card_id: str) -> datetime:
-        """Extract creation timestamp from card ID (MongoDB ObjectId)."""
+    def _get_created_at(self, card_id: str) -> datetime | None:
+        """Extract creation timestamp from card ID (MongoDB ObjectId).
+
+        Returns None if parsing fails (instead of misleading datetime.now()).
+        """
+        if not card_id or len(card_id) < 8:
+            return None
         try:
             timestamp_hex = card_id[:8]
             timestamp = int(timestamp_hex, 16)
             return datetime.fromtimestamp(timestamp, tz=UTC)
-        except (ValueError, IndexError):
-            return datetime.now(tz=UTC)
-
-    def _parse_timestamp(self, timestamp_str: str | None) -> datetime | None:
-        """Parse ISO timestamp from Trello API."""
-        if not timestamp_str:
-            return None
-        try:
-            return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
+        except (ValueError, IndexError, OSError):
             return None
 
     def get_prompt_template(self) -> str:

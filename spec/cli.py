@@ -457,14 +457,17 @@ def _run_workflow(
         auto_update_docs: Enable documentation updates. None = use config.
     """
     from spec.integrations.jira import parse_jira_ticket
+    from spec.integrations.providers import GenericTicket
     from spec.workflow.runner import run_spec_driven_workflow
     from spec.workflow.state import DirtyTreePolicy, RateLimitConfig
 
-    # Parse ticket
+    # Parse ticket and convert to GenericTicket
+    # TODO(AMI-25): Replace with TicketService.get_ticket() for full platform support
     jira_ticket = parse_jira_ticket(
         ticket,
         default_project=config.settings.default_jira_project,
     )
+    generic_ticket = GenericTicket.from_jira(jira_ticket)
 
     # Determine models
     effective_planning_model = (
@@ -475,8 +478,12 @@ def _run_workflow(
     )
 
     # Determine parallel execution settings
-    effective_parallel = parallel if parallel is not None else config.settings.parallel_execution_enabled
-    effective_max_parallel = max_parallel if max_parallel is not None else config.settings.max_parallel_tasks
+    effective_parallel = (
+        parallel if parallel is not None else config.settings.parallel_execution_enabled
+    )
+    effective_max_parallel = (
+        max_parallel if max_parallel is not None else config.settings.max_parallel_tasks
+    )
     effective_fail_fast = fail_fast if fail_fast is not None else config.settings.fail_fast
 
     # Validate effective_max_parallel (catches invalid config values too)
@@ -494,8 +501,7 @@ def _run_workflow(
             effective_dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
         else:
             print_error(
-                f"Invalid --dirty-tree-policy '{dirty_tree_policy}'. "
-                "Use 'fail-fast' or 'warn'."
+                f"Invalid --dirty-tree-policy '{dirty_tree_policy}'. " "Use 'fail-fast' or 'warn'."
             )
             raise typer.Exit(ExitCode.GENERAL_ERROR)
 
@@ -512,7 +518,7 @@ def _run_workflow(
 
     # Run workflow
     run_spec_driven_workflow(
-        ticket=jira_ticket,
+        ticket=generic_ticket,
         config=config,
         planning_model=effective_planning_model,
         implementation_model=effective_impl_model,
@@ -532,4 +538,3 @@ def _run_workflow(
 
 if __name__ == "__main__":
     app()
-

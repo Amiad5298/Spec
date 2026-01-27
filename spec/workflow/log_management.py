@@ -26,32 +26,34 @@ def get_log_base_dir() -> Path:
     return Path(".spec/runs")
 
 
-def create_run_log_dir(ticket_id: str) -> Path:
+def create_run_log_dir(safe_ticket_id: str) -> Path:
     """Create a timestamped log directory for this run.
 
     Args:
-        ticket_id: Ticket identifier for directory naming.
+        safe_ticket_id: Filesystem-safe ticket identifier (use ticket.safe_filename_stem).
+            MUST be sanitized - raw ticket IDs may contain unsafe chars like '/'.
 
     Returns:
         Path to the created log directory.
     """
     base_dir = get_log_base_dir()
-    ticket_dir = base_dir / ticket_id
+    ticket_dir = base_dir / safe_ticket_id
     run_dir = ticket_dir / format_run_directory()
 
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
 
 
-def cleanup_old_runs(ticket_id: str, keep_count: int = DEFAULT_LOG_RETENTION) -> None:
+def cleanup_old_runs(safe_ticket_id: str, keep_count: int = DEFAULT_LOG_RETENTION) -> None:
     """Remove old run directories beyond retention limit.
 
     Args:
-        ticket_id: Ticket identifier.
+        safe_ticket_id: Filesystem-safe ticket identifier (use ticket.safe_filename_stem).
+            MUST be sanitized - raw ticket IDs may contain unsafe chars like '/'.
         keep_count: Number of runs to keep.
     """
     base_dir = get_log_base_dir()
-    ticket_dir = base_dir / ticket_id
+    ticket_dir = base_dir / safe_ticket_id
 
     if not ticket_dir.exists():
         return
@@ -87,4 +89,3 @@ __all__ = [
     "_create_run_log_dir",
     "_cleanup_old_runs",
 ]
-

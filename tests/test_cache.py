@@ -40,8 +40,8 @@ def sample_ticket():
         type=TicketType.FEATURE,
         assignee="Test User",
         labels=["test", "feature"],
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
         branch_summary="test-ticket",
         platform_metadata={},
     )
@@ -682,7 +682,12 @@ class TestFileBasedTicketCache:
         - Eviction does NOT trigger when count is 5 (at max_size)
         - Eviction does NOT trigger when count is 6 (at threshold)
         - Eviction DOES trigger when count exceeds 6 (> threshold)
+
+        Uses mock to disable probabilistic lazy eviction during set() calls,
+        ensuring only force_evict() triggers eviction for deterministic testing.
         """
+        from unittest.mock import patch
+
         cache = FileBasedTicketCache(
             cache_dir=tmp_path,
             default_ttl=timedelta(hours=1),
@@ -715,32 +720,35 @@ class TestFileBasedTicketCache:
                 os.utime(path, (file_time, file_time))
             return ticket
 
-        # Add exactly 5 tickets (at max_size)
-        for i in range(5):
-            create_and_set_ticket(i)
+        # Disable lazy eviction by making random.random always return > 0.1
+        # This ensures only force_evict() triggers eviction
+        with patch("spec.integrations.cache.random.random", return_value=0.5):
+            # Add exactly 5 tickets (at max_size)
+            for i in range(5):
+                create_and_set_ticket(i)
 
-        # Force eviction - should NOT evict (5 <= 6 threshold)
-        cache.force_evict()
-        assert cache.size() == 5, "No eviction should occur when count equals max_size"
+            # Force eviction - should NOT evict (5 <= 6 threshold)
+            cache.force_evict()
+            assert cache.size() == 5, "No eviction should occur when count equals max_size"
 
-        # Add 1 more ticket (now at 6, which equals threshold)
-        create_and_set_ticket(5)
-        cache.force_evict()
-        assert cache.size() == 6, "No eviction should occur when count equals threshold (6)"
+            # Add 1 more ticket (now at 6, which equals threshold)
+            create_and_set_ticket(5)
+            cache.force_evict()
+            assert cache.size() == 6, "No eviction should occur when count equals threshold (6)"
 
-        # Add 1 more ticket (now at 7, exceeds threshold)
-        create_and_set_ticket(6)
-        cache.force_evict()
-        # After eviction, should be back to max_size=5
-        assert cache.size() == 5, "Eviction should occur when count exceeds threshold"
+            # Add 1 more ticket (now at 7, exceeds threshold)
+            create_and_set_ticket(6)
+            cache.force_evict()
+            # After eviction, should be back to max_size=5
+            assert cache.size() == 5, "Eviction should occur when count exceeds threshold"
 
-        # The 5 newest tickets should remain (BOUND-2 through BOUND-6)
-        assert cache.get(CacheKey(Platform.JIRA, "BOUND-0")) is None
-        assert cache.get(CacheKey(Platform.JIRA, "BOUND-1")) is None
-        for i in range(2, 7):
-            assert (
-                cache.get(CacheKey(Platform.JIRA, f"BOUND-{i}")) is not None
-            ), f"BOUND-{i} should remain"
+            # The 5 newest tickets should remain (BOUND-2 through BOUND-6)
+            assert cache.get(CacheKey(Platform.JIRA, "BOUND-0")) is None
+            assert cache.get(CacheKey(Platform.JIRA, "BOUND-1")) is None
+            for i in range(2, 7):
+                assert (
+                    cache.get(CacheKey(Platform.JIRA, f"BOUND-{i}")) is not None
+                ), f"BOUND-{i} should remain"
 
     def test_eviction_handles_file_deletion_race(self, tmp_path):
         """Test that eviction handles files being deleted during scan.

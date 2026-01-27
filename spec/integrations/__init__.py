@@ -31,10 +31,6 @@ from spec.integrations.cache import (
     FileBasedTicketCache,
     InMemoryTicketCache,
     TicketCache,
-    # Internal APIs - prefer dependency injection via TicketService
-    _clear_global_cache,
-    _get_global_cache,
-    _set_global_cache,
 )
 from spec.integrations.git import (
     DirtyStateAction,
@@ -73,10 +69,10 @@ __all__ = [
     "TicketCache",
     "InMemoryTicketCache",
     "FileBasedTicketCache",
-    # Internal cache APIs (prefer dependency injection via TicketService)
-    "_get_global_cache",
-    "_set_global_cache",
-    "_clear_global_cache",
+    # Note: _get_global_cache, _set_global_cache, _clear_global_cache are
+    # internal APIs imported above for testing/legacy support only.
+    # They are intentionally NOT exported in __all__ per AMI-32 spec.
+    # Production code should use dependency injection via TicketService.
     # Git
     "DirtyStateAction",
     "is_git_repo",

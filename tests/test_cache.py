@@ -677,6 +677,80 @@ class TestFileBasedTicketCache:
             5, initial_count - 1
         ), f"Cache size {final_size} should be reasonable after eviction"
 
+    def test_eviction_handles_stat_race_with_mock(self, tmp_path):
+        """Test that eviction handles FileNotFoundError during stat() with mock.
+
+        P1 Fix: Uses unittest.mock to simulate a FileNotFoundError occurring
+        when stat() is called on an entry during the scandir iteration.
+        This tests the try/except FileNotFoundError block in _evict_lru.
+        """
+        from unittest.mock import MagicMock, patch
+
+        cache = FileBasedTicketCache(
+            cache_dir=tmp_path,
+            default_ttl=timedelta(hours=1),
+            max_size=2,
+        )
+
+        # Add tickets to populate the cache
+        for i in range(5):
+            ticket = GenericTicket(
+                id=f"MOCK-{i}",
+                platform=Platform.JIRA,
+                url=f"https://example.com/MOCK-{i}",
+                title=f"Mock Ticket {i}",
+                description="",
+                status=TicketStatus.OPEN,
+                type=TicketType.TASK,
+                assignee=None,
+                labels=[],
+                created_at=None,
+                updated_at=None,
+                branch_summary=f"mock-ticket-{i}",
+                platform_metadata={},
+            )
+            cache.set(ticket)
+
+        # Create a mock DirEntry that raises FileNotFoundError on stat()
+        def create_mock_entries():
+            """Create a mix of normal and failing mock DirEntry objects."""
+            entries = []
+
+            # Create normal entries for existing files
+            for path in tmp_path.glob("*.json"):
+                mock_entry = MagicMock()
+                mock_entry.name = path.name
+                mock_entry.path = str(path)
+                mock_entry.is_file.return_value = True
+                mock_entry.stat.return_value = path.stat()
+                entries.append(mock_entry)
+
+            # Insert a "ghost" entry that raises FileNotFoundError on stat()
+            ghost_entry = MagicMock()
+            ghost_entry.name = "ghost_file.json"
+            ghost_entry.path = str(tmp_path / "ghost_file.json")
+            ghost_entry.is_file.return_value = True
+            ghost_entry.stat.side_effect = FileNotFoundError("File vanished")
+            entries.insert(0, ghost_entry)  # Insert at beginning
+
+            return iter(entries)
+
+        # Patch os.scandir to return our mock entries
+        with patch("os.scandir") as mock_scandir:
+            # Create a context manager mock
+            mock_context = MagicMock()
+            mock_context.__enter__ = MagicMock(return_value=create_mock_entries())
+            mock_context.__exit__ = MagicMock(return_value=False)
+            mock_scandir.return_value = mock_context
+
+            # This should NOT raise an exception - the FileNotFoundError
+            # should be caught and the ghost entry should be skipped
+            cache.force_evict()
+
+        # Cache should still be functional after eviction
+        # The exact size may vary based on eviction, but it shouldn't crash
+        assert cache.size() >= 0
+
 
 class TestGlobalCache:
     """Test global cache singleton functions (internal APIs)."""

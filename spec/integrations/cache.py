@@ -654,7 +654,15 @@ class FileBasedTicketCache(TicketCache):
             return
 
         # Sort by modification time (oldest first)
-        files.sort(key=lambda p: p.stat().st_mtime)
+        # Use a helper function that handles missing files gracefully
+        def get_mtime(path: Path) -> float:
+            try:
+                return path.stat().st_mtime
+            except FileNotFoundError:
+                # File was deleted between glob() and stat(), treat as oldest
+                return 0.0
+
+        files.sort(key=get_mtime)
 
         # Remove oldest files until at max_size (not threshold)
         to_remove = current_size - self.max_size

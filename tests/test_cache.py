@@ -90,6 +90,38 @@ class TestCacheKey:
         key2 = CacheKey(Platform.LINEAR, "PROJ-123")
         assert key1 != key2
 
+    def test_string_encoding_with_colon(self):
+        """P2 Fix: Verify ticket IDs with colons are URL-encoded.
+
+        This prevents parsing issues when the ticket_id contains the same
+        separator character as the platform:ticket_id format.
+        """
+        key = CacheKey(Platform.JIRA, "PROJ:SUB:123")
+        key_str = str(key)
+        # Platform separator colon should be first
+        assert key_str.startswith("JIRA:")
+        # Ticket ID colons should be encoded as %3A
+        assert "PROJ%3ASUB%3A123" in key_str
+
+    def test_string_encoding_with_slash(self):
+        """P2 Fix: Verify ticket IDs with slashes are URL-encoded."""
+        key = CacheKey(Platform.GITHUB, "owner/repo#42")
+        key_str = str(key)
+        assert key_str.startswith("GITHUB:")
+        # Slashes and hash should be encoded
+        assert "%2F" in key_str  # encoded slash
+        assert "%23" in key_str  # encoded hash
+
+    def test_string_encoding_special_characters(self):
+        """P2 Fix: Verify various special characters are properly encoded."""
+        key = CacheKey(Platform.LINEAR, "test ticket?id=123&foo=bar")
+        key_str = str(key)
+        assert key_str.startswith("LINEAR:")
+        # Special characters should be encoded
+        assert "?" not in key_str.split(":", 1)[1]
+        assert "&" not in key_str.split(":", 1)[1]
+        assert "=" not in key_str.split(":", 1)[1]
+
 
 class TestCachedTicket:
     """Test CachedTicket dataclass."""
@@ -529,20 +561,21 @@ class TestFileBasedTicketCache:
 
         assert error_queue.empty(), f"Errors occurred: {list(error_queue.queue)}"
 
-    def test_no_temp_file_leak_on_serialization_error(self, tmp_path):
-        """Test that non-serializable data doesn't leave orphaned .tmp files.
+    def test_non_serializable_metadata_normalized_and_cached(self, tmp_path):
+        """Test that non-serializable platform_metadata is normalized and cached.
 
-        P0 Fix: Ensures _atomic_write cleans up temp files even when json.dump
-        fails with TypeError (e.g., for non-serializable platform_metadata).
+        P1 Fix: platform_metadata is now recursively normalized to JSON-safe
+        types using _normalize_for_json(), so tickets with sets, datetimes,
+        custom objects, etc. can now be successfully cached.
         """
         cache = FileBasedTicketCache(cache_dir=tmp_path, default_ttl=timedelta(hours=1))
 
-        # Create a ticket with non-serializable platform_metadata
-        ticket_with_bad_metadata = GenericTicket(
-            id="BAD-123",
+        # Create a ticket with previously non-serializable platform_metadata
+        ticket_with_complex_metadata = GenericTicket(
+            id="COMPLEX-123",
             platform=Platform.JIRA,
-            url="https://example.com/BAD-123",
-            title="Ticket with non-serializable metadata",
+            url="https://example.com/COMPLEX-123",
+            title="Ticket with complex metadata",
             description="",
             status=TicketStatus.OPEN,
             type=TicketType.TASK,
@@ -550,25 +583,30 @@ class TestFileBasedTicketCache:
             labels=[],
             created_at=None,
             updated_at=None,
-            branch_summary="bad-ticket",
-            # Non-serializable objects: set and object()
+            branch_summary="complex-ticket",
+            # Previously non-serializable objects (now normalized by P1 fix)
             platform_metadata={
-                "bad_set": {1, 2, 3},  # Sets are not JSON serializable
-                "bad_object": object(),  # Custom objects are not JSON serializable
+                "tags_set": {1, 2, 3},  # Will be normalized to list
+                "custom_obj": object(),  # Will be normalized to __non_serializable__ dict
             },
         )
 
-        # This should fail gracefully without raising an exception
-        # (the cache logs a warning instead)
-        cache.set(ticket_with_bad_metadata)
+        # P1 Fix: This now succeeds (previously failed with TypeError)
+        cache.set(ticket_with_complex_metadata)
 
         # Check that no .tmp files were left behind
         tmp_files = list(tmp_path.glob(".cache_*.tmp"))
         assert len(tmp_files) == 0, f"Orphaned temp files found: {tmp_files}"
 
-        # Also verify no cache file was created for this ticket
-        key = CacheKey.from_ticket(ticket_with_bad_metadata)
-        assert cache.get(key) is None
+        # Ticket should now be successfully cached
+        key = CacheKey.from_ticket(ticket_with_complex_metadata)
+        cached = cache.get(key)
+        assert cached is not None, "P1 Fix: Ticket with complex metadata should be cached"
+
+        # Verify the normalized metadata
+        metadata = cached.platform_metadata
+        assert metadata["tags_set"] == [1, 2, 3], "set should be normalized to sorted list"
+        assert metadata["custom_obj"]["__non_serializable__"] is True
 
     def test_atomic_write_cleans_up_on_json_dump_type_error(self, tmp_path, sample_ticket):
         """Test that _atomic_write cleans up temp files when json.dump raises TypeError.
@@ -905,6 +943,70 @@ class TestFileBasedTicketCache:
         # Assert the cache directory is empty (no successful writes)
         all_files = os.listdir(tmp_path)
         assert len(all_files) == 0, f"Cache directory should be empty but contains: {all_files}"
+
+    def test_deterministic_eviction_with_injectable_rng(self, tmp_path):
+        """P2 Fix: Verify eviction behavior is reproducible with seeded RNG.
+
+        This test demonstrates that passing a seeded Random instance to the
+        cache constructor makes eviction behavior deterministic for testing.
+        """
+        import random as rand_module
+
+        run_counter = [0]  # Use list to allow mutation in nested function
+
+        def run_cache_operations(seed: int) -> list[bool]:
+            """Run cache ops with seeded RNG and track eviction triggers."""
+            run_counter[0] += 1
+            rng = rand_module.Random(seed)
+            # Each run gets a unique directory to ensure isolation
+            cache = FileBasedTicketCache(
+                cache_dir=tmp_path / f"cache_run{run_counter[0]}",
+                default_ttl=timedelta(hours=1),
+                max_size=3,
+                eviction_rng=rng,
+            )
+            eviction_triggered = []
+            original_evict = cache._evict_lru
+
+            def tracking_evict():
+                eviction_triggered.append(True)
+                original_evict()
+
+            cache._evict_lru = tracking_evict
+
+            # Set _approx_size to trigger probability check
+            cache._approx_size = 5  # Over threshold
+
+            for i in range(10):
+                ticket = GenericTicket(
+                    id=f"DET-{i}",
+                    platform=Platform.JIRA,
+                    url=f"https://example.com/DET-{i}",
+                    title=f"Deterministic Ticket {i}",
+                    description="",
+                    status=TicketStatus.OPEN,
+                    type=TicketType.TASK,
+                    assignee=None,
+                    labels=[],
+                    created_at=None,
+                    updated_at=None,
+                    branch_summary=f"det-ticket-{i}",
+                    platform_metadata={},
+                )
+                cache.set(ticket)
+
+            return eviction_triggered
+
+        # Run twice with same seed - should get same eviction pattern
+        result1 = run_cache_operations(42)
+        result2 = run_cache_operations(42)
+        assert result1 == result2, "Same seed should produce identical eviction behavior"
+
+        # Run with different seed - pattern may differ (but both should have some evictions)
+        result3 = run_cache_operations(123)
+        # All runs should have some evictions due to 10% probability over 10 ops
+        assert len(result1) > 0, "Expected at least one eviction check"
+        assert len(result3) > 0, "Expected at least one eviction check"
 
 
 class TestGlobalCache:

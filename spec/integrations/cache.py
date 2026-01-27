@@ -26,6 +26,7 @@ import os
 import random
 import tempfile
 import threading
+import urllib.parse
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -45,6 +46,10 @@ logger = logging.getLogger(__name__)
 class CacheKey:
     """Unique cache key for ticket data.
 
+    P2 Fix: ticket_id is URL-encoded in __str__ to handle special characters
+    like colons (:) which could otherwise break parsing logic. The encoding
+    uses 'safe=""' to ensure all special chars are encoded.
+
     Attributes:
         platform: The platform this ticket belongs to
         ticket_id: Normalized ticket identifier (e.g., 'PROJ-123', 'owner/repo#42')
@@ -54,8 +59,14 @@ class CacheKey:
     ticket_id: str
 
     def __str__(self) -> str:
-        """Generate string key for storage."""
-        return f"{self.platform.name}:{self.ticket_id}"
+        """Generate string key for storage.
+
+        P2 Fix: URL-encodes ticket_id to safely handle special characters
+        (colons, slashes, etc.) that could break parsing. Uses safe="" to
+        encode all special characters for maximum safety.
+        """
+        encoded_id = urllib.parse.quote(self.ticket_id, safe="")
+        return f"{self.platform.name}:{encoded_id}"
 
     @classmethod
     def from_ticket(cls, ticket: GenericTicket) -> CacheKey:
@@ -383,6 +394,8 @@ class FileBasedTicketCache(TicketCache):
         cache_dir: Path | None = None,
         default_ttl: timedelta = timedelta(hours=1),
         max_size: int = 0,
+        *,
+        eviction_rng: random.Random | None = None,
     ) -> None:
         """Initialize file-based cache.
 
@@ -390,6 +403,9 @@ class FileBasedTicketCache(TicketCache):
             cache_dir: Directory for cache files (default: ~/.specflow-cache)
             default_ttl: Default TTL for entries (default: 1 hour)
             max_size: Maximum entries before LRU eviction (0 = unlimited)
+            eviction_rng: Optional Random instance for deterministic eviction
+                behavior in tests. If None (default), uses global random.random().
+                Pass random.Random(seed) for reproducible eviction behavior.
         """
         self.cache_dir = cache_dir or Path.home() / ".specflow-cache"
         self.default_ttl = default_ttl
@@ -398,6 +414,8 @@ class FileBasedTicketCache(TicketCache):
         self._lock = threading.Lock()
         # Approximate cache size to avoid frequent disk scans
         self._approx_size: int | None = None
+        # P2 FIX: Injectable RNG for deterministic testing
+        self._eviction_rng = eviction_rng
 
     def _get_path(self, key: CacheKey) -> Path:
         """Get file path for cache key.
@@ -644,6 +662,9 @@ class FileBasedTicketCache(TicketCache):
         - Only runs with _EVICTION_PROBABILITY (10%) chance
         - Only evicts if size > max_size * _EVICTION_THRESHOLD_RATIO (110%)
 
+        P2 Fix: Uses injectable RNG (self._eviction_rng) for deterministic
+        testing. If None, falls back to global random.random().
+
         This is called from set() with the lock already held.
         """
         if self.max_size <= 0:
@@ -655,7 +676,11 @@ class FileBasedTicketCache(TicketCache):
                 return  # Definitely not over threshold
 
         # Probabilistic check: only scan 10% of the time
-        if random.random() > self._EVICTION_PROBABILITY:
+        # P2 FIX: Use injectable RNG for deterministic testing
+        rng_value = (
+            self._eviction_rng.random() if self._eviction_rng is not None else random.random()
+        )
+        if rng_value > self._EVICTION_PROBABILITY:
             return
 
         # Perform actual eviction check

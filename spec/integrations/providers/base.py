@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 # These are compiled once at module load time instead of on each function call
 _PATTERN_NON_ALPHANUMERIC_HYPHEN = re.compile(r"[^a-z0-9-]")
 _PATTERN_MULTIPLE_HYPHENS = re.compile(r"-+")
+_PATTERN_MULTIPLE_UNDERSCORES = re.compile(r"_+")
 
 
 def sanitize_for_branch_component(value: str) -> str:
@@ -520,15 +521,12 @@ class GenericTicket:
         for char in [":", "*", "?", '"', "<", ">", "|"]:
             result = result.replace(char, "_")
 
-        # Collapse multiple underscores
-        while "__" in result:
-            result = result.replace("__", "_")
+        # Collapse multiple underscores (using pre-compiled pattern for performance)
+        result = _PATTERN_MULTIPLE_UNDERSCORES.sub("_", result)
 
-        # Strip leading/trailing underscores
-        result = result.strip("_")
-
-        # Strip trailing dots and spaces (Windows filesystem issues)
-        result = result.rstrip(". ")
+        # Strip leading/trailing dots, spaces, and underscores aggressively
+        # (leading dots are dangerous on some systems - hidden files)
+        result = result.strip(" ._")
 
         # Handle empty result
         if not result:

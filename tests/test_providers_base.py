@@ -1495,6 +1495,23 @@ class TestGenericTicketSafeFilenameStem:
         assert ">" not in stem
         assert "|" not in stem
 
+    def test_leading_trailing_dots_spaces_underscores_stripped(self):
+        """Leading and trailing dots, spaces, and underscores are stripped.
+
+        Verifies:
+        - Leading dots removed (dangerous on some systems - hidden files)
+        - Trailing dots and spaces removed (Windows filesystem issues)
+        - Multiple underscores collapsed to single underscore
+        """
+        ticket = GenericTicket(
+            id=".. test__id ..",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/test",
+        )
+        # Leading '..' stripped, spaces become underscores then outer ones stripped,
+        # '__' collapsed to '_', trailing '..' stripped
+        assert ticket.safe_filename_stem == "test_id"
+
 
 class TestGenericTicketSerialization:
     """Tests for GenericTicket.to_dict() and from_dict() methods.

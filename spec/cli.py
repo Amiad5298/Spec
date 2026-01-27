@@ -457,7 +457,7 @@ def _run_workflow(
         auto_update_docs: Enable documentation updates. None = use config.
     """
     from spec.integrations.jira import parse_jira_ticket
-    from spec.integrations.providers import GenericTicket, Platform
+    from spec.integrations.providers import GenericTicket
     from spec.workflow.runner import run_spec_driven_workflow
     from spec.workflow.state import DirtyTreePolicy, RateLimitConfig
 
@@ -467,15 +467,7 @@ def _run_workflow(
         ticket,
         default_project=config.settings.default_jira_project,
     )
-    generic_ticket = GenericTicket(
-        id=jira_ticket.ticket_id,
-        platform=Platform.JIRA,
-        url=jira_ticket.ticket_url,
-        title=jira_ticket.title,
-        description=jira_ticket.description,
-        branch_summary=jira_ticket.summary,
-        full_info=jira_ticket.full_info,
-    )
+    generic_ticket = GenericTicket.from_jira(jira_ticket)
 
     # Determine models
     effective_planning_model = (

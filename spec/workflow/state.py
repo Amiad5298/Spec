@@ -166,18 +166,18 @@ class WorkflowState:
         """Get the plan filename.
 
         Returns:
-            Plan filename based on ticket ID
+            Plan filename based on ticket ID (filesystem-safe)
         """
-        return f"{self.ticket.id}-plan.md"
+        return f"{self.ticket.safe_filename_stem}-plan.md"
 
     @property
     def tasklist_filename(self) -> str:
         """Get the task list filename.
 
         Returns:
-            Task list filename based on ticket ID
+            Task list filename based on ticket ID (filesystem-safe)
         """
-        return f"{self.ticket.id}-tasklist.md"
+        return f"{self.ticket.safe_filename_stem}-tasklist.md"
 
     def get_plan_path(self) -> Path:
         """Get full path to plan file.

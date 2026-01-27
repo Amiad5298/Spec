@@ -211,10 +211,10 @@ def step_3_execute(
         f"{len(pending_independent)} independent tasks"
     )
 
-    # Setup
+    # Setup (use safe_filename_stem for filesystem operations)
     plan_path = state.get_plan_path()
-    log_dir = _create_run_log_dir(state.ticket.id)
-    _cleanup_old_runs(state.ticket.id)
+    log_dir = _create_run_log_dir(state.ticket.safe_filename_stem)
+    _cleanup_old_runs(state.ticket.safe_filename_stem)
 
     failed_tasks: list[str] = []
 
@@ -1007,15 +1007,15 @@ def _run_post_implementation_tests(state: WorkflowState) -> None:
 
     print_step("Running Tests for Changed Code via AI")
 
-    # Create log directory for test execution
-    log_dir = _get_log_base_dir() / state.ticket.id / LOG_DIR_TEST_EXECUTION
+    # Create log directory for test execution (use safe_filename_stem for paths)
+    log_dir = _get_log_base_dir() / state.ticket.safe_filename_stem / LOG_DIR_TEST_EXECUTION
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 
     # Create UI with collapsible panel and verbose toggle (single-operation mode)
     ui = TaskRunnerUI(
         status_message="Running tests for changed code...",
-        ticket_id=state.ticket.id,
+        ticket_id=state.ticket.id,  # Keep original ID for display
         single_operation_mode=True,
     )
     ui.set_log_path(log_path)

@@ -19,26 +19,26 @@ from spec.workflow.step2_tasklist import (
 )
 from spec.workflow.tasks import parse_task_list
 
+# Note: This file has multiple tests that create GenericTicket with specific IDs
+# because plan/tasklist filenames are derived from ticket.safe_filename_stem.
+# The workflow_state fixture uses generic_ticket from conftest.py.
+# Individual tests that need different IDs create their own tickets.
+
 
 @pytest.fixture
-def workflow_state(tmp_path):
-    """Create a workflow state for testing."""
-    ticket = GenericTicket(
-        id="TEST-123",
-        platform=Platform.JIRA,
-        url="https://jira.example.com/TEST-123",
-        title="Implement test feature",
-        description="Test description",
-        branch_summary="Test Feature",
-    )
-    state = WorkflowState(ticket=ticket)
+def workflow_state(generic_ticket, tmp_path):
+    """Create a workflow state for testing.
+
+    Uses generic_ticket fixture from conftest.py (TEST-123).
+    """
+    state = WorkflowState(ticket=generic_ticket)
 
     # Create specs directory
     specs_dir = tmp_path / "specs"
     specs_dir.mkdir(parents=True)
 
-    # Create plan file
-    plan_file = specs_dir / "TEST-123-plan.md"
+    # Create plan file - uses safe_filename_stem for path
+    plan_file = specs_dir / f"{generic_ticket.safe_filename_stem}-plan.md"
     plan_file.write_text(
         """# Implementation Plan: TEST-123
 

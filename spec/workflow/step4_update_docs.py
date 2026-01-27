@@ -603,15 +603,15 @@ def step_4_update_docs(
     # Use provided client or create default
     client = auggie_client or AuggieClient()
 
-    # Create log directory for documentation update
-    log_dir = get_log_base_dir() / state.ticket.id / LOG_DIR_DOC_UPDATE
+    # Create log directory for documentation update (use safe_filename_stem for paths)
+    log_dir = get_log_base_dir() / state.ticket.safe_filename_stem / LOG_DIR_DOC_UPDATE
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 
     # Create UI with collapsible panel and verbose toggle (single-operation mode)
     ui = TaskRunnerUI(
         status_message="Updating documentation...",
-        ticket_id=state.ticket.id,
+        ticket_id=state.ticket.id,  # Keep original ID for display
         single_operation_mode=True,
     )
     ui.set_log_path(log_path)

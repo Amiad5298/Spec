@@ -18,30 +18,18 @@ from spec.workflow.state import WorkflowState
 from spec.workflow.step4_update_docs import Step4Result
 
 
+# Use generic_ticket and generic_ticket_no_summary fixtures from conftest.py
+# These are aliased below for local compatibility
 @pytest.fixture
-def ticket():
-    """Create a test ticket."""
-    return GenericTicket(
-        id="TEST-123",
-        platform=Platform.JIRA,
-        url="https://jira.example.com/TEST-123",
-        title="Test Feature",
-        description="Test description for the feature implementation.",
-        branch_summary="test-feature-summary",
-    )
+def ticket(generic_ticket):
+    """Alias for generic_ticket fixture from conftest.py."""
+    return generic_ticket
 
 
 @pytest.fixture
-def ticket_no_summary():
-    """Create a test ticket without summary."""
-    return GenericTicket(
-        id="TEST-456",
-        platform=Platform.JIRA,
-        url="https://jira.example.com/TEST-456",
-        title="Test Feature No Summary",
-        description="Test description.",
-        branch_summary="",
-    )
+def ticket_no_summary(generic_ticket_no_summary):
+    """Alias for generic_ticket_no_summary fixture from conftest.py."""
+    return generic_ticket_no_summary
 
 
 @pytest.fixture
@@ -81,7 +69,11 @@ class TestSetupBranchNameGeneration:
     def test_generates_branch_name_with_summary(
         self, mock_get_branch, mock_create, mock_confirm, workflow_state, ticket
     ):
-        """Generates branch name with summary format: feature/{ticket_id}-{summary}."""
+        """Generates branch name with summary format: feature/{ticket_id}-{summary}.
+
+        Note: _setup_branch prepends 'feature/' prefix to ticket.branch_slug.
+        The ticket's branch_slug is: {id}-{branch_summary} = 'test-123-test-feature'
+        """
         mock_get_branch.return_value = "main"
         mock_confirm.return_value = True
         mock_create.return_value = True
@@ -89,7 +81,8 @@ class TestSetupBranchNameGeneration:
         result = _setup_branch(workflow_state, ticket)
 
         assert result is True
-        assert workflow_state.branch_name == "feature/test-123-test-feature-summary"
+        # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
+        assert workflow_state.branch_name == "feature/test-123-test-feature"
 
     @patch("spec.workflow.runner.prompt_confirm")
     @patch("spec.workflow.runner.create_branch")
@@ -125,7 +118,8 @@ class TestSetupBranchAlreadyOnFeature:
         self, mock_get_branch, workflow_state, ticket
     ):
         """Stays on current branch if already on the expected feature branch."""
-        expected_branch = "feature/test-123-test-feature-summary"
+        # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
+        expected_branch = "feature/test-123-test-feature"
         mock_get_branch.return_value = expected_branch
 
         result = _setup_branch(workflow_state, ticket)
@@ -136,7 +130,8 @@ class TestSetupBranchAlreadyOnFeature:
     @patch("spec.workflow.runner.get_current_branch")
     def test_updates_state_branch_name_correctly(self, mock_get_branch, workflow_state, ticket):
         """Updates state.branch_name correctly when already on branch."""
-        expected_branch = "feature/test-123-test-feature-summary"
+        # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
+        expected_branch = "feature/test-123-test-feature"
         mock_get_branch.return_value = expected_branch
 
         _setup_branch(workflow_state, ticket)
@@ -166,7 +161,8 @@ class TestSetupBranchCreateNew:
         result = _setup_branch(workflow_state, ticket)
 
         assert result is True
-        mock_create.assert_called_once_with("feature/test-123-test-feature-summary")
+        # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
+        mock_create.assert_called_once_with("feature/test-123-test-feature")
 
     @patch("spec.workflow.runner.prompt_confirm")
     @patch("spec.workflow.runner.create_branch")
@@ -1194,7 +1190,7 @@ class TestSetupBranchSpecialCharacters:
         result = _setup_branch(workflow_state, special_ticket)
 
         assert result is True
-        # GenericTicket.safe_branch_name sanitizes special characters
+        # _setup_branch prepends "feature/" to ticket.branch_slug which sanitizes special chars
         expected_branch = "feature/test-789-update-graphql-query"
         assert workflow_state.branch_name == expected_branch
         mock_create.assert_called_once_with(expected_branch)
@@ -1224,7 +1220,7 @@ class TestSetupBranchSpecialCharacters:
         result = _setup_branch(workflow_state, special_ticket)
 
         assert result is True
-        # GenericTicket.safe_branch_name sanitizes special characters
+        # _setup_branch prepends "feature/" to ticket.branch_slug which sanitizes special chars
         expected_branch = "feature/test-999-fix-api-endpoint-v2-urgent"
         assert workflow_state.branch_name == expected_branch
 

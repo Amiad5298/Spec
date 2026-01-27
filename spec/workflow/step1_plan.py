@@ -39,17 +39,18 @@ def _get_log_base_dir() -> Path:
     return Path(".spec/runs")
 
 
-def _create_plan_log_dir(ticket_id: str) -> Path:
+def _create_plan_log_dir(safe_ticket_id: str) -> Path:
     """Create a timestamped log directory for plan generation.
 
     Args:
-        ticket_id: Ticket identifier for directory naming.
+        safe_ticket_id: Filesystem-safe ticket identifier (use ticket.safe_filename_stem).
+            MUST be sanitized - raw ticket IDs may contain unsafe chars like '/'.
 
     Returns:
         Path to the created log directory.
     """
     base_dir = _get_log_base_dir()
-    plan_dir = base_dir / ticket_id / "plan_generation"
+    plan_dir = base_dir / safe_ticket_id / "plan_generation"
     plan_dir.mkdir(parents=True, exist_ok=True)
     return plan_dir
 
@@ -74,13 +75,13 @@ def _generate_plan_with_tui(
     """
     from spec.ui.tui import TaskRunnerUI
 
-    # Create log directory and log path
-    log_dir = _create_plan_log_dir(state.ticket.id)
+    # Create log directory and log path (use safe_filename_stem for paths)
+    log_dir = _create_plan_log_dir(state.ticket.safe_filename_stem)
     log_path = log_dir / f"{format_run_directory()}.log"
 
     ui = TaskRunnerUI(
         status_message="Generating implementation plan...",
-        ticket_id=state.ticket.id,
+        ticket_id=state.ticket.id,  # Keep original ID for display
         single_operation_mode=True,
     )
     ui.set_log_path(log_path)

@@ -88,6 +88,15 @@ def run_spec_driven_workflow(
     Returns:
         True if workflow completed successfully
     """
+    # Guardrails: Handle potentially incomplete ticket data
+    # Tickets may lack title if fetched without enrichment
+    display_name = ticket.title or ticket.branch_summary or ticket.id
+    if not ticket.title:
+        print_warning(
+            f"Ticket '{ticket.id}' is missing title. "
+            f"Using '{display_name}' for display purposes."
+        )
+
     print_header(f"Starting Workflow: {ticket.id}")
 
     # Initialize state with subagent names from config
@@ -171,7 +180,7 @@ def run_spec_driven_workflow(
                     )
                     console.print()
 
-        # Create feature branch using ticket's safe_branch_name
+        # Create feature branch using ticket's branch_slug with feature/ prefix
         if not _setup_branch(state, state.ticket):
             return False
 
@@ -214,20 +223,24 @@ def run_spec_driven_workflow(
         return True
 
 
-def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:
+def _setup_branch(
+    state: WorkflowState, ticket: GenericTicket, branch_prefix: str = "feature"
+) -> bool:
     """Set up the feature branch for the workflow.
 
     Args:
         state: Workflow state
         ticket: Ticket information (platform-agnostic)
+        branch_prefix: Prefix for the branch name (default: "feature")
 
     Returns:
         True if branch was set up successfully
     """
     current_branch = get_current_branch()
 
-    # Use GenericTicket's safe_branch_name property for git-safe branch naming
-    branch_name = ticket.safe_branch_name
+    # Use GenericTicket's branch_slug and prepend the prefix
+    # Policy: The prefix (e.g., "feature/") is a workflow concern, not model concern
+    branch_name = f"{branch_prefix}/{ticket.branch_slug}"
 
     state.branch_name = branch_name
 

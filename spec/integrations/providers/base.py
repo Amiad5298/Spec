@@ -17,7 +17,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
+
+if TYPE_CHECKING:
+    from spec.integrations.jira import JiraTicket
 
 # Pre-compiled regex patterns for performance optimization
 # These are compiled once at module load time instead of on each function call
@@ -389,11 +392,12 @@ class GenericTicket:
     _FALLBACK_SUMMARY = "unnamed-ticket"
 
     @property
-    def safe_branch_name(self) -> str:
-        """Generate safe git branch name from ticket.
+    def branch_slug(self) -> str:
+        """Generate safe git branch slug from ticket (without prefix).
 
-        Uses semantic prefix based on ticket type and sanitizes
-        the branch summary for git compatibility.
+        Returns ONLY the sanitized slug component (e.g., 'test-123-my-feature')
+        without any semantic prefix like 'feature/'. The calling code
+        (e.g., WorkflowRunner) is responsible for prepending the prefix.
 
         Handles edge cases:
         - GitHub-style IDs like 'owner/repo#42'
@@ -405,19 +409,16 @@ class GenericTicket:
         - Long branch_summary (truncated to max 50 chars)
 
         Output is deterministic, lowercase, and contains only git-safe
-        characters: [a-z0-9/-] (slash only in prefix separator).
+        characters: [a-z0-9-] (no slashes in the slug itself).
 
         Guarantees:
-        - Never returns just prefix without ticket component
-        - Always has format: prefix/id or prefix/id-summary
+        - Always has format: id or id-summary
         - Maximum summary length is enforced
-        - Always produces a valid, non-empty branch name
+        - Always produces a valid, non-empty slug
 
         Returns:
-            Git-compatible branch name like 'feat/proj-123-add-user-login'
+            Git-compatible branch slug like 'proj-123-add-user-login'
         """
-        prefix = self.semantic_branch_prefix
-
         # Sanitize ticket ID using shared sanitizer (ensures [a-z0-9-] only)
         safe_id = sanitize_for_branch_component(self.id)
 
@@ -443,14 +444,75 @@ class GenericTicket:
             # Original had content but it all got stripped - use fallback
             safe_summary = self._FALLBACK_SUMMARY
 
-        # Build branch name
+        # Build branch slug (no prefix)
         if safe_summary:
-            branch = f"{prefix}/{safe_id}-{safe_summary}"
+            slug = f"{safe_id}-{safe_summary}"
         else:
-            branch = f"{prefix}/{safe_id}"
+            slug = safe_id
 
-        # Final safety checks for git ref requirements
-        return self._finalize_git_ref(branch)
+        # Final safety checks for git ref requirements (without prefix)
+        return self._finalize_git_ref(slug)
+
+    @property
+    def safe_filename_stem(self) -> str:
+        """Generate filesystem-safe stem from ticket ID.
+
+        Strictly sanitizes the ticket ID for safe use in filenames and
+        directory paths. Replaces unsafe characters (/, \\, #, spaces,
+        and other problematic chars) with underscores or hyphens.
+
+        This is CRITICAL for security: ticket IDs from platforms like
+        GitHub can contain path-traversal characters (e.g., 'owner/repo#1').
+
+        Returns:
+            Filesystem-safe string like 'owner_repo_1' or 'TEST-123'
+        """
+        if not self.id:
+            return "unknown-ticket"
+
+        # Replace path separators and other unsafe filesystem characters
+        # with underscores for maximum compatibility
+        result = self.id
+        # Replace forward/back slashes (path traversal risk)
+        result = result.replace("/", "_")
+        result = result.replace("\\", "_")
+        # Replace hash (GitHub issue syntax, shell comment)
+        result = result.replace("#", "_")
+        # Replace spaces
+        result = result.replace(" ", "_")
+        # Replace other problematic characters
+        for char in [":", "*", "?", '"', "<", ">", "|"]:
+            result = result.replace(char, "_")
+
+        # Collapse multiple underscores
+        while "__" in result:
+            result = result.replace("__", "_")
+
+        # Strip leading/trailing underscores
+        result = result.strip("_")
+
+        # Handle empty result
+        if not result:
+            return "unknown-ticket"
+
+        return result
+
+    @property
+    def safe_branch_name(self) -> str:
+        """Generate safe git branch name from ticket (DEPRECATED).
+
+        This property is deprecated. Use branch_slug instead and prepend
+        the desired prefix (e.g., 'feature/') in the calling code.
+
+        Kept for backwards compatibility - returns full branch name with
+        semantic prefix.
+
+        Returns:
+            Git-compatible branch name like 'feat/proj-123-add-user-login'
+        """
+        prefix = self.semantic_branch_prefix
+        slug = self.branch_slug
+        return f"{prefix}/{slug}"
 
     def _generate_fallback_id(self) -> str:
         """Generate a deterministic fallback ID when sanitized ticket ID is empty.
@@ -617,6 +679,30 @@ class GenericTicket:
             ticket_data["platform_metadata"] = {}
 
         return cls(**ticket_data)
+
+    @classmethod
+    def from_jira(cls, jira_ticket: JiraTicket) -> GenericTicket:
+        """Create GenericTicket from a legacy JiraTicket.
+
+        This factory method encapsulates the mapping logic from the legacy
+        JiraTicket dataclass to GenericTicket. Use this instead of manually
+        constructing GenericTicket from JiraTicket fields.
+
+        Args:
+            jira_ticket: JiraTicket instance from spec.integrations.jira
+
+        Returns:
+            GenericTicket with fields mapped from JiraTicket
+        """
+        return cls(
+            id=jira_ticket.ticket_id,
+            platform=Platform.JIRA,
+            url=jira_ticket.ticket_url,
+            title=jira_ticket.title,
+            description=jira_ticket.description,
+            branch_summary=jira_ticket.summary,
+            full_info=jira_ticket.full_info,
+        )
 
 
 class IssueTrackerProvider(ABC):

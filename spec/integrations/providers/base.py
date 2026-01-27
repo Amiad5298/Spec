@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict
 
 if TYPE_CHECKING:
     from spec.integrations.jira import JiraTicket
@@ -387,10 +387,10 @@ class GenericTicket:
         return prefix_map.get(self.type, "feature")
 
     # Default max length for branch summary (same as sanitize_title_for_branch)
-    _BRANCH_SUMMARY_MAX_LENGTH: int = 50
+    _BRANCH_SUMMARY_MAX_LENGTH: ClassVar[int] = 50
 
     # Default fallback summary when ticket ID/title sanitize to empty strings
-    _FALLBACK_SUMMARY = "unnamed-ticket"
+    _FALLBACK_SUMMARY: ClassVar[str] = "unnamed-ticket"
 
     @property
     def branch_slug(self) -> str:
@@ -455,7 +455,7 @@ class GenericTicket:
         return self._finalize_git_ref(slug)
 
     # Windows reserved names (case-insensitive)
-    _WINDOWS_RESERVED_NAMES: frozenset[str] = frozenset(
+    _WINDOWS_RESERVED_NAMES: ClassVar[frozenset[str]] = frozenset(
         {
             "CON",
             "PRN",
@@ -483,7 +483,7 @@ class GenericTicket:
     )
 
     # Maximum length for filename stems (prevents MAX_PATH issues)
-    _MAX_FILENAME_STEM_LENGTH: int = 64
+    _MAX_FILENAME_STEM_LENGTH: ClassVar[int] = 64
 
     @property
     def safe_filename_stem(self) -> str:

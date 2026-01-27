@@ -2,16 +2,20 @@
 
 This module provides the Typer-based command-line interface with all
 flags and commands matching the original Bash script.
+
+Supports tickets from all 6 platforms: Jira, Linear, GitHub, Azure DevOps, Monday, Trello.
 """
 
+import asyncio
+import re
 from typing import Annotated
 
 import typer
 
 from spec.config.manager import ConfigManager
-from spec.integrations.auggie import check_auggie_installed, install_auggie
+from spec.integrations.auggie import AuggieClient, check_auggie_installed, install_auggie
 from spec.integrations.git import is_git_repo
-from spec.integrations.jira import check_jira_integration
+from spec.integrations.providers import GenericTicket, Platform
 from spec.ui.menus import MainMenuChoice, show_main_menu
 from spec.utils.console import (
     print_error,
@@ -39,6 +43,158 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _validate_platform(platform: str | None) -> Platform | None:
+    """Validate and convert platform string to Platform enum.
+
+    Args:
+        platform: Platform name string (e.g., "jira", "linear")
+
+    Returns:
+        Platform enum if valid, None if not provided
+
+    Raises:
+        typer.BadParameter: If platform name is invalid
+    """
+    if platform is None:
+        return None
+    try:
+        return Platform[platform.upper()]
+    except KeyError:
+        valid = ", ".join(p.name.lower() for p in Platform)
+        raise typer.BadParameter(f"Invalid platform: {platform}. Valid options: {valid}") from None
+
+
+def _is_ambiguous_ticket_id(input_str: str) -> bool:
+    """Check if input is an ambiguous ticket ID (not a URL).
+
+    Ambiguous formats match multiple platforms:
+    - PROJECT-123 could be Jira or Linear
+
+    Unambiguous formats:
+    - URLs (https://...)
+    - GitHub format (owner/repo#123)
+
+    Args:
+        input_str: Ticket input string
+
+    Returns:
+        True if the input is ambiguous
+    """
+    # URLs are unambiguous
+    if input_str.startswith("http://") or input_str.startswith("https://"):
+        return False
+    # GitHub format (owner/repo#123) is unambiguous
+    if re.match(r"^[^/]+/[^#]+#\d+$", input_str):
+        return False
+    # PROJECT-123 format is ambiguous (Jira or Linear)
+    if re.match(r"^[A-Za-z][A-Za-z0-9]*-\d+$", input_str):
+        return True
+    return False
+
+
+def _disambiguate_platform(ticket_input: str, config: ConfigManager) -> Platform:
+    """Resolve ambiguous ticket ID to a specific platform.
+
+    Resolution order:
+    1. Check config default_platform setting
+    2. Interactive prompt asking user to choose
+
+    Args:
+        ticket_input: The ambiguous ticket ID
+        config: Configuration manager
+
+    Returns:
+        Resolved Platform enum
+
+    Raises:
+        UserCancelledError: If user cancels the prompt
+    """
+    from spec.ui.prompts import prompt_select
+
+    # Check config default
+    default_platform: Platform | None = config.settings.get_default_platform()
+    if default_platform is not None:
+        return default_platform
+
+    # Interactive prompt
+    print_info(f"Ticket ID '{ticket_input}' could be from multiple platforms.")
+    choice: str = prompt_select(
+        message="Which platform is this ticket from?",
+        choices=["Jira", "Linear"],
+    )
+    return Platform[choice.upper()]
+
+
+async def _fetch_ticket_async(
+    ticket_input: str,
+    config: ConfigManager,
+    platform_hint: Platform | None = None,
+) -> GenericTicket:
+    """Fetch ticket using TicketService.
+
+    This async function bridges the sync CLI with the async TicketService.
+
+    Args:
+        ticket_input: Ticket ID or URL
+        config: Configuration manager
+        platform_hint: Optional platform override
+
+    Returns:
+        GenericTicket from TicketService
+
+    Raises:
+        SpecError: If ticket cannot be fetched
+    """
+    from spec.integrations.auth import AuthenticationManager
+    from spec.integrations.ticket_service import create_ticket_service
+
+    # Handle platform hint by constructing a more specific input
+    effective_input = ticket_input
+    if platform_hint is not None and _is_ambiguous_ticket_id(ticket_input):
+        effective_input = _resolve_with_platform_hint(ticket_input, platform_hint)
+
+    # Create auggie client for primary fetcher
+    auggie_client = AuggieClient()
+
+    # Create auth manager for fallback fetcher
+    auth_manager = AuthenticationManager(config)
+
+    async with await create_ticket_service(
+        auggie_client=auggie_client,
+        auth_manager=auth_manager,
+        config_manager=config,
+    ) as service:
+        return await service.get_ticket(effective_input)
+
+
+def _resolve_with_platform_hint(
+    ticket_id: str,
+    platform: Platform,
+) -> str:
+    """Convert ambiguous ticket ID to platform-specific URL.
+
+    For ambiguous IDs like PROJECT-123, constructs a platform-specific
+    URL that the TicketService can unambiguously detect.
+
+    Args:
+        ticket_id: Ambiguous ticket ID (e.g., "PROJ-123")
+        platform: Target platform
+
+    Returns:
+        Platform-specific URL or the original ID if no conversion needed
+    """
+    if platform == Platform.JIRA:
+        # Keep as-is - Jira provider handles bare IDs and is the default
+        return ticket_id
+    elif platform == Platform.LINEAR:
+        # Linear URLs have format: https://linear.app/team/issue/ID
+        # NOTE: Linear provider parses ticket ID from the URL path, ignoring the
+        # placeholder team name. This ensures unambiguous platform detection.
+        return f"https://linear.app/team/issue/{ticket_id}"
+    else:
+        return ticket_id
+
+
 def show_help() -> None:
     """Display help information."""
     print_header("SPEC Help")
@@ -48,15 +204,19 @@ def show_help() -> None:
     print_info("  spec [OPTIONS] [TICKET]")
     print_info("")
     print_info("Arguments:")
-    print_info("  TICKET    Jira ticket ID or URL (e.g., PROJECT-123)")
+    print_info("  TICKET    Ticket ID or URL from any supported platform")
+    print_info("            Examples: PROJ-123, https://jira.example.com/browse/PROJ-123")
+    print_info("            https://linear.app/team/issue/ENG-456, owner/repo#42")
     print_info("")
     print_info("Options:")
+    print_info("  --platform, -p PLATFORM   Override platform detection (jira, linear, github,")
+    print_info("                            azure_devops, monday, trello)")
     print_info("  --model, -m MODEL         Override default AI model")
     print_info("  --planning-model MODEL    Model for planning phases")
     print_info("  --impl-model MODEL        Model for implementation phase")
     print_info("  --skip-clarification      Skip clarification step")
     print_info("  --no-squash               Don't squash commits at end")
-    print_info("  --force-jira-check        Force fresh Jira integration check")
+    print_info("  --force-integration-check Force fresh platform integration check")
     print_info("  --tui/--no-tui            Enable/disable TUI mode (default: auto)")
     print_info("  --verbose, -V             Show verbose output in TUI log panel")
     print_info("  --parallel/--no-parallel  Enable/disable parallel task execution")
@@ -76,7 +236,16 @@ def main(
     ticket: Annotated[
         str | None,
         typer.Argument(
-            help="Jira ticket ID or URL (e.g., PROJECT-123)",
+            help="Ticket ID or URL (e.g., PROJ-123, https://jira.example.com/browse/PROJ-123, "
+            "https://linear.app/team/issue/ENG-456, owner/repo#42)",
+        ),
+    ] = None,
+    platform: Annotated[
+        str | None,
+        typer.Option(
+            "--platform",
+            "-p",
+            help="Override platform detection (jira, linear, github, azure_devops, monday, trello)",
         ),
     ] = None,
     model: Annotated[
@@ -115,11 +284,11 @@ def main(
             help="Don't squash checkpoint commits at end",
         ),
     ] = False,
-    force_jira_check: Annotated[
+    force_integration_check: Annotated[
         bool,
         typer.Option(
-            "--force-jira-check",
-            help="Force fresh Jira integration check",
+            "--force-integration-check",
+            help="Force fresh platform integration check",
         ),
     ] = False,
     tui: Annotated[
@@ -213,10 +382,14 @@ def main(
 ) -> None:
     """SPEC - Spec-driven development workflow using Auggie CLI.
 
-    Start a spec-driven development workflow for a Jira ticket.
+    Start a spec-driven development workflow for a ticket from any
+    supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, Trello).
     If no ticket is provided, shows the interactive main menu.
     """
     setup_logging()
+
+    # Validate --platform flag if provided
+    platform_enum = _validate_platform(platform)
 
     # Validate max_parallel if provided via CLI
     if max_parallel is not None and (max_parallel < 1 or max_parallel > 5):
@@ -237,7 +410,7 @@ def main(
             raise typer.Exit()
 
         # Check prerequisites
-        if not _check_prerequisites(config, force_jira_check):
+        if not _check_prerequisites(config, force_integration_check):
             raise typer.Exit(ExitCode.GENERAL_ERROR)
 
         # If ticket provided, start workflow directly
@@ -245,6 +418,7 @@ def main(
             _run_workflow(
                 ticket=ticket,
                 config=config,
+                platform=platform_enum,
                 model=model,
                 planning_model=planning_model,
                 impl_model=impl_model,
@@ -278,18 +452,16 @@ def main(
         raise typer.Exit(ExitCode.USER_CANCELLED) from e
 
 
-def _check_prerequisites(config: ConfigManager, force_jira_check: bool) -> bool:
+def _check_prerequisites(config: ConfigManager, force_integration_check: bool) -> bool:
     """Check all prerequisites for running the workflow.
 
     Args:
         config: Configuration manager
-        force_jira_check: Force fresh Jira check
+        force_integration_check: Force fresh platform integration check
 
     Returns:
         True if all prerequisites are met
     """
-    from spec.integrations.auggie import AuggieClient
-
     # Check git repository
     if not is_git_repo():
         print_error("Not in a git repository. Please run from a git repository.")
@@ -307,9 +479,11 @@ def _check_prerequisites(config: ConfigManager, force_jira_check: bool) -> bool:
         else:
             return False
 
-    # Check Jira integration (optional but recommended)
-    auggie = AuggieClient()
-    check_jira_integration(config, auggie, force=force_jira_check)
+    # NOTE: Platform integration checks are now handled by TicketService at fetch time.
+    # The legacy check_jira_integration() call was removed as part of AMI-25 migration.
+    # Future platform-specific pre-flight checks may use force_integration_check.
+    # See: AMI-42 (config output updates)
+    _ = force_integration_check  # Reserved for future platform credential validation
 
     return True
 
@@ -326,7 +500,7 @@ def _run_main_menu(config: ConfigManager) -> None:
         if choice == MainMenuChoice.START_WORKFLOW:
             from spec.ui.prompts import prompt_input
 
-            ticket = prompt_input("Enter Jira ticket ID or URL")
+            ticket = prompt_input("Enter ticket ID or URL")
             if ticket:
                 _run_workflow(ticket=ticket, config=config)
             break
@@ -419,6 +593,7 @@ def _configure_settings(config: ConfigManager) -> None:
 def _run_workflow(
     ticket: str,
     config: ConfigManager,
+    platform: Platform | None = None,
     model: str | None = None,
     planning_model: str | None = None,
     impl_model: str | None = None,
@@ -438,8 +613,9 @@ def _run_workflow(
     """Run the AI-assisted workflow.
 
     Args:
-        ticket: Jira ticket ID or URL
+        ticket: Ticket ID or URL from any supported platform
         config: Configuration manager
+        platform: Explicit platform override (from --platform flag)
         model: Override model for all phases
         planning_model: Model for planning phases
         impl_model: Model for implementation phase
@@ -456,18 +632,39 @@ def _run_workflow(
         dirty_tree_policy: Policy for dirty working tree: 'fail-fast' or 'warn'.
         auto_update_docs: Enable documentation updates. None = use config.
     """
-    from spec.integrations.jira import parse_jira_ticket
-    from spec.integrations.providers import GenericTicket
     from spec.workflow.runner import run_spec_driven_workflow
     from spec.workflow.state import DirtyTreePolicy, RateLimitConfig
 
-    # Parse ticket and convert to GenericTicket
-    # TODO(AMI-25): Replace with TicketService.get_ticket() for full platform support
-    jira_ticket = parse_jira_ticket(
-        ticket,
-        default_project=config.settings.default_jira_project,
-    )
-    generic_ticket = GenericTicket.from_jira(jira_ticket)
+    # Resolve platform for ambiguous ticket IDs
+    effective_platform = platform
+    if effective_platform is None and _is_ambiguous_ticket_id(ticket):
+        effective_platform = _disambiguate_platform(ticket, config)
+
+    # Fetch ticket using TicketService (async)
+    try:
+        generic_ticket = asyncio.run(
+            _fetch_ticket_async(ticket, config, platform_hint=effective_platform)
+        )
+    except Exception as e:
+        # Handle ticket fetch failures with user-friendly messages
+        from spec.integrations.providers.exceptions import (
+            AuthenticationError,
+            PlatformNotSupportedError,
+            TicketNotFoundError,
+        )
+
+        if isinstance(e, TicketNotFoundError):
+            print_error(f"Ticket not found: {e}")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+        elif isinstance(e, AuthenticationError):
+            print_error(f"Authentication failed: {e}")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+        elif isinstance(e, PlatformNotSupportedError):
+            print_error(f"Platform not supported: {e}")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+        else:
+            print_error(f"Failed to fetch ticket: {e}")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
 
     # Determine models
     effective_planning_model = (

@@ -4,8 +4,14 @@ This module defines the Settings dataclass that holds all configuration
 values, matching the original Bash script's configuration options.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from spec.integrations.providers import Platform
 
 # Import subagent constants as single source of truth
 from spec.integrations.auggie import (
@@ -82,6 +88,9 @@ class Settings:
     # Documentation update settings
     auto_update_docs: bool = True  # Enable automatic documentation updates
 
+    # Platform settings
+    default_platform: str = ""  # Default platform for ambiguous ticket IDs (jira, linear, etc.)
+
     # Fetch strategy settings
     agent_platform: str = "auggie"
     fetch_strategy_default: str = "auto"
@@ -113,6 +122,8 @@ class Settings:
             "SUBAGENT_REVIEWER": "subagent_reviewer",
             "SUBAGENT_DOC_UPDATER": "subagent_doc_updater",
             "AUTO_UPDATE_DOCS": "auto_update_docs",
+            # Platform settings
+            "DEFAULT_PLATFORM": "default_platform",
             # Fetch strategy settings
             "AGENT_PLATFORM": "agent_platform",
             "FETCH_STRATEGY_DEFAULT": "fetch_strategy_default",
@@ -159,6 +170,21 @@ class Settings:
         # Create a temporary instance to get the keys
         temp = cls()
         return list(temp._key_mapping.keys())
+
+    def get_default_platform(self) -> Platform | None:
+        """Get default platform as Platform enum, or None if not configured.
+
+        Returns:
+            Platform enum value if default_platform is set and valid, None otherwise
+        """
+        from spec.integrations.providers import Platform
+
+        if not self.default_platform:
+            return None
+        try:
+            return Platform[self.default_platform.upper()]
+        except KeyError:
+            return None
 
 
 # Default configuration file path

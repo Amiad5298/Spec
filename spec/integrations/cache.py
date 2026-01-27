@@ -756,7 +756,9 @@ class FileBasedTicketCache(TicketCache):
 # These globals are maintained for testing convenience only.
 _global_cache: TicketCache | None = None
 _global_cache_type: str | None = None
-_global_cache_kwargs: dict[str, Any] | None = None
+# P1 Fix: Use empty dict instead of None for consistent mismatch comparison logic.
+# This ensures kwargs comparison always works correctly after clear_global_cache().
+_global_cache_kwargs: dict[str, Any] = {}
 _cache_lock = threading.Lock()
 
 
@@ -865,6 +867,10 @@ def _clear_global_cache() -> None:
 
     Warning:
         This is an internal API for testing convenience.
+
+    P1 Fix: Reset _global_cache_kwargs to {} instead of None for consistent
+    comparison logic in _get_global_cache(). This ensures that after clearing,
+    subsequent calls with no kwargs will correctly match the empty state.
     """
     global _global_cache, _global_cache_type, _global_cache_kwargs
 
@@ -873,7 +879,8 @@ def _clear_global_cache() -> None:
             _global_cache.clear()
             _global_cache = None
         _global_cache_type = None
-        _global_cache_kwargs = None
+        # P1 Fix: Use empty dict instead of None for consistent mismatch checks
+        _global_cache_kwargs = {}
 
 
 # Backward compatibility aliases (deprecated - will be removed)

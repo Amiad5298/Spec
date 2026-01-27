@@ -1119,3 +1119,61 @@ class TestGlobalCache:
         assert cache is file_cache  # Should return existing cache
         assert "different configuration" in caplog.text
         _clear_global_cache()
+
+    def test_clear_global_cache_resets_kwargs_to_empty_dict(self):
+        """P1 Fix: Verify _global_cache_kwargs is reset to {} (not None) after clear.
+
+        This ensures consistent mismatch comparison logic - comparing {} to {}
+        works correctly, whereas comparing {} to None could cause confusion
+        or unexpected behavior in logging/error messages.
+        """
+        import spec.integrations.cache as cache_module
+
+        _clear_global_cache()
+
+        # Initialize with specific kwargs
+        _get_global_cache(cache_type="memory", max_size=500)
+
+        # Clear and check internal state
+        _clear_global_cache()
+
+        # P1 Fix: _global_cache_kwargs should be {} (empty dict), not None
+        assert (
+            cache_module._global_cache_kwargs == {}
+        ), f"Expected _global_cache_kwargs to be empty dict, got {cache_module._global_cache_kwargs!r}"
+        assert (
+            cache_module._global_cache_kwargs is not None
+        ), "_global_cache_kwargs should never be None after clear"
+
+        # Subsequent call with no kwargs should work without mismatch
+        # (empty {} == empty {} comparison should succeed)
+        cache = _get_global_cache(cache_type="memory")
+        assert isinstance(cache, InMemoryTicketCache)
+
+        # Clean up
+        _clear_global_cache()
+
+    def test_global_cache_kwargs_mismatch_after_clear_and_reinit(self):
+        """Test that kwargs mismatch detection works correctly after clear.
+
+        P1 Fix verification: After clearing and reinitializing with new kwargs,
+        subsequent calls with different kwargs should still raise/warn correctly.
+        """
+        _clear_global_cache()
+
+        # Initialize with max_size=100
+        cache1 = _get_global_cache(cache_type="memory", max_size=100)
+
+        # Clear the cache
+        _clear_global_cache()
+
+        # Reinitialize with max_size=200
+        cache2 = _get_global_cache(cache_type="memory", max_size=200)
+        assert cache2 is not cache1  # New cache instance
+
+        # Now trying with max_size=300 should raise (mismatch with 200)
+        with pytest.raises(CacheConfigurationError) as exc_info:
+            _get_global_cache(cache_type="memory", max_size=300)
+
+        assert "kwargs=" in str(exc_info.value)
+        _clear_global_cache()

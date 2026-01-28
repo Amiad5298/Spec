@@ -8,7 +8,7 @@ Supports tickets from all 6 platforms: Jira, Linear, GitHub, Azure DevOps, Monda
 
 import asyncio
 import re
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from typing import Annotated, TypeVar
 
 import typer
@@ -69,15 +69,22 @@ class AsyncLoopAlreadyRunningError(SpecError):
     _default_exit_code = ExitCode.GENERAL_ERROR
 
 
-def run_async(coro: Coroutine[None, None, T]) -> T:
+def run_async(coro_factory: Callable[[], Coroutine[None, None, T]]) -> T:
     """Run an async coroutine safely, handling existing event loops.
 
     This helper detects if an event loop is already running (e.g., in Jupyter
     notebooks or dev environments) and raises a clear error instead of
     crashing with asyncio.run().
 
+    Takes a factory function (callable that returns a coroutine) instead of
+    a coroutine object directly. This ensures we check for a running loop
+    BEFORE creating the coroutine, avoiding the need to close an uncalled
+    coroutine and the subtle footgun of discarding side effects that might
+    have occurred before the first await.
+
     Args:
-        coro: The coroutine to run
+        coro_factory: A callable that returns the coroutine to run.
+            Example: lambda: my_async_fn(arg1, arg2)
 
     Returns:
         The result of the coroutine
@@ -93,15 +100,14 @@ def run_async(coro: Coroutine[None, None, T]) -> T:
         loop = None
 
     if loop is not None:
-        # Close the coroutine to avoid "coroutine was never awaited" warning
-        coro.close()
+        # Raise BEFORE creating the coroutine - no cleanup needed
         raise AsyncLoopAlreadyRunningError(
             "Cannot run async operation: an event loop is already running. "
             "This can happen in Jupyter notebooks or when running inside an async context. "
             "Consider using 'await' directly or running from a synchronous environment."
         )
 
-    return asyncio.run(coro)
+    return asyncio.run(coro_factory())
 
 
 def _validate_platform(platform: str | None) -> Platform | None:
@@ -163,6 +169,15 @@ def _is_ambiguous_ticket_id(input_str: str) -> bool:
     return False
 
 
+def _platform_display_name(p: Platform) -> str:
+    """Convert Platform enum to user-friendly display name (kebab-case).
+
+    Provides a stable, reversible mapping for user-facing strings.
+    E.g., Platform.AZURE_DEVOPS -> "azure-devops"
+    """
+    return p.name.lower().replace("_", "-")
+
+
 def _disambiguate_platform(ticket_input: str, config: ConfigManager) -> Platform:
     """Resolve ambiguous ticket ID to a specific platform.
 
@@ -187,16 +202,18 @@ def _disambiguate_platform(ticket_input: str, config: ConfigManager) -> Platform
     if default_platform is not None:
         return default_platform
 
-    # Build choices from the constant for ambiguous platforms
-    choices = [p.name.title() for p in AMBIGUOUS_PLATFORMS]
+    # Build explicit mapping from display string to Platform enum.
+    # This avoids brittle string-to-enum parsing (e.g., .upper()) that would
+    # fail for enum names with underscores like AZURE_DEVOPS.
+    options: dict[str, Platform] = {_platform_display_name(p): p for p in AMBIGUOUS_PLATFORMS}
 
     # Interactive prompt
     print_info(f"Ticket ID '{ticket_input}' could be from multiple platforms.")
     choice: str = prompt_select(
         message="Which platform is this ticket from?",
-        choices=choices,
+        choices=list(options.keys()),
     )
-    return Platform[choice.upper()]
+    return options[choice]
 
 
 async def create_ticket_service_from_config(config: ConfigManager) -> TicketService:
@@ -250,8 +267,6 @@ async def _fetch_ticket_async(
         PlatformNotSupportedError: If platform is not supported
     """
     # Handle platform hint by constructing a more specific input
-    # NOTE: This URL construction is a temporary workaround until TicketService
-    # supports a platform_override parameter directly. See issue AMI-XX.
     effective_input = ticket_input
     if platform_hint is not None and _is_ambiguous_ticket_id(ticket_input):
         effective_input = _resolve_with_platform_hint(ticket_input, platform_hint)
@@ -263,35 +278,49 @@ async def _fetch_ticket_async(
         return ticket
 
 
+# Linear URL template placeholder for platform hint workaround
+_LINEAR_URL_TEMPLATE = "https://linear.app/team/issue/{ticket_id}"
+
+
 def _resolve_with_platform_hint(
     ticket_id: str,
     platform: Platform,
 ) -> str:
-    """Convert ambiguous ticket ID to platform-specific URL.
+    """Convert ambiguous ticket ID to platform-specific URL for disambiguation.
 
-    For ambiguous IDs like PROJECT-123, constructs a platform-specific
-    URL that the TicketService can unambiguously detect.
+    This is a WORKAROUND for the limitation that TicketService/ProviderRegistry
+    does not currently support a `platform_override` parameter. Instead of passing
+    the intended platform directly, we construct a synthetic URL that will route
+    to the correct provider during platform detection.
 
-    NOTE: This is a temporary workaround. Ideally, we would pass a platform_override
-    directly to TicketService. This approach constructs fake URLs to trigger
-    the correct provider detection.
+    TODO(https://github.com/Amiad5298/Spec/issues/36): Refactor TicketService to
+    accept platform_override parameter
+    directly instead of relying on URL-based platform detection. This would
+    eliminate the need for synthetic URL construction and make the intent clearer.
+
+    Assumptions:
+    - Linear provider's URL regex extracts the ticket ID from the path and
+      ignores the team slug ("team" in the template). The fake team name is
+      acceptable because the actual API call uses only the ticket ID.
+    - Jira provider handles bare IDs natively (no URL needed).
+    - Other platforms in AMBIGUOUS_PLATFORMS (if added) may need their own
+      URL templates here.
 
     Args:
         ticket_id: Ambiguous ticket ID (e.g., "PROJ-123")
-        platform: Target platform
+        platform: Target platform to route to
 
     Returns:
-        Platform-specific URL or the original ID if no conversion needed
+        Platform-specific URL for routing, or the original ID if no conversion needed
     """
     if platform == Platform.JIRA:
-        # Keep as-is - Jira provider handles bare IDs and is the default
+        # Jira provider handles bare IDs natively - no URL construction needed
         return ticket_id
     elif platform == Platform.LINEAR:
-        # Linear URLs have format: https://linear.app/team/issue/ID
-        # NOTE: Linear provider parses ticket ID from the URL path, ignoring the
-        # placeholder team name. This ensures unambiguous platform detection.
-        return f"https://linear.app/team/issue/{ticket_id}"
+        # Construct synthetic Linear URL with placeholder team name
+        return _LINEAR_URL_TEMPLATE.format(ticket_id=ticket_id)
     else:
+        # Fallback: return as-is for unsupported platforms
         return ticket_id
 
 
@@ -746,7 +775,7 @@ def _run_workflow(
     # Use run_async helper to safely handle existing event loops
     try:
         generic_ticket = run_async(
-            _fetch_ticket_async(ticket, config, platform_hint=effective_platform)
+            lambda: _fetch_ticket_async(ticket, config, platform_hint=effective_platform)
         )
     except TicketNotFoundError as e:
         print_error(f"Ticket not found: {e}")

@@ -976,7 +976,8 @@ class TestDisambiguatePlatform:
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
-        mock_prompt.return_value = "Jira"
+        # Now uses kebab-case display names
+        mock_prompt.return_value = "jira"
 
         result = _disambiguate_platform("PROJ-123", mock_config)
 
@@ -993,11 +994,53 @@ class TestDisambiguatePlatform:
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
-        mock_prompt.return_value = "Linear"
+        # Now uses kebab-case display names
+        mock_prompt.return_value = "linear"
 
         result = _disambiguate_platform("ENG-456", mock_config)
 
         assert result == Platform.LINEAR
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_uses_explicit_mapping_not_string_parsing(self, mock_print, mock_prompt):
+        """Verifies that explicit dict mapping is used, not string.upper() parsing.
+
+        This test ensures the mapping approach is robust for enum names with
+        underscores (like AZURE_DEVOPS would be "azure-devops" in display).
+        """
+        from spec.cli import _platform_display_name
+        from spec.integrations.providers import Platform
+
+        # Verify the helper produces correct kebab-case
+        assert _platform_display_name(Platform.JIRA) == "jira"
+        assert _platform_display_name(Platform.LINEAR) == "linear"
+        assert _platform_display_name(Platform.AZURE_DEVOPS) == "azure-devops"
+
+        # The key insight: "azure-devops".upper() == "AZURE-DEVOPS" (with hyphen)
+        # which would fail Platform["AZURE-DEVOPS"] since enum is AZURE_DEVOPS.
+        # Our explicit mapping avoids this by using dict lookup, not string parsing.
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_prompt_choices_are_kebab_case(self, mock_print, mock_prompt):
+        """Prompt choices use user-friendly kebab-case format."""
+        from spec.cli import _disambiguate_platform
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+        mock_prompt.return_value = "jira"
+
+        _disambiguate_platform("PROJ-123", mock_config)
+
+        # Verify choices passed to prompt are kebab-case
+        call_kwargs = mock_prompt.call_args[1]
+        choices = call_kwargs["choices"]
+        assert "jira" in choices
+        assert "linear" in choices
+        # Should NOT contain title-case like "Jira" or "Linear"
+        assert "Jira" not in choices
+        assert "Linear" not in choices
 
 
 class TestFetchTicketAsyncIntegration:
@@ -1130,33 +1173,65 @@ class TestFetchTicketAsyncIntegration:
 class TestRunAsync:
     """Tests for run_async helper function."""
 
-    def test_run_async_executes_coroutine(self):
-        """run_async executes a coroutine and returns its result."""
+    def test_run_async_executes_coroutine_factory(self):
+        """run_async executes a coroutine factory and returns its result."""
         from spec.cli import run_async
 
         async def sample_coro():
             return "test_result"
 
-        result = run_async(sample_coro())
+        # Now takes a factory (callable) instead of a coroutine
+        result = run_async(lambda: sample_coro())
         assert result == "test_result"
 
-    def test_run_async_raises_when_loop_running(self):
-        """run_async raises AsyncLoopAlreadyRunningError when loop is running."""
+    def test_run_async_raises_when_loop_running_without_creating_coroutine(self):
+        """run_async raises AsyncLoopAlreadyRunningError without creating coroutine.
+
+        The factory pattern ensures we check for a running loop BEFORE calling
+        the factory, so no coroutine needs to be created and then closed.
+        """
         import asyncio
 
         from spec.cli import AsyncLoopAlreadyRunningError, run_async
 
-        async def outer():
-            async def inner():
-                return "should not execute"
+        factory_called = False
 
+        async def inner_coro():
+            return "should not execute"
+
+        def coro_factory():
+            nonlocal factory_called
+            factory_called = True
+            return inner_coro()
+
+        async def outer():
             # This should raise because we're already in an async context
             with pytest.raises(AsyncLoopAlreadyRunningError) as exc_info:
-                run_async(inner())
+                run_async(coro_factory)
 
             assert "event loop is already running" in str(exc_info.value)
+            # Factory should NOT be called when loop is already running
+            assert factory_called is False
 
         asyncio.run(outer())
+
+    def test_run_async_calls_factory_when_no_loop(self):
+        """run_async calls the factory when no event loop is running."""
+        from spec.cli import run_async
+
+        factory_call_count = 0
+
+        async def coro():
+            return 42
+
+        def coro_factory():
+            nonlocal factory_call_count
+            factory_call_count += 1
+            return coro()
+
+        result = run_async(coro_factory)
+        assert result == 42
+        assert factory_call_count == 1
 
 
 class TestAmbiguousIdWithPlatformFlag:

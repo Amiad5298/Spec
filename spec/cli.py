@@ -205,6 +205,8 @@ def _disambiguate_platform(ticket_input: str, config: ConfigManager) -> Platform
     # Build explicit mapping from display string to Platform enum.
     # This avoids brittle string-to-enum parsing (e.g., .upper()) that would
     # fail for enum names with underscores like AZURE_DEVOPS.
+    # Note: AMBIGUOUS_PLATFORMS is a tuple, so iteration order is stable.
+    # Do not change it to a set or unordered collection without updating tests.
     options: dict[str, Platform] = {_platform_display_name(p): p for p in AMBIGUOUS_PLATFORMS}
 
     # Interactive prompt

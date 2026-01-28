@@ -1004,28 +1004,48 @@ class TestDisambiguatePlatform:
     @patch("spec.ui.prompts.prompt_select")
     @patch("spec.cli.print_info")
     def test_uses_explicit_mapping_not_string_parsing(self, mock_print, mock_prompt):
-        """Verifies that explicit dict mapping is used, not string.upper() parsing.
+        """Verifies _disambiguate_platform uses explicit dict mapping end-to-end.
 
-        This test ensures the mapping approach is robust for enum names with
-        underscores (like AZURE_DEVOPS would be "azure-devops" in display).
+        This test exercises the full flow:
+        1. Prompt receives kebab-case choices (the mapping keys)
+        2. Returning a choice string yields the correct Platform enum via mapping
+
+        Why this matters: If the implementation used choice.upper() + Platform[...],
+        it would fail for enums with underscores (e.g., "azure-devops".upper() gives
+        "AZURE-DEVOPS", but the enum is AZURE_DEVOPS). Our mapping avoids this.
         """
-        from spec.cli import _platform_display_name
-        from spec.integrations.providers import Platform
+        from spec.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
 
-        # Verify the helper produces correct kebab-case
-        assert _platform_display_name(Platform.JIRA) == "jira"
-        assert _platform_display_name(Platform.LINEAR) == "linear"
-        assert _platform_display_name(Platform.AZURE_DEVOPS) == "azure-devops"
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
 
-        # The key insight: "azure-devops".upper() == "AZURE-DEVOPS" (with hyphen)
-        # which would fail Platform["AZURE-DEVOPS"] since enum is AZURE_DEVOPS.
-        # Our explicit mapping avoids this by using dict lookup, not string parsing.
+        # Test each platform in AMBIGUOUS_PLATFORMS: simulate user selecting it
+        for expected_platform in AMBIGUOUS_PLATFORMS:
+            mock_prompt.reset_mock()
+            choice_key = _platform_display_name(expected_platform)
+            mock_prompt.return_value = choice_key
+
+            result = _disambiguate_platform("PROJ-123", mock_config)
+
+            # Verify the mapping returns the correct enum
+            assert (
+                result == expected_platform
+            ), f"Expected {expected_platform}, got {result} for choice '{choice_key}'"
+
+            # Verify prompt was called with kebab-case choices (the mapping keys)
+            call_kwargs = mock_prompt.call_args[1]
+            choices = call_kwargs["choices"]
+            assert choice_key in choices, f"Choice '{choice_key}' not in {choices}"
 
     @patch("spec.ui.prompts.prompt_select")
     @patch("spec.cli.print_info")
-    def test_prompt_choices_are_kebab_case(self, mock_print, mock_prompt):
-        """Prompt choices use user-friendly kebab-case format."""
-        from spec.cli import _disambiguate_platform
+    def test_prompt_choices_ordering_is_stable(self, mock_print, mock_prompt):
+        """Prompt choices maintain stable ordering matching AMBIGUOUS_PLATFORMS.
+
+        This ensures future changes (e.g., dict iteration order, set usage) don't
+        accidentally alter the user-facing choice order.
+        """
+        from spec.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
@@ -1033,14 +1053,14 @@ class TestDisambiguatePlatform:
 
         _disambiguate_platform("PROJ-123", mock_config)
 
-        # Verify choices passed to prompt are kebab-case
         call_kwargs = mock_prompt.call_args[1]
         choices = call_kwargs["choices"]
-        assert "jira" in choices
-        assert "linear" in choices
-        # Should NOT contain title-case like "Jira" or "Linear"
-        assert "Jira" not in choices
-        assert "Linear" not in choices
+
+        # Expected order: derived from AMBIGUOUS_PLATFORMS tuple order
+        expected_choices = [_platform_display_name(p) for p in AMBIGUOUS_PLATFORMS]
+        assert (
+            choices == expected_choices
+        ), f"Choices {choices} don't match expected order {expected_choices}"
 
 
 class TestFetchTicketAsyncIntegration:

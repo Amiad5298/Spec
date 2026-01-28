@@ -26,7 +26,7 @@ from typer.testing import CliRunner
 from spec.cli import app
 from spec.integrations.providers import Platform
 from spec.utils.errors import ExitCode
-from tests.fixtures.cli_integration import _make_async_context_manager
+from tests.helpers.async_cm import make_async_context_manager
 from tests.helpers.workflow import get_ticket_from_workflow_call
 
 # CLI integration fixtures are loaded via tests/cli/conftest.py
@@ -456,19 +456,32 @@ class TestFallbackBehaviorViaCLI:
 
         mock_config_class.return_value = mock_config_for_cli
 
+        # Create a parent mock to track call order across fetchers
+        call_order_tracker = MagicMock()
+
         # Primary fetcher FAILS with AgentIntegrationError
         mock_primary = MagicMock()
         mock_primary.name = "AuggieMediatedFetcher"
         mock_primary.supports_platform.return_value = True
-        mock_primary.fetch = AsyncMock(side_effect=AgentIntegrationError("Auggie unavailable"))
         mock_primary.close = AsyncMock()
+
+        async def primary_fetch_side_effect(*args, **kwargs):
+            call_order_tracker.primary_fetch()
+            raise AgentIntegrationError("Auggie unavailable")
+
+        mock_primary.fetch = AsyncMock(side_effect=primary_fetch_side_effect)
 
         # Fallback fetcher SUCCEEDS - DISTINCT mock instance
         mock_fallback = MagicMock()
         mock_fallback.name = "DirectAPIFetcher"
         mock_fallback.supports_platform.return_value = True
-        mock_fallback.fetch = AsyncMock(return_value=mock_jira_raw_data)
         mock_fallback.close = AsyncMock()
+
+        async def fallback_fetch_side_effect(*args, **kwargs):
+            call_order_tracker.fallback_fetch()
+            return mock_jira_raw_data
+
+        mock_fallback.fetch = AsyncMock(side_effect=fallback_fetch_side_effect)
 
         # Mock fetcher constructors to return SEPARATE mock instances
         with patch(
@@ -485,11 +498,18 @@ class TestFallbackBehaviorViaCLI:
         mock_primary.fetch.assert_called_once()
         mock_fallback.fetch.assert_called_once()
 
-        # Verify call order: primary attempted BEFORE fallback
-        # We can check this by verifying the call count history - primary should have
-        # been called before fallback finished (both should be called exactly once)
-        # Note: unittest.mock doesn't have built-in call order tracking across mocks,
-        # but the structure of the code guarantees order: primary fails -> fallback runs
+        # Verify call order: primary was attempted BEFORE fallback
+        # The parent mock tracks method calls in order, so we can verify the sequence
+        assert len(call_order_tracker.method_calls) == 2, (
+            f"Expected 2 calls (primary_fetch, fallback_fetch), "
+            f"got {len(call_order_tracker.method_calls)}: {call_order_tracker.method_calls}"
+        )
+        assert (
+            call_order_tracker.method_calls[0][0] == "primary_fetch"
+        ), f"Expected primary_fetch first, got: {call_order_tracker.method_calls[0][0]}"
+        assert (
+            call_order_tracker.method_calls[1][0] == "fallback_fetch"
+        ), f"Expected fallback_fetch second, got: {call_order_tracker.method_calls[1][0]}"
 
         # Verify CLI succeeded (fallback worked)
         assert (
@@ -595,7 +615,7 @@ class TestCLIErrorContract:
                 side_effect=TicketNotFoundError(ticket_id="NOTFOUND-999", platform="jira")
             )
             mock_service.close = AsyncMock()
-            return _make_async_context_manager(mock_service)
+            return make_async_context_manager(mock_service)
 
         with patch(
             "spec.cli.create_ticket_service_from_config",
@@ -640,7 +660,7 @@ class TestCLIErrorContract:
                 side_effect=AuthenticationError("Invalid API token", platform="jira")
             )
             mock_service.close = AsyncMock()
-            return _make_async_context_manager(mock_service)
+            return make_async_context_manager(mock_service)
 
         with patch(
             "spec.cli.create_ticket_service_from_config",
@@ -689,7 +709,7 @@ class TestCLIErrorContract:
                 )
             )
             mock_service.close = AsyncMock()
-            return _make_async_context_manager(mock_service)
+            return make_async_context_manager(mock_service)
 
         with patch(
             "spec.cli.create_ticket_service_from_config",

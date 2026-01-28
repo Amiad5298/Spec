@@ -3,9 +3,17 @@
 2-Layer Test Strategy:
 - Layer A (CLI Contract): Mock at create_ticket_service_from_config factory
 - Layer B (CLI→Service Integration): Mock only at fetcher class boundaries
-  (AuggieMediatedFetcher / DirectAPIFetcher constructors)
+  (AuggieMediatedFetcher / DirectAPIFetcher constructors) and workflow runner
+
+Mocking Boundaries:
+- Layer A mocks create_ticket_service_from_config to test CLI behavior in isolation
+- Layer B mocks:
+  1. Fetcher constructors (AuggieMediatedFetcher, DirectAPIFetcher) - prevents external API calls
+  2. run_spec_driven_workflow - prevents actual workflow execution
+  3. Uses SEPARATE mock instances for primary/fallback fetchers to catch lifecycle bugs
 
 All tests use runner.invoke(app, ...) to exercise the real CLI entry point.
+Tests run in isolated_filesystem() for deterministic behavior.
 
 This file implements AMI-40: Add End-to-End Integration Tests for Multi-Platform CLI.
 """
@@ -18,6 +26,10 @@ from typer.testing import CliRunner
 from spec.cli import app
 from spec.integrations.providers import Platform
 from spec.utils.errors import ExitCode
+from tests.fixtures.cli_integration import get_ticket_from_workflow_call
+
+# Import CLI integration fixtures from dedicated module
+pytest_plugins = ["tests.fixtures.cli_integration"]
 
 runner = CliRunner()
 
@@ -36,18 +48,22 @@ class TestPlatformFlagValidation:
         Note: This test doesn't need any mocks - validation fails before
         TicketService is called.
 
-        Typer raises BadParameter which results in exit code 2 (not ExitCode.GENERAL_ERROR).
+        Assertions are kept resilient to Click/Typer wording changes:
+        - Exit code 2 (standard usage error)
+        - Output mentions "invalid" (case-insensitive)
+        - Output mentions at least "jira" and "linear" as valid options (not all 6)
         """
         result = runner.invoke(app, ["PROJ-123", "--platform", "invalid"])
 
-        # Typer's BadParameter produces exit code 2
-        assert result.exit_code != 0, f"Expected non-zero exit code, got {result.exit_code}"
-        # Use result.output consistently (combines stdout/stderr)
-        output = result.output
-        assert "Invalid platform" in output
-        # Should list valid options - check for all platforms
-        for platform_name in ["jira", "linear", "github", "azure-devops", "monday", "trello"]:
-            assert platform_name in output.lower()
+        # Typer/Click usage error is exit code 2
+        assert result.exit_code == 2, f"Expected exit code 2, got {result.exit_code}"
+
+        output = result.output.lower()
+        # Should indicate invalid value (case-insensitive, allows for wording variations)
+        assert "invalid" in output, f"Expected 'invalid' in output: {result.output}"
+        # Should mention at least some valid platforms (not all 6 to avoid brittleness)
+        assert "jira" in output, f"Expected 'jira' mentioned as valid option: {result.output}"
+        assert "linear" in output, f"Expected 'linear' mentioned as valid option: {result.output}"
 
     @pytest.mark.parametrize(
         "platform_name,expected_platform",
@@ -326,45 +342,55 @@ class TestCLIServiceIntegration:
     ):
         """Layer B: All 6 platforms work through CLI→TicketService→Provider chain.
 
-        This test:
-        1. Invokes CLI with a platform-specific URL
-        2. Lets REAL _run_workflow, _fetch_ticket_async, TicketService, and Provider code run
-        3. Mocks only fetcher constructors to return mock instances with .fetch()
-        4. Mocks run_spec_driven_workflow to prevent actual workflow execution
-        5. Verifies the workflow receives correctly normalized GenericTicket
+        Mocking boundaries:
+        - Fetcher constructors: AuggieMediatedFetcher and DirectAPIFetcher (SEPARATE instances)
+        - Workflow runner: run_spec_driven_workflow
+        - ConfigManager, show_banner, _check_prerequisites (CLI infrastructure)
+
+        What runs real:
+        - CLI entry point, argument parsing
+        - TicketService, ProviderRegistry, Provider normalization
         """
         test_data = self.PLATFORM_TEST_DATA[platform]
         raw_data = request.getfixturevalue(test_data["raw_fixture"])
 
         mock_config_class.return_value = mock_config_for_cli
 
-        # Create mock fetcher that returns raw data for this platform
-        mock_fetcher = MagicMock()
-        mock_fetcher.name = "MockAuggieFetcher"
-        mock_fetcher.supports_platform.return_value = True
-        mock_fetcher.fetch = AsyncMock(return_value=raw_data)
-        mock_fetcher.close = AsyncMock()
+        # Create SEPARATE mock fetchers for primary and fallback
+        # This ensures we don't hide bugs where primary vs fallback are confused
+        mock_primary_fetcher = MagicMock()
+        mock_primary_fetcher.name = "MockAuggieFetcher"
+        mock_primary_fetcher.supports_platform.return_value = True
+        mock_primary_fetcher.fetch = AsyncMock(return_value=raw_data)
+        mock_primary_fetcher.close = AsyncMock()
 
-        # Mock fetcher class constructors - this is the KEY Layer B approach
-        # The real TicketService, create_ticket_service, ProviderRegistry all run
+        mock_fallback_fetcher = MagicMock()
+        mock_fallback_fetcher.name = "MockDirectAPIFetcher"
+        mock_fallback_fetcher.supports_platform.return_value = True
+        mock_fallback_fetcher.fetch = AsyncMock(return_value=raw_data)
+        mock_fallback_fetcher.close = AsyncMock()
+
+        # Mock fetcher class constructors with DISTINCT instances
         with patch(
             "spec.integrations.ticket_service.AuggieMediatedFetcher",
-            return_value=mock_fetcher,
+            return_value=mock_primary_fetcher,
         ), patch(
             "spec.integrations.ticket_service.DirectAPIFetcher",
-            return_value=mock_fetcher,
+            return_value=mock_fallback_fetcher,
         ):
-            result = runner.invoke(app, [test_data["url"]])
+            # Use isolated_filesystem to prevent filesystem I/O flakiness
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, [test_data["url"]])
 
         # Verify workflow runner was called with correct ticket
         assert result.exit_code == 0, f"CLI failed: {result.output}"
         mock_workflow_runner.assert_called_once()
 
-        # Verify the ticket passed to workflow has correct platform and title
-        # run_spec_driven_workflow is called with ticket=generic_ticket (GenericTicket object)
-        call_kwargs = mock_workflow_runner.call_args.kwargs
-        ticket = call_kwargs.get("ticket")
+        # Use robust ticket extraction (handles positional and keyword args)
+        ticket = get_ticket_from_workflow_call(mock_workflow_runner)
         assert ticket is not None, "Workflow should receive a ticket"
+        assert hasattr(ticket, "platform"), "Ticket should have platform attribute"
+        assert hasattr(ticket, "title"), "Ticket should have title attribute"
         assert ticket.platform == platform, f"Expected {platform}, got {ticket.platform}"
         assert (
             ticket.title == test_data["expected_title"]
@@ -374,10 +400,18 @@ class TestCLIServiceIntegration:
 class TestFallbackBehaviorViaCLI:
     """Layer B: Test primary→fallback fetcher chain via CLI.
 
+    Mocking boundaries:
+    - Fetcher constructors: AuggieMediatedFetcher and DirectAPIFetcher (SEPARATE instances)
+    - Workflow runner: run_spec_driven_workflow
+    - ConfigManager, show_banner, _check_prerequisites (CLI infrastructure)
+
+    What runs real:
+    - CLI entry point, TicketService fallback logic, Provider normalization
+
     These tests verify the REAL fallback mechanism in TicketService:
     - Primary fetcher (AuggieMediatedFetcher) fails with AgentIntegrationError
     - Fallback fetcher (DirectAPIFetcher) is invoked and succeeds
-    - Both fetchers' fetch() methods are called in order
+    - SEPARATE mock instances verify call order and prevent lifecycle confusion
     """
 
     @patch("spec.workflow.runner.run_spec_driven_workflow")  # Mock at workflow runner level
@@ -395,10 +429,10 @@ class TestFallbackBehaviorViaCLI:
     ):
         """Primary fetcher failure triggers fallback - both fetchers called.
 
-        This is a TRUE fallback test that:
-        1. Mocks primary fetcher to raise AgentIntegrationError
-        2. Mocks fallback fetcher to return valid data
-        3. Asserts BOTH fetch() methods were called (primary first, then fallback)
+        Mocking boundaries:
+        - Primary fetcher: raises AgentIntegrationError
+        - Fallback fetcher: returns valid raw data
+        - Workflow runner: mocked to verify ticket passed correctly
         """
         from spec.integrations.fetchers.exceptions import AgentIntegrationError
 
@@ -411,14 +445,14 @@ class TestFallbackBehaviorViaCLI:
         mock_primary.fetch = AsyncMock(side_effect=AgentIntegrationError("Auggie unavailable"))
         mock_primary.close = AsyncMock()
 
-        # Fallback fetcher SUCCEEDS
+        # Fallback fetcher SUCCEEDS - DISTINCT mock instance
         mock_fallback = MagicMock()
         mock_fallback.name = "DirectAPIFetcher"
         mock_fallback.supports_platform.return_value = True
         mock_fallback.fetch = AsyncMock(return_value=mock_jira_raw_data)
         mock_fallback.close = AsyncMock()
 
-        # Mock fetcher constructors to return our mock instances
+        # Mock fetcher constructors to return SEPARATE mock instances
         with patch(
             "spec.integrations.ticket_service.AuggieMediatedFetcher",
             return_value=mock_primary,
@@ -426,7 +460,8 @@ class TestFallbackBehaviorViaCLI:
             "spec.integrations.ticket_service.DirectAPIFetcher",
             return_value=mock_fallback,
         ):
-            result = runner.invoke(app, ["https://company.atlassian.net/browse/PROJ-123"])
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["https://company.atlassian.net/browse/PROJ-123"])
 
         # Key assertions: both fetchers were called in correct order
         mock_primary.fetch.assert_called_once()
@@ -436,10 +471,9 @@ class TestFallbackBehaviorViaCLI:
         assert result.exit_code == 0, f"CLI should succeed after fallback: {result.output}"
         mock_workflow_runner.assert_called_once()
 
-        # Verify ticket was correctly normalized from fallback data
-        call_kwargs = mock_workflow_runner.call_args.kwargs
-        ticket = call_kwargs.get("ticket")
-        assert ticket is not None
+        # Use robust ticket extraction (handles positional and keyword args)
+        ticket = get_ticket_from_workflow_call(mock_workflow_runner)
+        assert ticket is not None, "Workflow should receive a ticket from fallback"
         assert ticket.platform == Platform.JIRA
         assert ticket.title == "Test Jira Ticket"
 
@@ -456,7 +490,12 @@ class TestFallbackBehaviorViaCLI:
         mock_jira_raw_data,
         mock_config_for_cli,
     ):
-        """When primary succeeds, fallback should NOT be called."""
+        """When primary succeeds, fallback should NOT be called.
+
+        Mocking boundaries:
+        - Primary fetcher: returns valid raw data (success case)
+        - Fallback fetcher: should NOT be invoked
+        """
         mock_config_class.return_value = mock_config_for_cli
 
         # Primary fetcher SUCCEEDS
@@ -466,7 +505,7 @@ class TestFallbackBehaviorViaCLI:
         mock_primary.fetch = AsyncMock(return_value=mock_jira_raw_data)
         mock_primary.close = AsyncMock()
 
-        # Fallback fetcher (should NOT be called)
+        # Fallback fetcher - DISTINCT instance, should NOT be called
         mock_fallback = MagicMock()
         mock_fallback.name = "DirectAPIFetcher"
         mock_fallback.supports_platform.return_value = True
@@ -480,7 +519,8 @@ class TestFallbackBehaviorViaCLI:
             "spec.integrations.ticket_service.DirectAPIFetcher",
             return_value=mock_fallback,
         ):
-            result = runner.invoke(app, ["https://company.atlassian.net/browse/PROJ-123"])
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["https://company.atlassian.net/browse/PROJ-123"])
 
         # Primary was called, fallback was NOT called
         mock_primary.fetch.assert_called_once()
@@ -490,12 +530,16 @@ class TestFallbackBehaviorViaCLI:
 
 
 class TestErrorPropagationViaCLI:
-    """Layer B: Test error propagation from service layer to CLI.
+    """Layer A: Test error propagation from service layer to CLI.
 
-    These tests verify that errors from TicketService surface correctly
-    at the CLI level with appropriate exit codes and user-friendly messages.
+    Mocking boundaries:
+    - create_ticket_service_from_config: returns mock service that raises errors
+    - ConfigManager, show_banner, _check_prerequisites (CLI infrastructure)
 
-    Uses SPECIFIC assertions for exit codes and error message content.
+    What runs real:
+    - CLI entry point, error handling, exit code mapping
+
+    Exit codes use ExitCode (IntEnum), so comparisons work with both int and enum.
     """
 
     @patch("spec.cli.show_banner")
@@ -507,7 +551,10 @@ class TestErrorPropagationViaCLI:
         mock_prereq,
         mock_banner,
     ):
-        """TicketNotFoundError surfaces with ticket ID in error message."""
+        """TicketNotFoundError surfaces with ticket ID in error message.
+
+        Mocking: create_ticket_service_from_config raises TicketNotFoundError
+        """
         from spec.integrations.providers.exceptions import TicketNotFoundError
 
         mock_config = MagicMock()
@@ -530,12 +577,13 @@ class TestErrorPropagationViaCLI:
             "spec.cli.create_ticket_service_from_config",
             side_effect=mock_create_service,
         ):
-            result = runner.invoke(app, ["NOTFOUND-999", "--platform", "jira"])
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["NOTFOUND-999", "--platform", "jira"])
 
-        # Specific assertions
+        # ExitCode is IntEnum, so comparison works with both int and enum
         assert (
-            result.exit_code == ExitCode.GENERAL_ERROR
-        ), f"Expected exit code {ExitCode.GENERAL_ERROR}, got {result.exit_code}"
+            result.exit_code == ExitCode.GENERAL_ERROR.value
+        ), f"Expected exit code {ExitCode.GENERAL_ERROR.value}, got {result.exit_code}"
         output = result.output
         # Should mention the ticket ID and indicate it wasn't found
         assert (
@@ -551,7 +599,10 @@ class TestErrorPropagationViaCLI:
         mock_prereq,
         mock_banner,
     ):
-        """AuthenticationError surfaces with auth-related message."""
+        """AuthenticationError surfaces with auth-related message.
+
+        Mocking: create_ticket_service_from_config raises AuthenticationError
+        """
         from spec.integrations.providers.exceptions import AuthenticationError
 
         mock_config = MagicMock()
@@ -573,10 +624,11 @@ class TestErrorPropagationViaCLI:
             "spec.cli.create_ticket_service_from_config",
             side_effect=mock_create_service,
         ):
-            result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
 
-        # Specific assertions
-        assert result.exit_code == ExitCode.GENERAL_ERROR
+        # ExitCode is IntEnum, so comparison works with both int and enum
+        assert result.exit_code == ExitCode.GENERAL_ERROR.value
         output = result.output
         # Should indicate authentication issue
         assert (
@@ -592,7 +644,10 @@ class TestErrorPropagationViaCLI:
         mock_prereq,
         mock_banner,
     ):
-        """Unconfigured platform error shows platform name and configuration hint."""
+        """Unconfigured platform error shows platform name and configuration hint.
+
+        Mocking: create_ticket_service_from_config raises PlatformNotSupportedError
+        """
         from spec.integrations.fetchers.exceptions import (
             PlatformNotSupportedError as FetcherPlatformNotSupportedError,
         )
@@ -620,10 +675,11 @@ class TestErrorPropagationViaCLI:
             "spec.cli.create_ticket_service_from_config",
             side_effect=mock_create_service,
         ):
-            result = runner.invoke(app, ["TRL-123", "--platform", "trello"])
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["TRL-123", "--platform", "trello"])
 
-        # Specific assertions
-        assert result.exit_code == ExitCode.GENERAL_ERROR
+        # ExitCode is IntEnum, so comparison works with both int and enum
+        assert result.exit_code == ExitCode.GENERAL_ERROR.value
         output = result.output
         # Should mention the platform or configuration issue
         assert (

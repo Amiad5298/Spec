@@ -4,12 +4,13 @@
     <strong>Spec-Driven Development Workflow Powered by AI</strong>
   </p>
   <p align="center">
-    Transform Jira tickets into implemented features with a structured, AI-assisted three-step workflow.
+    Transform tickets from any platform into implemented features with a structured, AI-assisted three-step workflow.
   </p>
 </p>
 
 <p align="center">
   <a href="#features">Features</a> •
+  <a href="#supported-platforms">Supported Platforms</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#how-it-works">How It Works</a> •
   <a href="#installation">Installation</a> •
@@ -22,7 +23,7 @@
 
 ## What is SPEC?
 
-SPEC is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a Jira ticket, SPEC:
+SPEC is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a ticket from any supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, or Trello), SPEC:
 
 1. **Plans** - Creates a detailed implementation plan by analyzing requirements and your codebase
 2. **Tasks** - Generates an optimized task list, identifying which tasks can run in parallel
@@ -36,7 +37,7 @@ SPEC leverages the [Auggie CLI](https://github.com/AugmentCode/auggie) and multi
 
 ### 🚀 Three-Step Workflow
 A structured approach that breaks complex features into manageable pieces:
-- **Step 1**: AI-generated implementation plan based on Jira ticket and codebase analysis
+- **Step 1**: AI-generated implementation plan based on ticket and codebase analysis
 - **Step 2**: Task list with dependency analysis for optimal execution order
 - **Step 3**: Automated task execution with real-time progress tracking
 
@@ -48,7 +49,8 @@ Dramatically reduce implementation time:
 - Built-in rate limit handling with exponential backoff
 
 ### 🔗 Deep Integrations
-- **Jira**: Automatic ticket fetching, context extraction, and branch naming
+- **6 Ticket Platforms**: Jira, Linear, GitHub, Azure DevOps, Monday, and Trello
+- **Automatic Platform Detection**: URLs and ticket IDs are automatically routed to the correct platform
 - **Git**: Feature branch creation, checkpoint commits after each task, optional commit squashing
 - **Auggie CLI**: Leverages Auggie's AI capabilities with specialized subagents
 
@@ -108,6 +110,35 @@ Example task list with file annotations:
 
 [Screenshot placeholder: Terminal showing the TUI with parallel task execution in progress]
 
+## Supported Platforms
+
+SPEC supports 6 ticket platforms out of the box:
+
+| Platform | URL Support | Ticket ID Support | Notes |
+|----------|-------------|-------------------|-------|
+| **Jira** | ✅ | ✅ `PROJECT-123` | Full integration via Auggie |
+| **Linear** | ✅ | ✅ `ENG-456` | Full integration via Auggie |
+| **GitHub Issues** | ✅ | ✅ `owner/repo#42` | Full integration via Auggie |
+| **Azure DevOps** | ✅ | ⚠️ `AB#789` | Requires fallback credentials |
+| **Monday** | ✅ | ❌ URL only | Requires fallback credentials |
+| **Trello** | ✅ | ❌ URL only | Requires fallback credentials |
+
+### Platform Detection
+
+SPEC automatically detects the platform from the ticket URL or ID:
+
+```bash
+# URLs are auto-detected
+spec https://company.atlassian.net/browse/PROJ-123     # → Jira
+spec https://linear.app/team/issue/ENG-456             # → Linear
+spec https://github.com/owner/repo/issues/42           # → GitHub
+spec https://dev.azure.com/org/project/_workitems/789 # → Azure DevOps
+
+# Ambiguous IDs (PROJECT-123 format) may require --platform flag
+spec PROJ-123 --platform jira
+spec ENG-456 --platform linear
+```
+
 ## Quick Start
 
 ```bash
@@ -117,8 +148,15 @@ pip install spec
 # Navigate to your git repository
 cd your-project
 
-# Start a workflow with a Jira ticket
-spec PROJECT-123
+# Start a workflow with any ticket
+spec https://company.atlassian.net/browse/PROJECT-123  # Jira URL
+spec https://linear.app/team/issue/ENG-456              # Linear URL
+spec https://github.com/owner/repo/issues/42            # GitHub URL
+
+# Or use a ticket ID with explicit platform
+spec PROJECT-123 --platform jira
+spec ENG-456 --platform linear
+spec owner/repo#42                                       # GitHub (unambiguous)
 ```
 
 That's it! SPEC will guide you through the entire workflow with interactive prompts.
@@ -134,12 +172,12 @@ That's it! SPEC will guide you through the entire workflow with interactive prom
 │                           SPEC WORKFLOW                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│   Jira Ticket                                                            │
+│   Ticket (Any Platform)                                                  │
 │       │                                                                  │
 │       ▼                                                                  │
 │   ┌───────────────────────────────────────────────────────────┐         │
 │   │  STEP 1: PLAN                                              │         │
-│   │  • Fetch ticket details from Jira                          │         │
+│   │  • Fetch ticket details from platform                      │         │
 │   │  • Analyze codebase with context retrieval                 │         │
 │   │  • Generate implementation plan                            │         │
 │   │  • Output: specs/{ticket}-plan.md                          │         │
@@ -243,28 +281,31 @@ spec --help
 On first run, SPEC will:
 1. Check for Auggie CLI installation (offer to install if missing)
 2. Prompt for Auggie login if needed
-3. Check Jira integration status
+3. Check platform integration status (Jira, Linear, GitHub via Auggie)
 4. Create agent definition files in `.augment/agents/`
+
+**Note:** Azure DevOps, Monday, and Trello require fallback credentials to be configured. See [AMI-39: Platform Configuration Guide] for setup instructions.
 
 ## Usage
 
 ### Basic Commands
 
 ```bash
-# Start workflow with a Jira ticket
-spec PROJECT-123
+# Start workflow with a ticket URL (auto-detected platform)
+spec https://company.atlassian.net/browse/PROJECT-123     # Jira
+spec https://linear.app/team/issue/ENG-456                 # Linear
+spec https://github.com/owner/repo/issues/42               # GitHub
 
-# Start with a full Jira URL
-spec https://company.atlassian.net/browse/PROJECT-123
+# Start with ticket ID (may need --platform for ambiguous IDs)
+spec PROJECT-123 --platform jira
+spec ENG-456 --platform linear
+spec owner/repo#42                                          # GitHub (unambiguous)
 
 # Show interactive main menu
 spec
 
 # View current configuration
 spec --config
-
-# Show version
-spec --version
 ```
 
 ### Command-Line Options
@@ -273,7 +314,13 @@ spec --version
 spec [OPTIONS] [TICKET]
 
 Arguments:
-  TICKET                      Jira ticket ID or URL (e.g., PROJECT-123)
+  TICKET                      Ticket ID or URL from any supported platform
+                              Examples: PROJ-123, https://jira.example.com/browse/PROJ-123,
+                              https://linear.app/team/issue/ENG-456, owner/repo#42
+
+Platform Options:
+  --platform, -p PLATFORM     Override platform detection (jira, linear, github,
+                              azure_devops, monday, trello)
 
 Model Options:
   --model, -m MODEL           Override AI model for all phases
@@ -317,7 +364,7 @@ Other:
 spec PROJ-456
 
 # SPEC will:
-# 1. Fetch ticket from Jira
+# 1. Fetch ticket from platform
 # 2. Ask if you want to add context
 # 3. Create feature branch (e.g., proj-456-add-user-authentication)
 # 4. Generate implementation plan
@@ -366,7 +413,8 @@ SPEC stores configuration in `~/.spec-config`:
 PLANNING_MODEL="claude-sonnet-4-5"
 IMPLEMENTATION_MODEL="claude-sonnet-4-5"
 
-# Jira Settings
+# Platform Settings
+DEFAULT_PLATFORM=""  # Options: jira, linear, github, azure_devops, monday, trello
 DEFAULT_JIRA_PROJECT="PROJ"
 
 # Workflow Behavior
@@ -392,6 +440,7 @@ SUBAGENT_REVIEWER="spec-reviewer"
 |--------|------|---------|-------------|
 | `PLANNING_MODEL` | string | "" | AI model for Steps 1-2 |
 | `IMPLEMENTATION_MODEL` | string | "" | AI model for Step 3 |
+| `DEFAULT_PLATFORM` | string | "" | Default platform for ambiguous ticket IDs |
 | `DEFAULT_JIRA_PROJECT` | string | "" | Default Jira project key |
 | `SKIP_CLARIFICATION` | bool | false | Skip clarification step |
 | `SQUASH_AT_END` | bool | true | Squash commits after workflow |
@@ -429,7 +478,7 @@ SPEC uses specialized AI agents defined in `.augment/agents/`. These are created
 
 | File | Purpose |
 |------|---------|
-| `.augment/agents/spec-planner.md` | Creates implementation plans from Jira tickets |
+| `.augment/agents/spec-planner.md` | Creates implementation plans from tickets |
 | `.augment/agents/spec-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
 | `.augment/agents/spec-implementer.md` | Executes individual tasks with codebase awareness |
 | `.augment/agents/spec-reviewer.md` | Validates completed tasks with PASS/NEEDS_ATTENTION output |
@@ -662,6 +711,40 @@ spec PROJECT-123
 spec PROJECT-123 --dirty-tree-policy warn
 ```
 
+#### Platform Detection Issues
+
+If SPEC detects the wrong platform:
+
+```bash
+# Use --platform to explicitly specify
+spec PROJ-123 --platform jira
+
+# Or set a default in configuration
+# Add to ~/.spec-config:
+DEFAULT_PLATFORM="jira"
+```
+
+#### "Platform not supported" Error
+
+For Azure DevOps, Monday, or Trello, fallback credentials are required:
+
+```bash
+# Check which platforms are configured
+spec --config
+
+# See AMI-39: Platform Configuration Guide for credential setup
+```
+
+#### Ambiguous Ticket ID
+
+If prompted to select a platform:
+
+```bash
+# Both Jira and Linear use PROJECT-123 format
+# SPEC will prompt you to choose, or use --platform:
+spec ENG-456 --platform linear
+```
+
 ### Debug Logging
 
 SPEC writes detailed logs to `.spec/runs/{ticket}/`. Check these for debugging:
@@ -687,4 +770,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 <p align="center">
   Made with ❤️ for developers who want AI to handle the implementation details
 </p>
-

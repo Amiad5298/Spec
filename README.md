@@ -4,7 +4,7 @@
     <strong>Spec-Driven Development Workflow Powered by AI</strong>
   </p>
   <p align="center">
-    Transform tickets from any platform into implemented features with a structured, AI-assisted three-step workflow.
+    Transform tickets from any supported platform into implemented features with a structured, AI-assisted three-step workflow.
   </p>
 </p>
 
@@ -119,7 +119,7 @@ SPEC supports 6 ticket platforms out of the box:
 | **Jira** | ✅ | ✅ `PROJECT-123` | Full integration via Auggie |
 | **Linear** | ✅ | ✅ `ENG-456` | Full integration via Auggie |
 | **GitHub Issues** | ✅ | ✅ `owner/repo#42` | Full integration via Auggie |
-| **Azure DevOps** | ✅ | ⚠️ `AB#789` | Requires fallback credentials |
+| **Azure DevOps** | ✅ | ⚠️ Work item ID | Requires fallback credentials *(TODO: verify exact accepted ID formats)* |
 | **Monday** | ✅ | ❌ URL only | Requires fallback credentials |
 | **Trello** | ✅ | ❌ URL only | Requires fallback credentials |
 
@@ -134,7 +134,8 @@ spec https://linear.app/team/issue/ENG-456             # → Linear
 spec https://github.com/owner/repo/issues/42           # → GitHub
 spec https://dev.azure.com/org/project/_workitems/789 # → Azure DevOps
 
-# Ambiguous IDs (PROJECT-123 format) may require --platform flag
+# Ambiguous IDs may require --platform flag
+# (e.g., "ENG-123" could match both Jira and Linear project formats)
 spec PROJ-123 --platform jira
 spec ENG-456 --platform linear
 ```
@@ -152,6 +153,11 @@ cd your-project
 spec https://company.atlassian.net/browse/PROJECT-123  # Jira URL
 spec https://linear.app/team/issue/ENG-456              # Linear URL
 spec https://github.com/owner/repo/issues/42            # GitHub URL
+
+# URL-based examples for other platforms
+spec https://dev.azure.com/org/project/_workitems/edit/789  # Azure DevOps
+spec https://mycompany.monday.com/boards/123456/pulses/789  # Monday (TODO: verify URL format)
+spec https://trello.com/c/aBcDeFgH/123-card-title           # Trello
 
 # Or use a ticket ID with explicit platform
 spec PROJECT-123 --platform jira
@@ -284,7 +290,7 @@ On first run, SPEC will:
 3. Check platform integration status (Jira, Linear, GitHub via Auggie)
 4. Create agent definition files in `.augment/agents/`
 
-**Note:** Azure DevOps, Monday, and Trello require fallback credentials to be configured. See [AMI-39: Platform Configuration Guide] for setup instructions.
+**Note:** Azure DevOps, Monday, and Trello require fallback credentials to be configured. See [Platform Configuration Guide](docs/platform-configuration.md) for setup instructions.
 
 ## Usage
 
@@ -304,6 +310,9 @@ spec owner/repo#42                                          # GitHub (unambiguou
 # Show interactive main menu
 spec
 
+# Check version (confirm supported flags)
+spec --version
+
 # View current configuration
 spec --config
 ```
@@ -314,7 +323,7 @@ spec --config
 spec [OPTIONS] [TICKET]
 
 Arguments:
-  TICKET                      Ticket ID or URL from any supported platform
+  TICKET                      Ticket ID or URL from a supported platform
                               Examples: PROJ-123, https://jira.example.com/browse/PROJ-123,
                               https://linear.app/team/issue/ENG-456, owner/repo#42
 
@@ -440,7 +449,7 @@ SUBAGENT_REVIEWER="spec-reviewer"
 |--------|------|---------|-------------|
 | `PLANNING_MODEL` | string | "" | AI model for Steps 1-2 |
 | `IMPLEMENTATION_MODEL` | string | "" | AI model for Step 3 |
-| `DEFAULT_PLATFORM` | string | "" | Default platform for ambiguous ticket IDs |
+| `DEFAULT_PLATFORM` | string | "" | Default platform for ambiguous ticket IDs (empty = auto-detect) |
 | `DEFAULT_JIRA_PROJECT` | string | "" | Default Jira project key |
 | `SKIP_CLARIFICATION` | bool | false | Skip clarification step |
 | `SQUASH_AT_END` | bool | true | Squash commits after workflow |
@@ -732,7 +741,7 @@ For Azure DevOps, Monday, or Trello, fallback credentials are required:
 # Check which platforms are configured
 spec --config
 
-# See AMI-39: Platform Configuration Guide for credential setup
+# See docs/platform-configuration.md for credential setup
 ```
 
 #### Ambiguous Ticket ID

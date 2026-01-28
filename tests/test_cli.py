@@ -87,9 +87,7 @@ class TestCLIWorkflow:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_runs_workflow_with_ticket(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_runs_workflow_with_ticket(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """Runs workflow when ticket is provided."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -140,9 +138,7 @@ class TestCLIFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_skip_clarification_flag(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_skip_clarification_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--skip-clarification flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -196,9 +192,7 @@ class TestParallelFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_no_parallel_flag_disables(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_no_parallel_flag_disables(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--no-parallel flag disables parallel execution."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -214,9 +208,7 @@ class TestParallelFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_max_parallel_sets_value(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_max_parallel_sets_value(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--max-parallel sets the maximum parallel tasks."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -243,9 +235,7 @@ class TestParallelFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_fail_fast_flag(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_fail_fast_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--fail-fast flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -261,9 +251,7 @@ class TestParallelFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_no_fail_fast_flag(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_no_fail_fast_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--no-fail-fast flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -319,9 +307,7 @@ class TestRetryFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_max_retries_sets_value(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_max_retries_sets_value(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--max-retries sets the maximum retry count."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -337,9 +323,7 @@ class TestRetryFlags:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_max_retries_zero_disables(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_max_retries_zero_disables(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--max-retries 0 disables retries."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -468,9 +452,7 @@ class TestExceptionHandlers:
     @patch("spec.cli.ConfigManager")
     @patch("spec.cli._check_prerequisites")
     @patch("spec.cli._run_workflow")
-    def test_spec_error_handled(
-        self, mock_run, mock_prereq, mock_config_class, mock_banner
-    ):
+    def test_spec_error_handled(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """SpecError is handled gracefully."""
         from spec.utils.errors import SpecError
 
@@ -488,14 +470,17 @@ class TestExceptionHandlers:
 class TestDirtyTreePolicy:
     """Tests for dirty tree policy parsing."""
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
-    def test_dirty_tree_policy_fail_fast(self, mock_parse, mock_run_workflow):
+    @patch("spec.cli.run_async")
+    def test_dirty_tree_policy_fail_fast(
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
+    ):
         """--dirty-tree-policy fail-fast sets FAIL_FAST policy."""
         from spec.cli import _run_workflow
         from spec.workflow.state import DirtyTreePolicy
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -517,14 +502,15 @@ class TestDirtyTreePolicy:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["dirty_tree_policy"] == DirtyTreePolicy.FAIL_FAST
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
-    def test_dirty_tree_policy_warn(self, mock_parse, mock_run_workflow):
+    @patch("spec.cli.run_async")
+    def test_dirty_tree_policy_warn(self, mock_run_async, mock_run_workflow, mock_is_ambiguous):
         """--dirty-tree-policy warn sets WARN_AND_CONTINUE policy."""
         from spec.cli import _run_workflow
         from spec.workflow.state import DirtyTreePolicy
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -546,14 +532,15 @@ class TestDirtyTreePolicy:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["dirty_tree_policy"] == DirtyTreePolicy.WARN_AND_CONTINUE
 
-    @patch("spec.integrations.jira.parse_jira_ticket")
-    def test_dirty_tree_policy_invalid_rejected(self, mock_parse):
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("spec.cli.run_async")
+    def test_dirty_tree_policy_invalid_rejected(self, mock_run_async, mock_is_ambiguous):
         """Invalid --dirty-tree-policy value is rejected."""
         import click
 
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -604,15 +591,16 @@ class TestAuggieInstallFlow:
 class TestEffectiveValueOverrides:
     """Tests for effective value computation and override semantics in _run_workflow."""
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
+    @patch("spec.cli.run_async")
     def test_max_parallel_override_cli_beats_config(
-        self, mock_parse, mock_run_workflow
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --max-parallel 3 overrides config max_parallel_tasks=5."""
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 5
         mock_config.settings.parallel_execution_enabled = True
@@ -634,15 +622,16 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["max_parallel_tasks"] == 3  # CLI wins over config=5
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
+    @patch("spec.cli.run_async")
     def test_max_parallel_none_uses_config(
-        self, mock_parse, mock_run_workflow
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """When CLI max_parallel is None, uses config.settings.max_parallel_tasks."""
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 5
         mock_config.settings.parallel_execution_enabled = True
@@ -664,15 +653,16 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["max_parallel_tasks"] == 5  # Uses config value
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
+    @patch("spec.cli.run_async")
     def test_no_fail_fast_overrides_config_true(
-        self, mock_parse, mock_run_workflow
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --no-fail-fast (False) overrides config fail_fast=True."""
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -694,15 +684,14 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["fail_fast"] is False  # CLI wins
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
-    def test_fail_fast_none_uses_config(
-        self, mock_parse, mock_run_workflow
-    ):
+    @patch("spec.cli.run_async")
+    def test_fail_fast_none_uses_config(self, mock_run_async, mock_run_workflow, mock_is_ambiguous):
         """When CLI fail_fast is None, uses config.settings.fail_fast."""
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -724,15 +713,16 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["fail_fast"] is True  # Uses config value
 
-    @patch("spec.integrations.jira.parse_jira_ticket")
-    def test_invalid_config_max_parallel_rejected(self, mock_parse):
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("spec.cli.run_async")
+    def test_invalid_config_max_parallel_rejected(self, mock_run_async, mock_is_ambiguous):
         """Invalid config max_parallel_tasks (e.g., 10) is rejected via effective validation."""
         import click
 
         from spec.cli import _run_workflow
         from spec.utils.errors import ExitCode
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 10  # Invalid config value
         mock_config.settings.parallel_execution_enabled = True
@@ -753,15 +743,16 @@ class TestEffectiveValueOverrides:
             )
         assert exc_info.value.exit_code == ExitCode.GENERAL_ERROR
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
+    @patch("spec.cli.run_async")
     def test_auto_update_docs_override_cli_beats_config(
-        self, mock_parse, mock_run_workflow
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --no-auto-update-docs overrides config auto_update_docs=True."""
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -783,15 +774,16 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["auto_update_docs"] is False  # CLI wins
 
+    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.integrations.jira.parse_jira_ticket")
+    @patch("spec.cli.run_async")
     def test_auto_update_docs_none_uses_config(
-        self, mock_parse, mock_run_workflow
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """When CLI auto_update_docs is None, uses config.settings.auto_update_docs."""
         from spec.cli import _run_workflow
 
-        mock_parse.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -813,3 +805,558 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["auto_update_docs"] is False  # Uses config value
 
+
+class TestValidatePlatform:
+    """Tests for _validate_platform helper function."""
+
+    def test_validate_platform_valid_jira(self):
+        """Valid Jira platform string returns Platform.JIRA."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        assert _validate_platform("jira") == Platform.JIRA
+        assert _validate_platform("JIRA") == Platform.JIRA
+        assert _validate_platform("Jira") == Platform.JIRA
+
+    def test_validate_platform_valid_linear(self):
+        """Valid Linear platform string returns Platform.LINEAR."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        assert _validate_platform("linear") == Platform.LINEAR
+        assert _validate_platform("LINEAR") == Platform.LINEAR
+
+    def test_validate_platform_valid_github(self):
+        """Valid GitHub platform string returns Platform.GITHUB."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        assert _validate_platform("github") == Platform.GITHUB
+
+    def test_validate_platform_none(self):
+        """None input returns None."""
+        from spec.cli import _validate_platform
+
+        assert _validate_platform(None) is None
+
+    def test_validate_platform_invalid(self):
+        """Invalid platform raises BadParameter."""
+        import typer
+
+        from spec.cli import _validate_platform
+
+        with pytest.raises(typer.BadParameter) as exc_info:
+            _validate_platform("invalid")
+        assert "Invalid platform" in str(exc_info.value)
+        assert "invalid" in str(exc_info.value)
+
+    def test_validate_platform_hyphen_normalization(self):
+        """Platform names with hyphens are normalized to underscores."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        # azure-devops should be normalized to AZURE_DEVOPS
+        assert _validate_platform("azure-devops") == Platform.AZURE_DEVOPS
+        assert _validate_platform("AZURE-DEVOPS") == Platform.AZURE_DEVOPS
+        assert _validate_platform("Azure-DevOps") == Platform.AZURE_DEVOPS
+
+    def test_validate_platform_underscore_format(self):
+        """Platform names with underscores also work."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        assert _validate_platform("azure_devops") == Platform.AZURE_DEVOPS
+
+
+class TestIsAmbiguousTicketId:
+    """Tests for _is_ambiguous_ticket_id helper function."""
+
+    def test_bare_project_id_is_ambiguous(self):
+        """Bare PROJECT-123 format is ambiguous."""
+        from spec.cli import _is_ambiguous_ticket_id
+
+        assert _is_ambiguous_ticket_id("PROJ-123") is True
+        assert _is_ambiguous_ticket_id("ENG-456") is True
+        assert _is_ambiguous_ticket_id("ABC-1") is True
+        assert _is_ambiguous_ticket_id("A1-999") is True
+
+    def test_url_is_not_ambiguous(self):
+        """URLs are not ambiguous."""
+        from spec.cli import _is_ambiguous_ticket_id
+
+        assert _is_ambiguous_ticket_id("https://jira.example.com/browse/PROJ-123") is False
+        assert _is_ambiguous_ticket_id("https://linear.app/team/issue/ENG-456") is False
+        assert _is_ambiguous_ticket_id("http://example.com/ticket") is False
+
+    def test_github_format_is_not_ambiguous(self):
+        """GitHub format (owner/repo#123) is not ambiguous."""
+        from spec.cli import _is_ambiguous_ticket_id
+
+        assert _is_ambiguous_ticket_id("owner/repo#42") is False
+        assert _is_ambiguous_ticket_id("my-org/my-repo#123") is False
+
+    def test_invalid_formats_are_not_ambiguous(self):
+        """Invalid formats are not considered ambiguous."""
+        from spec.cli import _is_ambiguous_ticket_id
+
+        assert _is_ambiguous_ticket_id("123") is False
+        assert _is_ambiguous_ticket_id("just-text") is False
+        assert _is_ambiguous_ticket_id("") is False
+
+    def test_underscore_in_project_key_is_ambiguous(self):
+        """Project keys with underscores (Jira-style) are ambiguous."""
+        from spec.cli import _is_ambiguous_ticket_id
+
+        # Jira supports underscores in project keys
+        assert _is_ambiguous_ticket_id("MY_PROJ-123") is True
+        assert _is_ambiguous_ticket_id("TEST_PROJECT-1") is True
+        assert _is_ambiguous_ticket_id("A_B_C-999") is True
+
+
+class TestResolveWithPlatformHint:
+    """Tests for _resolve_with_platform_hint helper function."""
+
+    def test_jira_keeps_bare_id(self):
+        """Jira keeps bare ID as-is."""
+        from spec.cli import _resolve_with_platform_hint
+        from spec.integrations.providers import Platform
+
+        result = _resolve_with_platform_hint("PROJ-123", Platform.JIRA)
+        assert result == "PROJ-123"
+
+    def test_linear_converts_to_url(self):
+        """Linear converts to URL format."""
+        from spec.cli import _resolve_with_platform_hint
+        from spec.integrations.providers import Platform
+
+        result = _resolve_with_platform_hint("ENG-456", Platform.LINEAR)
+        assert result == "https://linear.app/team/issue/ENG-456"
+
+    def test_github_keeps_bare_id(self):
+        """GitHub keeps bare ID as-is (fallback behavior)."""
+        from spec.cli import _resolve_with_platform_hint
+        from spec.integrations.providers import Platform
+
+        result = _resolve_with_platform_hint("owner/repo#42", Platform.GITHUB)
+        assert result == "owner/repo#42"
+
+    def test_other_platforms_keep_bare_id(self):
+        """Other platforms keep bare ID as-is."""
+        from spec.cli import _resolve_with_platform_hint
+        from spec.integrations.providers import Platform
+
+        result = _resolve_with_platform_hint("PROJ-123", Platform.AZURE_DEVOPS)
+        assert result == "PROJ-123"
+
+
+class TestDisambiguatePlatform:
+    """Tests for _disambiguate_platform helper function."""
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_uses_config_default_when_set(self, mock_print, mock_prompt):
+        """Uses config default_platform when set."""
+        from spec.cli import _disambiguate_platform
+        from spec.integrations.providers import Platform
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = Platform.LINEAR
+
+        result = _disambiguate_platform("PROJ-123", mock_config)
+
+        assert result == Platform.LINEAR
+        mock_prompt.assert_not_called()
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_prompts_when_no_default(self, mock_print, mock_prompt):
+        """Prompts user when no default_platform configured."""
+        from spec.cli import _disambiguate_platform
+        from spec.integrations.providers import Platform
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+        # Now uses kebab-case display names
+        mock_prompt.return_value = "jira"
+
+        result = _disambiguate_platform("PROJ-123", mock_config)
+
+        assert result == Platform.JIRA
+        mock_prompt.assert_called_once()
+        mock_print.assert_called_once()
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_prompt_linear_selection(self, mock_print, mock_prompt):
+        """User selecting Linear from prompt returns Platform.LINEAR."""
+        from spec.cli import _disambiguate_platform
+        from spec.integrations.providers import Platform
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+        # Now uses kebab-case display names
+        mock_prompt.return_value = "linear"
+
+        result = _disambiguate_platform("ENG-456", mock_config)
+
+        assert result == Platform.LINEAR
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_uses_explicit_mapping_not_string_parsing(self, mock_print, mock_prompt):
+        """Verifies _disambiguate_platform uses explicit dict mapping end-to-end.
+
+        This test exercises the full flow:
+        1. Prompt receives kebab-case choices (the mapping keys)
+        2. Returning a choice string yields the correct Platform enum via mapping
+
+        Why this matters: If the implementation used choice.upper() + Platform[...],
+        it would fail for enums with underscores (e.g., "azure-devops".upper() gives
+        "AZURE-DEVOPS", but the enum is AZURE_DEVOPS). Our mapping avoids this.
+        """
+        from spec.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+
+        # Test each platform in AMBIGUOUS_PLATFORMS: simulate user selecting it
+        for expected_platform in AMBIGUOUS_PLATFORMS:
+            mock_prompt.reset_mock()
+            choice_key = _platform_display_name(expected_platform)
+            mock_prompt.return_value = choice_key
+
+            result = _disambiguate_platform("PROJ-123", mock_config)
+
+            # Verify the mapping returns the correct enum
+            assert (
+                result == expected_platform
+            ), f"Expected {expected_platform}, got {result} for choice '{choice_key}'"
+
+            # Verify prompt was called with kebab-case choices (the mapping keys)
+            call_kwargs = mock_prompt.call_args[1]
+            choices = call_kwargs["choices"]
+            assert choice_key in choices, f"Choice '{choice_key}' not in {choices}"
+
+    @patch("spec.ui.prompts.prompt_select")
+    @patch("spec.cli.print_info")
+    def test_prompt_choices_ordering_is_stable(self, mock_print, mock_prompt):
+        """Prompt choices maintain stable ordering matching AMBIGUOUS_PLATFORMS.
+
+        This ensures future changes (e.g., dict iteration order, set usage) don't
+        accidentally alter the user-facing choice order.
+        """
+        from spec.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+        mock_prompt.return_value = "jira"
+
+        _disambiguate_platform("PROJ-123", mock_config)
+
+        call_kwargs = mock_prompt.call_args[1]
+        choices = call_kwargs["choices"]
+
+        # Expected order: derived from AMBIGUOUS_PLATFORMS tuple order
+        expected_choices = [_platform_display_name(p) for p in AMBIGUOUS_PLATFORMS]
+        assert (
+            choices == expected_choices
+        ), f"Choices {choices} don't match expected order {expected_choices}"
+
+
+class TestFetchTicketAsyncIntegration:
+    """Integration tests for _fetch_ticket_async with mocked TicketService."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_ticket_async_calls_ticket_service(self):
+        """_fetch_ticket_async properly calls TicketService.get_ticket."""
+        from unittest.mock import AsyncMock
+
+        from spec.cli import _fetch_ticket_async
+        from spec.integrations.providers import GenericTicket, Platform
+
+        # Create mock ticket
+        mock_ticket = GenericTicket(
+            id="PROJ-123",
+            title="Test Ticket",
+            description="Test description",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/browse/PROJ-123",
+        )
+
+        # Create mock service with async context manager support
+        mock_service = AsyncMock()
+        mock_service.get_ticket = AsyncMock(return_value=mock_ticket)
+        mock_service.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_service.__aexit__ = AsyncMock(return_value=None)
+
+        mock_config = MagicMock()
+
+        # Patch create_ticket_service_from_config to return our mock service
+        async def mock_create_service_from_config(*args, **kwargs):
+            return mock_service
+
+        with patch(
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=mock_create_service_from_config,
+        ):
+            result = await _fetch_ticket_async(
+                ticket_input="PROJ-123",
+                config=mock_config,
+                platform_hint=None,
+            )
+
+        assert result == mock_ticket
+        mock_service.get_ticket.assert_called_once_with("PROJ-123")
+
+    @pytest.mark.asyncio
+    async def test_fetch_ticket_async_with_platform_hint_linear(self):
+        """_fetch_ticket_async converts ambiguous ID to Linear URL when hint provided."""
+        from unittest.mock import AsyncMock
+
+        from spec.cli import _fetch_ticket_async
+        from spec.integrations.providers import GenericTicket, Platform
+
+        mock_ticket = GenericTicket(
+            id="ENG-456",
+            title="Linear Ticket",
+            description="Test",
+            platform=Platform.LINEAR,
+            url="https://linear.app/team/issue/ENG-456",
+        )
+
+        mock_service = AsyncMock()
+        mock_service.get_ticket = AsyncMock(return_value=mock_ticket)
+        mock_service.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_service.__aexit__ = AsyncMock(return_value=None)
+
+        mock_config = MagicMock()
+
+        async def mock_create_service_from_config(*args, **kwargs):
+            return mock_service
+
+        with patch(
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=mock_create_service_from_config,
+        ):
+            result = await _fetch_ticket_async(
+                ticket_input="ENG-456",
+                config=mock_config,
+                platform_hint=Platform.LINEAR,
+            )
+
+        assert result == mock_ticket
+        # Should have converted to Linear URL format
+        mock_service.get_ticket.assert_called_once_with("https://linear.app/team/issue/ENG-456")
+
+    @pytest.mark.asyncio
+    async def test_fetch_ticket_async_url_not_modified(self):
+        """_fetch_ticket_async does not modify URL inputs even with platform hint."""
+        from unittest.mock import AsyncMock
+
+        from spec.cli import _fetch_ticket_async
+        from spec.integrations.providers import GenericTicket, Platform
+
+        mock_ticket = GenericTicket(
+            id="PROJ-123",
+            title="Jira Ticket",
+            description="Test",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/browse/PROJ-123",
+        )
+
+        mock_service = AsyncMock()
+        mock_service.get_ticket = AsyncMock(return_value=mock_ticket)
+        mock_service.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_service.__aexit__ = AsyncMock(return_value=None)
+
+        mock_config = MagicMock()
+        original_url = "https://jira.example.com/browse/PROJ-123"
+
+        async def mock_create_service_from_config(*args, **kwargs):
+            return mock_service
+
+        with patch(
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=mock_create_service_from_config,
+        ):
+            result = await _fetch_ticket_async(
+                ticket_input=original_url,
+                config=mock_config,
+                platform_hint=Platform.LINEAR,  # Hint should be ignored for URLs
+            )
+
+        assert result == mock_ticket
+        # URL should pass through unchanged
+        mock_service.get_ticket.assert_called_once_with(original_url)
+
+
+class TestRunAsync:
+    """Tests for run_async helper function."""
+
+    def test_run_async_executes_coroutine_factory(self):
+        """run_async executes a coroutine factory and returns its result."""
+        from spec.cli import run_async
+
+        async def sample_coro():
+            return "test_result"
+
+        # Now takes a factory (callable) instead of a coroutine
+        result = run_async(lambda: sample_coro())
+        assert result == "test_result"
+
+    def test_run_async_raises_when_loop_running_without_creating_coroutine(self):
+        """run_async raises AsyncLoopAlreadyRunningError without creating coroutine.
+
+        The factory pattern ensures we check for a running loop BEFORE calling
+        the factory, so no coroutine needs to be created and then closed.
+        """
+        import asyncio
+
+        from spec.cli import AsyncLoopAlreadyRunningError, run_async
+
+        factory_called = False
+
+        async def inner_coro():
+            return "should not execute"
+
+        def coro_factory():
+            nonlocal factory_called
+            factory_called = True
+            return inner_coro()
+
+        async def outer():
+            # This should raise because we're already in an async context
+            with pytest.raises(AsyncLoopAlreadyRunningError) as exc_info:
+                run_async(coro_factory)
+
+            assert "event loop is already running" in str(exc_info.value)
+            # Factory should NOT be called when loop is already running
+            assert factory_called is False
+
+        asyncio.run(outer())
+
+    def test_run_async_calls_factory_when_no_loop(self):
+        """run_async calls the factory when no event loop is running."""
+        from spec.cli import run_async
+
+        factory_call_count = 0
+
+        async def coro():
+            return 42
+
+        def coro_factory():
+            nonlocal factory_call_count
+            factory_call_count += 1
+            return coro()
+
+        result = run_async(coro_factory)
+        assert result == 42
+        assert factory_call_count == 1
+
+
+class TestAmbiguousIdWithPlatformFlag:
+    """Tests verifying ambiguous IDs with --platform flag do not trigger prompts."""
+
+    @patch("spec.cli.show_banner")
+    @patch("spec.cli.ConfigManager")
+    @patch("spec.cli._check_prerequisites")
+    @patch("spec.cli._run_workflow")
+    @patch("spec.ui.prompts.prompt_select")
+    def test_ambiguous_id_with_platform_flag_no_prompt(
+        self, mock_prompt, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        """Ambiguous ID with explicit --platform flag does not prompt user."""
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config.settings.default_jira_project = ""
+        mock_config_class.return_value = mock_config
+
+        # Run with ambiguous ID but explicit platform
+        runner.invoke(app, ["PROJ-123", "--platform", "linear"])
+
+        # Should NOT call prompt_select since platform is explicit
+        mock_prompt.assert_not_called()
+
+        # Verify _run_workflow was called with correct platform
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args[1]
+        from spec.integrations.providers import Platform
+
+        assert call_kwargs["platform"] == Platform.LINEAR
+
+
+class TestInvalidDefaultPlatformWarning:
+    """Tests for invalid default_platform config warning behavior."""
+
+    def test_invalid_default_platform_logs_warning(self, caplog):
+        """Invalid default_platform value logs a warning."""
+        import logging
+
+        from spec.config.settings import Settings
+
+        settings = Settings(default_platform="invalid_platform")
+
+        with caplog.at_level(logging.WARNING):
+            result = settings.get_default_platform()
+
+        assert result is None
+        assert "Invalid DEFAULT_PLATFORM value" in caplog.text
+        assert "invalid_platform" in caplog.text
+
+    def test_valid_default_platform_no_warning(self, caplog):
+        """Valid default_platform does not log a warning."""
+        import logging
+
+        from spec.config.settings import Settings
+
+        settings = Settings(default_platform="jira")
+
+        with caplog.at_level(logging.WARNING):
+            result = settings.get_default_platform()
+
+        from spec.integrations.providers import Platform
+
+        assert result == Platform.JIRA
+        assert "Invalid DEFAULT_PLATFORM value" not in caplog.text
+
+
+class TestForceIntegrationCheckWarning:
+    """Tests for force_integration_check flag warning."""
+
+    @patch("spec.cli.is_git_repo")
+    @patch("spec.cli.check_auggie_installed")
+    @patch("spec.cli.print_warning")
+    def test_force_integration_check_prints_warning(
+        self, mock_print_warning, mock_check_auggie, mock_is_git_repo
+    ):
+        """force_integration_check=True prints a warning about no effect."""
+        from spec.cli import _check_prerequisites
+
+        mock_is_git_repo.return_value = True
+        mock_check_auggie.return_value = (True, "Auggie installed")
+
+        mock_config = MagicMock()
+        result = _check_prerequisites(mock_config, force_integration_check=True)
+
+        assert result is True
+        mock_print_warning.assert_called_once()
+        warning_msg = mock_print_warning.call_args[0][0]
+        assert "no effect" in warning_msg.lower() or "currently has no effect" in warning_msg
+
+    @patch("spec.cli.is_git_repo")
+    @patch("spec.cli.check_auggie_installed")
+    @patch("spec.cli.print_warning")
+    def test_force_integration_check_false_no_warning(
+        self, mock_print_warning, mock_check_auggie, mock_is_git_repo
+    ):
+        """force_integration_check=False does not print warning."""
+        from spec.cli import _check_prerequisites
+
+        mock_is_git_repo.return_value = True
+        mock_check_auggie.return_value = (True, "Auggie installed")
+
+        mock_config = MagicMock()
+        result = _check_prerequisites(mock_config, force_integration_check=False)
+
+        assert result is True
+        mock_print_warning.assert_not_called()

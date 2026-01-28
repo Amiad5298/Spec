@@ -91,7 +91,10 @@ class TestParallelSettings:
         settings = Settings()
 
         # Verify the key mappings exist
-        assert settings.get_attribute_for_key("PARALLEL_EXECUTION_ENABLED") == "parallel_execution_enabled"
+        assert (
+            settings.get_attribute_for_key("PARALLEL_EXECUTION_ENABLED")
+            == "parallel_execution_enabled"
+        )
         assert settings.get_attribute_for_key("MAX_PARALLEL_TASKS") == "max_parallel_tasks"
         assert settings.get_attribute_for_key("FAIL_FAST") == "fail_fast"
 
@@ -162,6 +165,69 @@ class TestDocUpdateSettings:
         assert settings.get_attribute_for_key("AUTO_UPDATE_DOCS") == "auto_update_docs"
 
 
+class TestDefaultPlatformSettings:
+    """Tests for default_platform setting and get_default_platform method."""
+
+    def test_default_platform_default_value(self):
+        """default_platform defaults to empty string."""
+        settings = Settings()
+        assert settings.default_platform == ""
+
+    def test_default_platform_custom_value(self):
+        """default_platform accepts custom value."""
+        settings = Settings(default_platform="jira")
+        assert settings.default_platform == "jira"
+
+    def test_default_platform_config_key_mapping(self):
+        """default_platform has correct config key mapping."""
+        settings = Settings()
+        assert settings.get_attribute_for_key("DEFAULT_PLATFORM") == "default_platform"
+
+    def test_get_default_platform_returns_none_when_empty(self):
+        """get_default_platform returns None when not configured."""
+        settings = Settings()
+        assert settings.get_default_platform() is None
+
+    def test_get_default_platform_returns_jira(self):
+        """get_default_platform returns Platform.JIRA for 'jira'."""
+        from spec.integrations.providers import Platform
+
+        settings = Settings(default_platform="jira")
+        assert settings.get_default_platform() == Platform.JIRA
+
+    def test_get_default_platform_returns_linear(self):
+        """get_default_platform returns Platform.LINEAR for 'linear'."""
+        from spec.integrations.providers import Platform
+
+        settings = Settings(default_platform="linear")
+        assert settings.get_default_platform() == Platform.LINEAR
+
+    def test_get_default_platform_case_insensitive(self):
+        """get_default_platform is case-insensitive."""
+        from spec.integrations.providers import Platform
+
+        assert Settings(default_platform="JIRA").get_default_platform() == Platform.JIRA
+        assert Settings(default_platform="Jira").get_default_platform() == Platform.JIRA
+        assert Settings(default_platform="LINEAR").get_default_platform() == Platform.LINEAR
+
+    def test_get_default_platform_returns_none_for_invalid(self):
+        """get_default_platform returns None for invalid platform names."""
+        settings = Settings(default_platform="invalid_platform")
+        assert settings.get_default_platform() is None
+
+    def test_get_default_platform_all_valid_platforms(self):
+        """get_default_platform works for all valid platform names."""
+        from spec.integrations.providers import Platform
+
+        assert Settings(default_platform="github").get_default_platform() == Platform.GITHUB
+        assert (
+            Settings(default_platform="azure_devops").get_default_platform()
+            == Platform.AZURE_DEVOPS
+        )
+        assert Settings(default_platform="monday").get_default_platform() == Platform.MONDAY
+        assert Settings(default_platform="trello").get_default_platform() == Platform.TRELLO
+
+
 class TestConfigFile:
     """Tests for CONFIG_FILE constant."""
 
@@ -172,4 +238,3 @@ class TestConfigFile:
     def test_config_file_name(self):
         """CONFIG_FILE has correct name."""
         assert CONFIG_FILE.name == ".spec-config"
-

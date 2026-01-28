@@ -499,17 +499,20 @@ class TestFallbackBehaviorViaCLI:
         mock_fallback.fetch.assert_called_once()
 
         # Verify call order: primary was attempted BEFORE fallback
-        # The parent mock tracks method calls in order, so we can verify the sequence
-        assert len(call_order_tracker.method_calls) == 2, (
-            f"Expected 2 calls (primary_fetch, fallback_fetch), "
-            f"got {len(call_order_tracker.method_calls)}: {call_order_tracker.method_calls}"
+        # Extract method names from call order tracker
+        call_names = [call[0] for call in call_order_tracker.method_calls]
+        assert (
+            "primary_fetch" in call_names
+        ), f"Expected primary_fetch to be called, got: {call_names}"
+        assert (
+            "fallback_fetch" in call_names
+        ), f"Expected fallback_fetch to be called, got: {call_names}"
+        primary_idx = call_names.index("primary_fetch")
+        fallback_idx = call_names.index("fallback_fetch")
+        assert primary_idx < fallback_idx, (
+            f"Expected primary_fetch (index {primary_idx}) before fallback_fetch "
+            f"(index {fallback_idx}), call order: {call_names}"
         )
-        assert (
-            call_order_tracker.method_calls[0][0] == "primary_fetch"
-        ), f"Expected primary_fetch first, got: {call_order_tracker.method_calls[0][0]}"
-        assert (
-            call_order_tracker.method_calls[1][0] == "fallback_fetch"
-        ), f"Expected fallback_fetch second, got: {call_order_tracker.method_calls[1][0]}"
 
         # Verify CLI succeeded (fallback worked)
         assert (

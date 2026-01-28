@@ -221,10 +221,6 @@ def mock_trello_ticket():
 # Mock factory fixtures
 # =============================================================================
 
-# Backwards-compatible alias for existing imports
-# Canonical location: tests.helpers.async_cm.make_async_context_manager
-_make_async_context_manager = make_async_context_manager
-
 
 @pytest.fixture
 def mock_fetcher_factory():
@@ -317,7 +313,7 @@ def mock_ticket_service_factory():
             mock_service.close = AsyncMock()
 
             # Use standard async CM pattern helper
-            return _make_async_context_manager(mock_service)
+            return make_async_context_manager(mock_service)
 
         return mock_create_ticket_service
 

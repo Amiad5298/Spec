@@ -1,8 +1,8 @@
 """Scoped conftest for CLI integration tests.
 
-This conftest imports CLI-specific fixtures from tests.fixtures.cli_integration,
-making them available only to tests in the tests/cli/ directory.
+Note: CLI-specific fixtures have been moved to tests/fixtures/cli_integration.py
+and are now loaded via the root conftest.py (pytest_plugins).
+This is required since pytest 9.x no longer supports pytest_plugins in non-top-level conftest.
 """
 
-# Import CLI integration fixtures for all tests in this directory
-pytest_plugins = ["tests.fixtures.cli_integration"]
+# All CLI fixtures are now registered globally via tests/conftest.py

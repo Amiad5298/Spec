@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Enable pytest-asyncio for async test support
-pytest_plugins = ("pytest_asyncio",)
+# Also include CLI integration fixtures (moved from tests/cli/conftest.py per pytest 9.x requirement)
+pytest_plugins = ("pytest_asyncio", "tests.fixtures.cli_integration")
 
 
 @pytest.fixture
@@ -203,7 +204,8 @@ def generic_ticket_no_summary():
 # =============================================================================
 # CLI Integration Test Fixtures (AMI-40)
 # =============================================================================
-# NOTE: Platform-specific fixtures for CLI integration tests have been moved to
-# tests/fixtures/cli_integration.py to reduce conftest bloat.
-# Import them with: pytest_plugins = ["tests.fixtures.cli_integration"]
+# NOTE: Platform-specific fixtures for CLI integration tests are in
+# tests/fixtures/cli_integration.py and loaded via pytest_plugins above.
+# This is required since pytest 9.x no longer supports pytest_plugins
+# in non-top-level conftest files.
 # =============================================================================

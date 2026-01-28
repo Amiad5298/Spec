@@ -26,10 +26,9 @@ from typer.testing import CliRunner
 from spec.cli import app
 from spec.integrations.providers import Platform
 from spec.utils.errors import ExitCode
-from tests.fixtures.cli_integration import get_ticket_from_workflow_call
+from tests.helpers.workflow import get_ticket_from_workflow_call
 
-# Import CLI integration fixtures from dedicated module
-pytest_plugins = ["tests.fixtures.cli_integration"]
+# CLI integration fixtures are loaded via tests/cli/conftest.py
 
 runner = CliRunner()
 
@@ -386,6 +385,10 @@ class TestCLIServiceIntegration:
         assert result.exit_code == 0, f"CLI failed: {result.output}"
         mock_workflow_runner.assert_called_once()
 
+        # Verify primary fetcher was used and fallback was NOT used (primary succeeded)
+        mock_primary_fetcher.fetch.assert_called_once()
+        mock_fallback_fetcher.fetch.assert_not_called()
+
         # Use robust ticket extraction (handles positional and keyword args)
         ticket = get_ticket_from_workflow_call(mock_workflow_runner)
         assert ticket is not None, "Workflow should receive a ticket"
@@ -529,8 +532,8 @@ class TestFallbackBehaviorViaCLI:
         assert result.exit_code == 0
 
 
-class TestErrorPropagationViaCLI:
-    """Layer A: Test error propagation from service layer to CLI.
+class TestCLIErrorContract:
+    """Layer A: CLI error contract tests - verify error→exit code mapping.
 
     Mocking boundaries:
     - create_ticket_service_from_config: returns mock service that raises errors
@@ -539,7 +542,7 @@ class TestErrorPropagationViaCLI:
     What runs real:
     - CLI entry point, error handling, exit code mapping
 
-    Exit codes use ExitCode (IntEnum), so comparisons work with both int and enum.
+    Exit code assertions use ExitCode.X.value for explicit int comparison.
     """
 
     @patch("spec.cli.show_banner")
@@ -580,7 +583,7 @@ class TestErrorPropagationViaCLI:
             with runner.isolated_filesystem():
                 result = runner.invoke(app, ["NOTFOUND-999", "--platform", "jira"])
 
-        # ExitCode is IntEnum, so comparison works with both int and enum
+        # Compare against ExitCode.X.value for explicit int comparison
         assert (
             result.exit_code == ExitCode.GENERAL_ERROR.value
         ), f"Expected exit code {ExitCode.GENERAL_ERROR.value}, got {result.exit_code}"
@@ -627,7 +630,7 @@ class TestErrorPropagationViaCLI:
             with runner.isolated_filesystem():
                 result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
 
-        # ExitCode is IntEnum, so comparison works with both int and enum
+        # Compare against ExitCode.X.value for explicit int comparison
         assert result.exit_code == ExitCode.GENERAL_ERROR.value
         output = result.output
         # Should indicate authentication issue
@@ -678,7 +681,7 @@ class TestErrorPropagationViaCLI:
             with runner.isolated_filesystem():
                 result = runner.invoke(app, ["TRL-123", "--platform", "trello"])
 
-        # ExitCode is IntEnum, so comparison works with both int and enum
+        # Compare against ExitCode.X.value for explicit int comparison
         assert result.exit_code == ExitCode.GENERAL_ERROR.value
         output = result.output
         # Should mention the platform or configuration issue

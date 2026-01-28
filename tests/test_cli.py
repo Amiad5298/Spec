@@ -472,15 +472,15 @@ class TestDirtyTreePolicy:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
+    @patch("spec.cli.run_async")
     def test_dirty_tree_policy_fail_fast(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """--dirty-tree-policy fail-fast sets FAIL_FAST policy."""
         from spec.cli import _run_workflow
         from spec.workflow.state import DirtyTreePolicy
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -504,13 +504,13 @@ class TestDirtyTreePolicy:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
-    def test_dirty_tree_policy_warn(self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous):
+    @patch("spec.cli.run_async")
+    def test_dirty_tree_policy_warn(self, mock_run_async, mock_run_workflow, mock_is_ambiguous):
         """--dirty-tree-policy warn sets WARN_AND_CONTINUE policy."""
         from spec.cli import _run_workflow
         from spec.workflow.state import DirtyTreePolicy
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -533,14 +533,14 @@ class TestDirtyTreePolicy:
         assert call_kwargs["dirty_tree_policy"] == DirtyTreePolicy.WARN_AND_CONTINUE
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.cli._fetch_ticket_async")
-    def test_dirty_tree_policy_invalid_rejected(self, mock_fetch_ticket, mock_is_ambiguous):
+    @patch("spec.cli.run_async")
+    def test_dirty_tree_policy_invalid_rejected(self, mock_run_async, mock_is_ambiguous):
         """Invalid --dirty-tree-policy value is rejected."""
         import click
 
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -593,14 +593,14 @@ class TestEffectiveValueOverrides:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
+    @patch("spec.cli.run_async")
     def test_max_parallel_override_cli_beats_config(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --max-parallel 3 overrides config max_parallel_tasks=5."""
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 5
         mock_config.settings.parallel_execution_enabled = True
@@ -624,14 +624,14 @@ class TestEffectiveValueOverrides:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
+    @patch("spec.cli.run_async")
     def test_max_parallel_none_uses_config(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """When CLI max_parallel is None, uses config.settings.max_parallel_tasks."""
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 5
         mock_config.settings.parallel_execution_enabled = True
@@ -655,14 +655,14 @@ class TestEffectiveValueOverrides:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
+    @patch("spec.cli.run_async")
     def test_no_fail_fast_overrides_config_true(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --no-fail-fast (False) overrides config fail_fast=True."""
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -686,14 +686,12 @@ class TestEffectiveValueOverrides:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
-    def test_fail_fast_none_uses_config(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
-    ):
+    @patch("spec.cli.run_async")
+    def test_fail_fast_none_uses_config(self, mock_run_async, mock_run_workflow, mock_is_ambiguous):
         """When CLI fail_fast is None, uses config.settings.fail_fast."""
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -716,15 +714,15 @@ class TestEffectiveValueOverrides:
         assert call_kwargs["fail_fast"] is True  # Uses config value
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.cli._fetch_ticket_async")
-    def test_invalid_config_max_parallel_rejected(self, mock_fetch_ticket, mock_is_ambiguous):
+    @patch("spec.cli.run_async")
+    def test_invalid_config_max_parallel_rejected(self, mock_run_async, mock_is_ambiguous):
         """Invalid config max_parallel_tasks (e.g., 10) is rejected via effective validation."""
         import click
 
         from spec.cli import _run_workflow
         from spec.utils.errors import ExitCode
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 10  # Invalid config value
         mock_config.settings.parallel_execution_enabled = True
@@ -747,14 +745,14 @@ class TestEffectiveValueOverrides:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
+    @patch("spec.cli.run_async")
     def test_auto_update_docs_override_cli_beats_config(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --no-auto-update-docs overrides config auto_update_docs=True."""
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -778,14 +776,14 @@ class TestEffectiveValueOverrides:
 
     @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
     @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli._fetch_ticket_async")
+    @patch("spec.cli.run_async")
     def test_auto_update_docs_none_uses_config(
-        self, mock_fetch_ticket, mock_run_workflow, mock_is_ambiguous
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """When CLI auto_update_docs is None, uses config.settings.auto_update_docs."""
         from spec.cli import _run_workflow
 
-        mock_fetch_ticket.return_value = MagicMock()
+        mock_run_async.return_value = MagicMock()
         mock_config = MagicMock()
         mock_config.settings.max_parallel_tasks = 3
         mock_config.settings.parallel_execution_enabled = True
@@ -852,6 +850,23 @@ class TestValidatePlatform:
         assert "Invalid platform" in str(exc_info.value)
         assert "invalid" in str(exc_info.value)
 
+    def test_validate_platform_hyphen_normalization(self):
+        """Platform names with hyphens are normalized to underscores."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        # azure-devops should be normalized to AZURE_DEVOPS
+        assert _validate_platform("azure-devops") == Platform.AZURE_DEVOPS
+        assert _validate_platform("AZURE-DEVOPS") == Platform.AZURE_DEVOPS
+        assert _validate_platform("Azure-DevOps") == Platform.AZURE_DEVOPS
+
+    def test_validate_platform_underscore_format(self):
+        """Platform names with underscores also work."""
+        from spec.cli import _validate_platform
+        from spec.integrations.providers import Platform
+
+        assert _validate_platform("azure_devops") == Platform.AZURE_DEVOPS
+
 
 class TestIsAmbiguousTicketId:
     """Tests for _is_ambiguous_ticket_id helper function."""
@@ -887,6 +902,15 @@ class TestIsAmbiguousTicketId:
         assert _is_ambiguous_ticket_id("123") is False
         assert _is_ambiguous_ticket_id("just-text") is False
         assert _is_ambiguous_ticket_id("") is False
+
+    def test_underscore_in_project_key_is_ambiguous(self):
+        """Project keys with underscores (Jira-style) are ambiguous."""
+        from spec.cli import _is_ambiguous_ticket_id
+
+        # Jira supports underscores in project keys
+        assert _is_ambiguous_ticket_id("MY_PROJ-123") is True
+        assert _is_ambiguous_ticket_id("TEST_PROJECT-1") is True
+        assert _is_ambiguous_ticket_id("A_B_C-999") is True
 
 
 class TestResolveWithPlatformHint:
@@ -1002,17 +1026,16 @@ class TestFetchTicketAsyncIntegration:
         mock_service.__aenter__ = AsyncMock(return_value=mock_service)
         mock_service.__aexit__ = AsyncMock(return_value=None)
 
-        # Mock create_ticket_service to return our mock
-        async def mock_create_service(*args, **kwargs):
-            return mock_service
-
         mock_config = MagicMock()
 
-        # Patch at the import location inside the function
+        # Patch create_ticket_service_from_config to return our mock service
+        async def mock_create_service_from_config(*args, **kwargs):
+            return mock_service
+
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
-            side_effect=mock_create_service,
-        ), patch("spec.cli.AuggieClient"), patch("spec.integrations.auth.AuthenticationManager"):
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=mock_create_service_from_config,
+        ):
             result = await _fetch_ticket_async(
                 ticket_input="PROJ-123",
                 config=mock_config,
@@ -1043,15 +1066,15 @@ class TestFetchTicketAsyncIntegration:
         mock_service.__aenter__ = AsyncMock(return_value=mock_service)
         mock_service.__aexit__ = AsyncMock(return_value=None)
 
-        async def mock_create_service(*args, **kwargs):
-            return mock_service
-
         mock_config = MagicMock()
 
+        async def mock_create_service_from_config(*args, **kwargs):
+            return mock_service
+
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
-            side_effect=mock_create_service,
-        ), patch("spec.cli.AuggieClient"), patch("spec.integrations.auth.AuthenticationManager"):
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=mock_create_service_from_config,
+        ):
             result = await _fetch_ticket_async(
                 ticket_input="ENG-456",
                 config=mock_config,
@@ -1083,16 +1106,16 @@ class TestFetchTicketAsyncIntegration:
         mock_service.__aenter__ = AsyncMock(return_value=mock_service)
         mock_service.__aexit__ = AsyncMock(return_value=None)
 
-        async def mock_create_service(*args, **kwargs):
-            return mock_service
-
         mock_config = MagicMock()
         original_url = "https://jira.example.com/browse/PROJ-123"
 
+        async def mock_create_service_from_config(*args, **kwargs):
+            return mock_service
+
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
-            side_effect=mock_create_service,
-        ), patch("spec.cli.AuggieClient"), patch("spec.integrations.auth.AuthenticationManager"):
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=mock_create_service_from_config,
+        ):
             result = await _fetch_ticket_async(
                 ticket_input=original_url,
                 config=mock_config,
@@ -1102,3 +1125,143 @@ class TestFetchTicketAsyncIntegration:
         assert result == mock_ticket
         # URL should pass through unchanged
         mock_service.get_ticket.assert_called_once_with(original_url)
+
+
+class TestRunAsync:
+    """Tests for run_async helper function."""
+
+    def test_run_async_executes_coroutine(self):
+        """run_async executes a coroutine and returns its result."""
+        from spec.cli import run_async
+
+        async def sample_coro():
+            return "test_result"
+
+        result = run_async(sample_coro())
+        assert result == "test_result"
+
+    def test_run_async_raises_when_loop_running(self):
+        """run_async raises AsyncLoopAlreadyRunningError when loop is running."""
+        import asyncio
+
+        from spec.cli import AsyncLoopAlreadyRunningError, run_async
+
+        async def outer():
+            async def inner():
+                return "should not execute"
+
+            # This should raise because we're already in an async context
+            with pytest.raises(AsyncLoopAlreadyRunningError) as exc_info:
+                run_async(inner())
+
+            assert "event loop is already running" in str(exc_info.value)
+
+        asyncio.run(outer())
+
+
+class TestAmbiguousIdWithPlatformFlag:
+    """Tests verifying ambiguous IDs with --platform flag do not trigger prompts."""
+
+    @patch("spec.cli.show_banner")
+    @patch("spec.cli.ConfigManager")
+    @patch("spec.cli._check_prerequisites")
+    @patch("spec.cli._run_workflow")
+    @patch("spec.ui.prompts.prompt_select")
+    def test_ambiguous_id_with_platform_flag_no_prompt(
+        self, mock_prompt, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        """Ambiguous ID with explicit --platform flag does not prompt user."""
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config.settings.default_jira_project = ""
+        mock_config_class.return_value = mock_config
+
+        # Run with ambiguous ID but explicit platform
+        runner.invoke(app, ["PROJ-123", "--platform", "linear"])
+
+        # Should NOT call prompt_select since platform is explicit
+        mock_prompt.assert_not_called()
+
+        # Verify _run_workflow was called with correct platform
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args[1]
+        from spec.integrations.providers import Platform
+
+        assert call_kwargs["platform"] == Platform.LINEAR
+
+
+class TestInvalidDefaultPlatformWarning:
+    """Tests for invalid default_platform config warning behavior."""
+
+    def test_invalid_default_platform_logs_warning(self, caplog):
+        """Invalid default_platform value logs a warning."""
+        import logging
+
+        from spec.config.settings import Settings
+
+        settings = Settings(default_platform="invalid_platform")
+
+        with caplog.at_level(logging.WARNING):
+            result = settings.get_default_platform()
+
+        assert result is None
+        assert "Invalid DEFAULT_PLATFORM value" in caplog.text
+        assert "invalid_platform" in caplog.text
+
+    def test_valid_default_platform_no_warning(self, caplog):
+        """Valid default_platform does not log a warning."""
+        import logging
+
+        from spec.config.settings import Settings
+
+        settings = Settings(default_platform="jira")
+
+        with caplog.at_level(logging.WARNING):
+            result = settings.get_default_platform()
+
+        from spec.integrations.providers import Platform
+
+        assert result == Platform.JIRA
+        assert "Invalid DEFAULT_PLATFORM value" not in caplog.text
+
+
+class TestForceIntegrationCheckWarning:
+    """Tests for force_integration_check flag warning."""
+
+    @patch("spec.cli.is_git_repo")
+    @patch("spec.cli.check_auggie_installed")
+    @patch("spec.cli.print_warning")
+    def test_force_integration_check_prints_warning(
+        self, mock_print_warning, mock_check_auggie, mock_is_git_repo
+    ):
+        """force_integration_check=True prints a warning about no effect."""
+        from spec.cli import _check_prerequisites
+
+        mock_is_git_repo.return_value = True
+        mock_check_auggie.return_value = (True, "Auggie installed")
+
+        mock_config = MagicMock()
+        result = _check_prerequisites(mock_config, force_integration_check=True)
+
+        assert result is True
+        mock_print_warning.assert_called_once()
+        warning_msg = mock_print_warning.call_args[0][0]
+        assert "no effect" in warning_msg.lower() or "currently has no effect" in warning_msg
+
+    @patch("spec.cli.is_git_repo")
+    @patch("spec.cli.check_auggie_installed")
+    @patch("spec.cli.print_warning")
+    def test_force_integration_check_false_no_warning(
+        self, mock_print_warning, mock_check_auggie, mock_is_git_repo
+    ):
+        """force_integration_check=False does not print warning."""
+        from spec.cli import _check_prerequisites
+
+        mock_is_git_repo.return_value = True
+        mock_check_auggie.return_value = (True, "Auggie installed")
+
+        mock_config = MagicMock()
+        result = _check_prerequisites(mock_config, force_integration_check=False)
+
+        assert result is True
+        mock_print_warning.assert_not_called()

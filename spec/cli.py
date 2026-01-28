@@ -8,24 +8,40 @@ Supports tickets from all 6 platforms: Jira, Linear, GitHub, Azure DevOps, Monda
 
 import asyncio
 import re
-from typing import Annotated
+from collections.abc import Coroutine
+from typing import Annotated, TypeVar
 
 import typer
 
 from spec.config.manager import ConfigManager
 from spec.integrations.auggie import AuggieClient, check_auggie_installed, install_auggie
+from spec.integrations.auth import AuthenticationManager
 from spec.integrations.git import is_git_repo
 from spec.integrations.providers import GenericTicket, Platform
+from spec.integrations.providers.exceptions import (
+    AuthenticationError,
+    PlatformNotSupportedError,
+    TicketNotFoundError,
+)
+from spec.integrations.ticket_service import TicketService, create_ticket_service
 from spec.ui.menus import MainMenuChoice, show_main_menu
 from spec.utils.console import (
     print_error,
     print_header,
     print_info,
+    print_warning,
     show_banner,
     show_version,
 )
 from spec.utils.errors import ExitCode, SpecError, UserCancelledError
 from spec.utils.logging import setup_logging
+
+# Type variable for async helper
+T = TypeVar("T")
+
+# Platforms that use the PROJECT-123 format and are ambiguous
+# (i.e., can't be distinguished from each other without additional context)
+AMBIGUOUS_PLATFORMS: tuple[Platform, ...] = (Platform.JIRA, Platform.LINEAR)
 
 # Create Typer app
 app = typer.Typer(
@@ -43,11 +59,59 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+class AsyncLoopAlreadyRunningError(SpecError):
+    """Raised when trying to run async code in an existing event loop.
+
+    This occurs in environments like Jupyter notebooks or when already
+    running inside an async context.
+    """
+
+    _default_exit_code = ExitCode.GENERAL_ERROR
+
+
+def run_async(coro: Coroutine[None, None, T]) -> T:
+    """Run an async coroutine safely, handling existing event loops.
+
+    This helper detects if an event loop is already running (e.g., in Jupyter
+    notebooks or dev environments) and raises a clear error instead of
+    crashing with asyncio.run().
+
+    Args:
+        coro: The coroutine to run
+
+    Returns:
+        The result of the coroutine
+
+    Raises:
+        AsyncLoopAlreadyRunningError: If an event loop is already running.
+            This provides a clear error message instead of cryptic asyncio errors.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop - safe to use asyncio.run()
+        loop = None
+
+    if loop is not None:
+        # Close the coroutine to avoid "coroutine was never awaited" warning
+        coro.close()
+        raise AsyncLoopAlreadyRunningError(
+            "Cannot run async operation: an event loop is already running. "
+            "This can happen in Jupyter notebooks or when running inside an async context. "
+            "Consider using 'await' directly or running from a synchronous environment."
+        )
+
+    return asyncio.run(coro)
+
+
 def _validate_platform(platform: str | None) -> Platform | None:
     """Validate and convert platform string to Platform enum.
 
+    Normalizes input by replacing hyphens with underscores to support
+    both "azure-devops" and "azure_devops" formats.
+
     Args:
-        platform: Platform name string (e.g., "jira", "linear")
+        platform: Platform name string (e.g., "jira", "linear", "azure-devops")
 
     Returns:
         Platform enum if valid, None if not provided
@@ -57,10 +121,14 @@ def _validate_platform(platform: str | None) -> Platform | None:
     """
     if platform is None:
         return None
+
+    # Normalize: replace hyphens with underscores for user-friendly input
+    normalized = platform.replace("-", "_").upper()
+
     try:
-        return Platform[platform.upper()]
+        return Platform[normalized]
     except KeyError:
-        valid = ", ".join(p.name.lower() for p in Platform)
+        valid = ", ".join(p.name.lower().replace("_", "-") for p in Platform)
         raise typer.BadParameter(f"Invalid platform: {platform}. Valid options: {valid}") from None
 
 
@@ -69,6 +137,7 @@ def _is_ambiguous_ticket_id(input_str: str) -> bool:
 
     Ambiguous formats match multiple platforms:
     - PROJECT-123 could be Jira or Linear
+    - MY_PROJ-123 (with underscores in project key) could be Jira or Linear
 
     Unambiguous formats:
     - URLs (https://...)
@@ -86,8 +155,10 @@ def _is_ambiguous_ticket_id(input_str: str) -> bool:
     # GitHub format (owner/repo#123) is unambiguous
     if re.match(r"^[^/]+/[^#]+#\d+$", input_str):
         return False
-    # PROJECT-123 format is ambiguous (Jira or Linear)
-    if re.match(r"^[A-Za-z][A-Za-z0-9]*-\d+$", input_str):
+    # PROJECT-123 or MY_PROJECT-123 format is ambiguous (Jira or Linear)
+    # Supports: letters, digits, and underscores in project key (Jira allows underscores)
+    # Must start with a letter
+    if re.match(r"^[A-Za-z][A-Za-z0-9_]*-\d+$", input_str):
         return True
     return False
 
@@ -116,13 +187,44 @@ def _disambiguate_platform(ticket_input: str, config: ConfigManager) -> Platform
     if default_platform is not None:
         return default_platform
 
+    # Build choices from the constant for ambiguous platforms
+    choices = [p.name.title() for p in AMBIGUOUS_PLATFORMS]
+
     # Interactive prompt
     print_info(f"Ticket ID '{ticket_input}' could be from multiple platforms.")
     choice: str = prompt_select(
         message="Which platform is this ticket from?",
-        choices=["Jira", "Linear"],
+        choices=choices,
     )
     return Platform[choice.upper()]
+
+
+async def create_ticket_service_from_config(config: ConfigManager) -> TicketService:
+    """Create a TicketService with dependencies wired from configuration.
+
+    This is a dependency injection helper that centralizes the creation of
+    AuggieClient and AuthenticationManager, making the CLI code cleaner
+    and easier to test.
+
+    Args:
+        config: Configuration manager
+
+    Returns:
+        Configured TicketService ready for use as an async context manager
+
+    Example:
+        service = await create_ticket_service_from_config(config)
+        async with service as svc:
+            ticket = await svc.get_ticket("PROJ-123")
+    """
+    auggie_client = AuggieClient()
+    auth_manager = AuthenticationManager(config)
+
+    return await create_ticket_service(
+        auggie_client=auggie_client,
+        auth_manager=auth_manager,
+        config_manager=config,
+    )
 
 
 async def _fetch_ticket_async(
@@ -137,34 +239,28 @@ async def _fetch_ticket_async(
     Args:
         ticket_input: Ticket ID or URL
         config: Configuration manager
-        platform_hint: Optional platform override
+        platform_hint: Optional platform override for ambiguous ticket IDs
 
     Returns:
         GenericTicket from TicketService
 
     Raises:
-        SpecError: If ticket cannot be fetched
+        TicketNotFoundError: If ticket cannot be found
+        AuthenticationError: If authentication fails
+        PlatformNotSupportedError: If platform is not supported
     """
-    from spec.integrations.auth import AuthenticationManager
-    from spec.integrations.ticket_service import create_ticket_service
-
     # Handle platform hint by constructing a more specific input
+    # NOTE: This URL construction is a temporary workaround until TicketService
+    # supports a platform_override parameter directly. See issue AMI-XX.
     effective_input = ticket_input
     if platform_hint is not None and _is_ambiguous_ticket_id(ticket_input):
         effective_input = _resolve_with_platform_hint(ticket_input, platform_hint)
 
-    # Create auggie client for primary fetcher
-    auggie_client = AuggieClient()
-
-    # Create auth manager for fallback fetcher
-    auth_manager = AuthenticationManager(config)
-
-    async with await create_ticket_service(
-        auggie_client=auggie_client,
-        auth_manager=auth_manager,
-        config_manager=config,
-    ) as service:
-        return await service.get_ticket(effective_input)
+    # Use the dependency injection helper for cleaner code
+    service: TicketService = await create_ticket_service_from_config(config)
+    async with service:
+        ticket: GenericTicket = await service.get_ticket(effective_input)
+        return ticket
 
 
 def _resolve_with_platform_hint(
@@ -175,6 +271,10 @@ def _resolve_with_platform_hint(
 
     For ambiguous IDs like PROJECT-123, constructs a platform-specific
     URL that the TicketService can unambiguously detect.
+
+    NOTE: This is a temporary workaround. Ideally, we would pass a platform_override
+    directly to TicketService. This approach constructs fake URLs to trigger
+    the correct provider detection.
 
     Args:
         ticket_id: Ambiguous ticket ID (e.g., "PROJ-123")
@@ -479,11 +579,13 @@ def _check_prerequisites(config: ConfigManager, force_integration_check: bool) -
         else:
             return False
 
-    # NOTE: Platform integration checks are now handled by TicketService at fetch time.
-    # The legacy check_jira_integration() call was removed as part of AMI-25 migration.
-    # Future platform-specific pre-flight checks may use force_integration_check.
-    # See: AMI-42 (config output updates)
-    _ = force_integration_check  # Reserved for future platform credential validation
+    # Warn user if they provided --force-integration-check flag
+    # This flag currently has no effect but is reserved for future use
+    if force_integration_check:
+        print_warning(
+            "--force-integration-check flag currently has no effect. "
+            "Platform integration checks are handled at ticket fetch time."
+        )
 
     return True
 
@@ -641,30 +743,34 @@ def _run_workflow(
         effective_platform = _disambiguate_platform(ticket, config)
 
     # Fetch ticket using TicketService (async)
+    # Use run_async helper to safely handle existing event loops
     try:
-        generic_ticket = asyncio.run(
+        generic_ticket = run_async(
             _fetch_ticket_async(ticket, config, platform_hint=effective_platform)
         )
+    except TicketNotFoundError as e:
+        print_error(f"Ticket not found: {e}")
+        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+    except AuthenticationError as e:
+        print_error(f"Authentication failed: {e}")
+        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+    except PlatformNotSupportedError as e:
+        print_error(f"Platform not supported: {e}")
+        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+    except AsyncLoopAlreadyRunningError as e:
+        print_error(str(e))
+        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+    except (typer.Exit, SystemExit, KeyboardInterrupt):
+        # Allow typer.Exit, SystemExit, and KeyboardInterrupt to propagate
+        raise
+    except SpecError as e:
+        # Handle any other SpecError subclasses
+        print_error(str(e))
+        raise typer.Exit(e.exit_code) from e
     except Exception as e:
-        # Handle ticket fetch failures with user-friendly messages
-        from spec.integrations.providers.exceptions import (
-            AuthenticationError,
-            PlatformNotSupportedError,
-            TicketNotFoundError,
-        )
-
-        if isinstance(e, TicketNotFoundError):
-            print_error(f"Ticket not found: {e}")
-            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-        elif isinstance(e, AuthenticationError):
-            print_error(f"Authentication failed: {e}")
-            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-        elif isinstance(e, PlatformNotSupportedError):
-            print_error(f"Platform not supported: {e}")
-            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-        else:
-            print_error(f"Failed to fetch ticket: {e}")
-            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+        # Final catch-all for unexpected errors
+        print_error(f"Failed to fetch ticket: {e}")
+        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
 
     # Determine models
     effective_planning_model = (

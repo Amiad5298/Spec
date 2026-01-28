@@ -174,9 +174,14 @@ class Settings:
     def get_default_platform(self) -> Platform | None:
         """Get default platform as Platform enum, or None if not configured.
 
+        Logs a warning if the configured value is invalid (non-empty but not
+        a valid platform name).
+
         Returns:
             Platform enum value if default_platform is set and valid, None otherwise
         """
+        import logging
+
         from spec.integrations.providers import Platform
 
         if not self.default_platform:
@@ -184,6 +189,13 @@ class Settings:
         try:
             return Platform[self.default_platform.upper()]
         except KeyError:
+            # Log warning for invalid configuration value
+            logger = logging.getLogger(__name__)
+            valid_platforms = ", ".join(p.name.lower() for p in Platform)
+            logger.warning(
+                f"Invalid DEFAULT_PLATFORM value '{self.default_platform}', ignoring. "
+                f"Valid options: {valid_platforms}"
+            )
             return None
 
 

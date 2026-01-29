@@ -1074,6 +1074,7 @@ class ConfigManager:
 
         except Exception:
             # Rich failed - fall back to plain-text output using standard print()
+            logger.debug("Rich rendering failed; falling back to plain text", exc_info=True)
             self._show_platform_status_plain_text(agent_integrations, fallback_status, ready_status)
 
     def _show_platform_status_plain_text(

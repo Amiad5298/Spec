@@ -517,19 +517,24 @@ class TestPlatformStatusHelpers:
         self, mock_info, mock_header, temp_config_file, capsys
     ):
         """Falls back to plain-text output when Rich cannot be imported (ImportError)."""
+        import sys
+        from types import ModuleType
+
         manager = ConfigManager(temp_config_file)
         manager.load()
 
-        # Simulate ImportError when trying to import rich.table
-        # by making the import statement inside _show_platform_status raise ImportError
-        import importlib
+        # Create a fake module that raises ImportError when accessing Table
+        class FakeRichTableModule(ModuleType):
+            def __getattr__(self, name):
+                if name == "Table":
+                    raise ImportError("No module named 'rich.table'")
+                raise AttributeError(name)
 
-        def mock_import(name, *args, **kwargs):
-            if name == "rich.table":
-                raise ImportError("No module named 'rich.table'")
-            return importlib.__import__(name, *args, **kwargs)
+        fake_module = FakeRichTableModule("rich.table")
 
-        with patch("builtins.__import__", side_effect=mock_import):
+        # Temporarily replace rich.table in sys.modules with our fake module.
+        # This approach is more localized than patching builtins.__import__.
+        with patch.dict(sys.modules, {"rich.table": fake_module}):
             manager._show_platform_status()
 
         # Should have used plain-text fallback (prints to stdout)

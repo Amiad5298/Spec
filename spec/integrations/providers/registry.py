@@ -305,6 +305,28 @@ class ProviderRegistry:
             cls._config = dict(config)  # Copy to prevent external mutation
 
     @classmethod
+    def reset_instances(cls) -> None:
+        """Reset instances, config, and user interaction without clearing provider registrations.
+
+        Use this method when you need to reset runtime state but preserve provider
+        registrations. This is particularly useful in tests that need to reset
+        between test cases without re-registering providers.
+
+        Thread-safe: Uses lock to protect mutations.
+
+        After resetting:
+        - All singleton instances are destroyed (will be recreated on next get_provider)
+        - UserInteractionInterface is reset to CLIUserInteraction
+        - Configuration is cleared
+
+        Provider class registrations are preserved.
+        """
+        with cls._lock:
+            cls._instances.clear()
+            cls._user_interaction = CLIUserInteraction()
+            cls._config.clear()
+
+    @classmethod
     def clear(cls) -> None:
         """Clear all registrations and instances.
 

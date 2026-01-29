@@ -539,14 +539,14 @@ def main(
         config = ConfigManager()
         config.load()
 
-        # Pass default_jira_project to ProviderRegistry for JiraProvider injection
-        # This enables explicit dependency injection rather than relying on env vars
-        if config.settings.default_jira_project:
-            ProviderRegistry.set_config(
-                {
-                    "default_jira_project": config.settings.default_jira_project,
-                }
-            )
+        # Always set ProviderRegistry config at startup to ensure deterministic state
+        # This prevents stale config from previous runs (e.g., in tests or daemon mode)
+        # If default_jira_project is not configured, explicitly set to None
+        ProviderRegistry.set_config(
+            {
+                "default_jira_project": config.settings.default_jira_project or "",
+            }
+        )
 
         # Handle --config flag
         if show_config:

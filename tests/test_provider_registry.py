@@ -729,3 +729,137 @@ class TestProviderRegistryConcurrentClearAndRegister:
         # All platforms registered
         platforms = ProviderRegistry.list_platforms()
         assert len(platforms) == 3
+
+
+class TestProviderRegistryResetInstances:
+    """Tests for reset_instances() method."""
+
+    def test_reset_instances_preserves_registrations(self):
+        """reset_instances() clears instances but preserves provider registrations."""
+        ProviderRegistry.register(MockJiraProvider)
+        ProviderRegistry.register(MockGitHubProvider)
+
+        # Create instances
+        _ = ProviderRegistry.get_provider(Platform.JIRA)
+        _ = ProviderRegistry.get_provider(Platform.GITHUB)
+
+        # Verify state before reset
+        assert len(ProviderRegistry._providers) == 2
+        assert len(ProviderRegistry._instances) == 2
+
+        # Reset instances
+        ProviderRegistry.reset_instances()
+
+        # Instances are gone, but registrations remain
+        assert len(ProviderRegistry._providers) == 2
+        assert len(ProviderRegistry._instances) == 0
+
+        # Can still get providers (new instances created)
+        provider = ProviderRegistry.get_provider(Platform.JIRA)
+        assert isinstance(provider, MockJiraProvider)
+
+    def test_reset_instances_clears_config(self):
+        """reset_instances() clears configuration."""
+        ProviderRegistry.register(MockJiraProvider)
+        ProviderRegistry.set_config({"default_jira_project": "MYPROJ"})
+
+        # Verify config is set
+        assert ProviderRegistry._config.get("default_jira_project") == "MYPROJ"
+
+        # Reset instances
+        ProviderRegistry.reset_instances()
+
+        # Config is cleared
+        assert ProviderRegistry._config.get("default_jira_project") is None
+
+    def test_reset_instances_resets_user_interaction(self):
+        """reset_instances() resets user interaction to CLIUserInteraction."""
+        mock_ui = MagicMock(spec=UserInteractionInterface)
+        ProviderRegistry.set_user_interaction(mock_ui)
+
+        # Reset instances
+        ProviderRegistry.reset_instances()
+
+        # User interaction is reset
+        ui = ProviderRegistry.get_user_interaction()
+        assert isinstance(ui, CLIUserInteraction)
+
+    def test_reset_instances_allows_config_change_without_re_registration(self):
+        """reset_instances() allows changing config without re-registering providers."""
+        ProviderRegistry.register(MockLinearProviderWithDI)
+
+        # First config
+        mock_ui1 = MagicMock(spec=UserInteractionInterface)
+        ProviderRegistry.set_user_interaction(mock_ui1)
+        provider1 = ProviderRegistry.get_provider(Platform.LINEAR)
+        assert provider1.user_interaction is mock_ui1
+
+        # Reset instances (not clear!)
+        ProviderRegistry.reset_instances()
+
+        # Set new config - no re-registration needed
+        mock_ui2 = MagicMock(spec=UserInteractionInterface)
+        ProviderRegistry.set_user_interaction(mock_ui2)
+        provider2 = ProviderRegistry.get_provider(Platform.LINEAR)
+
+        # New instance with new config
+        assert provider2 is not provider1
+        assert provider2.user_interaction is mock_ui2
+
+
+class TestProviderRegistryConfigDeterminism:
+    """Tests for config determinism - ensuring no stale config persists."""
+
+    def test_set_config_twice_does_not_keep_old_values(self):
+        """Setting config twice replaces all old values, not merging.
+
+        This ensures that if main() runs multiple times (e.g., in tests),
+        the second run's config completely replaces the first.
+        """
+        # First config
+        ProviderRegistry.set_config({"default_jira_project": "FIRST"})
+        assert ProviderRegistry._config.get("default_jira_project") == "FIRST"
+
+        # Second config with different value
+        ProviderRegistry.set_config({"default_jira_project": "SECOND"})
+        assert ProviderRegistry._config.get("default_jira_project") == "SECOND"
+
+        # Second config with empty value
+        ProviderRegistry.set_config({"default_jira_project": ""})
+        assert ProviderRegistry._config.get("default_jira_project") == ""
+
+    def test_set_config_with_empty_replaces_previous(self):
+        """Setting config with empty dict clears all previous config.
+
+        This simulates running CLI first with config, then without.
+        """
+        # First run with config
+        ProviderRegistry.set_config({"default_jira_project": "CONFIGURED"})
+        assert ProviderRegistry._config.get("default_jira_project") == "CONFIGURED"
+
+        # Second run without config (empty dict)
+        ProviderRegistry.set_config({})
+        assert ProviderRegistry._config.get("default_jira_project") is None
+
+    def test_initialization_twice_first_with_value_then_without(self):
+        """Simulates main() running twice: first with config, then without.
+
+        Verifies that stale config from first run doesn't persist to second run.
+        This is the core acceptance test for config determinism.
+        """
+        ProviderRegistry.register(MockLinearProviderWithDI)
+
+        # First "run" - set config and create instance
+        ProviderRegistry.set_config({"default_jira_project": "PROJ1"})
+        _ = ProviderRegistry.get_provider(Platform.LINEAR)
+        assert ProviderRegistry._config.get("default_jira_project") == "PROJ1"
+
+        # Simulate CLI calling reset_instances at start of second run
+        ProviderRegistry.reset_instances()
+
+        # Second "run" - set empty config
+        ProviderRegistry.set_config({"default_jira_project": ""})
+
+        # Old config must NOT persist
+        assert ProviderRegistry._config.get("default_jira_project") == ""
+        assert ProviderRegistry._config.get("default_jira_project") != "PROJ1"

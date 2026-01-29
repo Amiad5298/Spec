@@ -7,7 +7,6 @@ Supports tickets from all 6 platforms: Jira, Linear, GitHub, Azure DevOps, Monda
 """
 
 import asyncio
-import os
 import re
 from collections.abc import Callable, Coroutine
 from typing import Annotated, TypeVar
@@ -24,6 +23,7 @@ from spec.integrations.providers.exceptions import (
     PlatformNotSupportedError,
     TicketNotFoundError,
 )
+from spec.integrations.providers.registry import ProviderRegistry
 from spec.integrations.ticket_service import TicketService, create_ticket_service
 from spec.ui.menus import MainMenuChoice, show_main_menu
 from spec.utils.console import (
@@ -539,10 +539,14 @@ def main(
         config = ConfigManager()
         config.load()
 
-        # Export DEFAULT_JIRA_PROJECT to environment for JiraProvider
-        # This ensures config file values are available to JiraProvider singleton
+        # Pass default_jira_project to ProviderRegistry for JiraProvider injection
+        # This enables explicit dependency injection rather than relying on env vars
         if config.settings.default_jira_project:
-            os.environ["DEFAULT_JIRA_PROJECT"] = config.settings.default_jira_project
+            ProviderRegistry.set_config(
+                {
+                    "default_jira_project": config.settings.default_jira_project,
+                }
+            )
 
         # Handle --config flag
         if show_config:

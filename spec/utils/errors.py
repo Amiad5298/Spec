@@ -4,6 +4,7 @@ This module defines the exit codes and exception hierarchy used throughout
 the application, matching the original Bash script's error handling.
 """
 
+import re
 from enum import IntEnum
 from typing import ClassVar
 
@@ -100,11 +101,16 @@ class PlatformNotConfiguredError(SpecError):
         """
         self.platform = platform
         if platform:
-            # Normalize platform name for prefix check (strip whitespace, lowercase)
+            # Normalize platform name for prefix check
             platform_normalized = platform.strip().lower()
-            # Check if message already starts with any form of the platform prefix
-            message_lower = message.strip().lower()
-            if not message_lower.startswith(f"[{platform_normalized}]"):
+            # Use regex to check if message already has the platform prefix
+            # Handles variations like [Linear], [ Linear ], [LINEAR], etc.
+            # Pattern: ^\[\s*platform\s*\] (case-insensitive, optional whitespace inside brackets)
+            prefix_pattern = re.compile(
+                rf"^\[\s*{re.escape(platform_normalized)}\s*\]",
+                re.IGNORECASE,
+            )
+            if not prefix_pattern.match(message.strip()):
                 # Add platform prefix for clarity
                 message = f"[{platform.strip()}] {message}"
         super().__init__(message, exit_code)

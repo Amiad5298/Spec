@@ -216,3 +216,143 @@ class TestNumericIdWithConfiguredDefaultProject:
         assert "default project" in error_message.lower()
         # The error should guide users to provide a project key
         assert "PROJECT-123" in error_message or "default_project" in error_message
+
+
+class TestProviderRegistryConfigWiring:
+    """Integration tests for ConfigManager → ProviderRegistry → JiraProvider wiring.
+
+    These tests verify that the default_jira_project configuration flows correctly
+    from ProviderRegistry.set_config() to JiraProvider, without relying on
+    environment variables.
+
+    This is the "wiring test" to ensure dependency injection works end-to-end.
+    """
+
+    @pytest.fixture(autouse=True)
+    def reset_registry(self):
+        """Reset ProviderRegistry before and after each test.
+
+        After clearing, re-register JiraProvider since the decorator only runs
+        once at import time.
+        """
+        from spec.integrations.providers.jira import JiraProvider
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        ProviderRegistry.clear()
+        # Re-register JiraProvider after clear (decorator ran at import time)
+        ProviderRegistry.register(JiraProvider)
+        yield
+        ProviderRegistry.clear()
+
+    def test_set_config_injects_default_project_to_jira_provider(self):
+        """ProviderRegistry.set_config passes default_jira_project to JiraProvider.
+
+        This is the core wiring test: verify that calling set_config with
+        default_jira_project causes the JiraProvider instance to use that
+        value for numeric ID parsing.
+        """
+        from spec.integrations.providers.base import Platform
+        from spec.integrations.providers.jira import JiraProvider
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        # Clear and re-register to ensure fresh state
+        ProviderRegistry.clear()
+        ProviderRegistry.register(JiraProvider)
+
+        # Set config BEFORE getting provider (provider is lazy-instantiated)
+        ProviderRegistry.set_config({"default_jira_project": "TESTPROJ"})
+
+        # Get provider instance (will be created with injected config)
+        provider = ProviderRegistry.get_provider(Platform.JIRA)
+
+        # Verify the provider received the config
+        assert provider._default_project == "TESTPROJ"
+        assert provider._has_explicit_default_project is True
+
+        # Verify numeric ID parsing uses the configured project
+        ticket_id = provider.parse_input("456")
+        assert ticket_id == "TESTPROJ-456"
+
+    def test_numeric_id_can_handle_with_config(self):
+        """JiraProvider.can_handle returns True for numeric IDs when config is set.
+
+        When default_jira_project is configured, JiraProvider should be able
+        to handle numeric-only ticket IDs.
+        """
+        from spec.integrations.providers.base import Platform
+        from spec.integrations.providers.jira import JiraProvider
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        # Clear and re-register to ensure fresh state
+        ProviderRegistry.clear()
+        ProviderRegistry.register(JiraProvider)
+
+        # Set config before getting provider
+        ProviderRegistry.set_config({"default_jira_project": "MYPROJ"})
+
+        provider = ProviderRegistry.get_provider(Platform.JIRA)
+
+        # Should be able to handle numeric IDs when configured
+        assert provider.can_handle("123") is True
+        assert provider.can_handle("999") is True
+
+    def test_no_config_uses_fallback(self):
+        """Without set_config, JiraProvider uses DEFAULT_PROJECT fallback.
+
+        When no config is provided and no env var is set, the provider
+        should fall back to the DEFAULT_PROJECT constant.
+        """
+        import os
+
+        from spec.integrations.providers.base import Platform
+        from spec.integrations.providers.jira import DEFAULT_PROJECT, JiraProvider
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        # Clear and re-register to ensure fresh state
+        ProviderRegistry.clear()
+        ProviderRegistry.register(JiraProvider)
+
+        # Clear any env vars that might interfere
+        old_env = os.environ.pop("JIRA_DEFAULT_PROJECT", None)
+        try:
+            # Get provider without setting config
+            provider = ProviderRegistry.get_provider(Platform.JIRA)
+
+            # Should use the DEFAULT_PROJECT constant
+            assert provider._default_project == DEFAULT_PROJECT
+
+            # But _has_explicit_default_project should be False
+            assert provider._has_explicit_default_project is False
+        finally:
+            # Restore env var if it was set
+            if old_env is not None:
+                os.environ["JIRA_DEFAULT_PROJECT"] = old_env
+
+    def test_config_clear_resets_providers(self):
+        """ProviderRegistry.clear() resets config and allows re-injection.
+
+        After clear(), setting new config should create a new provider
+        instance with the new config values.
+        """
+        from spec.integrations.providers.base import Platform
+        from spec.integrations.providers.jira import JiraProvider
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        # Clear and re-register to ensure fresh state
+        ProviderRegistry.clear()
+        ProviderRegistry.register(JiraProvider)
+
+        # Set initial config
+        ProviderRegistry.set_config({"default_jira_project": "FIRST"})
+        provider1 = ProviderRegistry.get_provider(Platform.JIRA)
+        assert provider1._default_project == "FIRST"
+
+        # Clear and re-register with new config
+        ProviderRegistry.clear()
+        ProviderRegistry.register(JiraProvider)
+        ProviderRegistry.set_config({"default_jira_project": "SECOND"})
+        provider2 = ProviderRegistry.get_provider(Platform.JIRA)
+
+        # Should be a new instance with new config
+        assert provider2._default_project == "SECOND"
+        assert provider1 is not provider2  # Different instances

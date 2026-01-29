@@ -112,6 +112,11 @@ my-project/
 
 > **⚠️ Security Warning:** Never commit secrets or credentials to a `.spec` file if it is tracked in version control. Use environment variables for secrets (see [Security Best Practices](#security-best-practices)). If your `.spec` file contains personal credentials, add it to `.gitignore`.
 
+```bash
+# Add to your .gitignore
+.spec
+```
+
 ### Global Config (`~/.spec-config`)
 
 The global config file stores user-wide defaults. This is the recommended location for personal credentials and preferences.

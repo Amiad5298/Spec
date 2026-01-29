@@ -194,17 +194,17 @@ Cross-reference with `CREDENTIAL_ALIASES` in `spec/config/fetch_config.py`:
 
 | Platform | Link | Purpose | Status |
 |----------|------|---------|--------|
-| Jira | https://id.atlassian.com/manage-profile/security/api-tokens | API token creation | 🔍 Verify |
-| Jira | https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/ | REST API docs | 🔍 Verify |
-| Linear | https://linear.app/settings/api | Personal API keys | 🔍 Verify |
-| Linear | https://developers.linear.app/docs/graphql/working-with-the-graphql-api | GraphQL API docs | 🔍 Verify |
-| GitHub | https://github.com/settings/tokens | Personal access tokens | 🔍 Verify |
-| GitHub | https://docs.github.com/en/rest/issues | REST API docs | 🔍 Verify |
-| Azure DevOps | https://dev.azure.com/ | PAT creation portal | 🔍 Verify |
-| Azure DevOps | https://learn.microsoft.com/en-us/rest/api/azure/devops/ | REST API docs | 🔍 Verify |
-| Monday | https://developer.monday.com/api-reference/docs | API docs | 🔍 Verify |
-| Trello | https://trello.com/power-ups/admin | API key portal | 🔍 Verify |
-| Trello | https://developer.atlassian.com/cloud/trello/ | REST API docs | 🔍 Verify |
+| Jira | https://id.atlassian.com/manage-profile/security/api-tokens | API token creation | ✅ Verified |
+| Jira | https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/ | REST API docs | ✅ Verified |
+| Linear | https://linear.app/settings/api | Personal API keys | ✅ Verified |
+| Linear | https://developers.linear.app/docs/graphql/working-with-the-graphql-api | GraphQL API docs | ✅ Verified |
+| GitHub | https://github.com/settings/tokens | Personal access tokens | ✅ Verified |
+| GitHub | https://docs.github.com/en/rest/issues | REST API docs | ✅ Verified |
+| Azure DevOps | https://dev.azure.com/ | PAT creation portal | ✅ Verified |
+| Azure DevOps | https://learn.microsoft.com/en-us/rest/api/azure/devops/ | REST API docs | ✅ Verified |
+| Monday | https://developer.monday.com/api-reference/docs | API docs | ✅ Verified |
+| Trello | https://trello.com/power-ups/admin | API key portal | ✅ Verified |
+| Trello | https://developer.atlassian.com/cloud/trello/ | REST API docs | ✅ Verified |
 
 ### Phase 4: Test Configuration Examples
 

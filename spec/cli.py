@@ -336,7 +336,7 @@ def show_help() -> None:
     print_info("")
     print_info("Arguments:")
     print_info("  TICKET    Ticket ID or URL from any supported platform")
-    print_info("            Examples: PROJ-123, https://jira.example.com/browse/PROJ-123")
+    print_info("            Examples: PROJ-123, https://example.atlassian.net/browse/PROJ-123,")
     print_info("            https://linear.app/team/issue/ENG-456, owner/repo#42")
     print_info("")
     print_info("Options:")
@@ -367,7 +367,7 @@ def main(
     ticket: Annotated[
         str | None,
         typer.Argument(
-            help="Ticket ID or URL (e.g., PROJ-123, https://jira.example.com/browse/PROJ-123, "
+            help="Ticket ID or URL (e.g., PROJ-123, https://example.atlassian.net/browse/PROJ-123, "
             "https://linear.app/team/issue/ENG-456, owner/repo#42)",
         ),
     ] = None,
@@ -680,15 +680,6 @@ def _configure_settings(config: ConfigManager) -> None:
         )
         if model:
             config.save("IMPLEMENTATION_MODEL", model)
-
-    # Default Jira project
-    if prompt_confirm("Configure default Jira project?", default=False):
-        project = prompt_input(
-            "Enter default Jira project key",
-            default=config.settings.default_jira_project,
-        )
-        if project:
-            config.save("DEFAULT_JIRA_PROJECT", project.upper())
 
     # Parallel execution settings
     if prompt_confirm("Configure parallel execution settings?", default=False):

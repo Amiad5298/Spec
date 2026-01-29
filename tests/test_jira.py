@@ -53,8 +53,8 @@ class TestParseJiraTicket:
         assert result.ticket_id == "MYPROJ-789"
 
     def test_parse_numeric_without_default(self):
-        """Raises error for numeric without default project."""
-        with pytest.raises(ValueError, match="DEFAULT_JIRA_PROJECT"):
+        """Raises error for numeric-only IDs without default project."""
+        with pytest.raises(ValueError, match="default project"):
             parse_jira_ticket("789")
 
     def test_parse_invalid_format(self):
@@ -108,9 +108,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "YES, Jira is available"
 
-        with patch("spec.integrations.jira.print_info"), \
-             patch("spec.integrations.jira.print_success"), \
-             patch("spec.integrations.jira.print_step"):
+        with patch("spec.integrations.jira.print_info"), patch(
+            "spec.integrations.jira.print_success"
+        ), patch("spec.integrations.jira.print_step"):
             check_jira_integration(mock_config, mock_auggie, force=True)
 
         mock_auggie.run_print_quiet.assert_called_once()
@@ -123,9 +123,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "YES, Jira is available"
 
-        with patch("spec.integrations.jira.print_info"), \
-             patch("spec.integrations.jira.print_success"), \
-             patch("spec.integrations.jira.print_step"):
+        with patch("spec.integrations.jira.print_info"), patch(
+            "spec.integrations.jira.print_success"
+        ), patch("spec.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie)
 
         assert result is True
@@ -139,9 +139,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "Jira is not configured"
 
-        with patch("spec.integrations.jira.print_info"), \
-             patch("spec.integrations.jira.print_warning"), \
-             patch("spec.integrations.jira.print_step"):
+        with patch("spec.integrations.jira.print_info"), patch(
+            "spec.integrations.jira.print_warning"
+        ), patch("spec.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie)
 
         assert result is False
@@ -180,4 +180,3 @@ DESCRIPTION: Test
 
         # Should be lowercase, no special chars
         assert result.summary == "add-user-s-authentication"
-

@@ -1162,7 +1162,6 @@ class ConfigManager:
         # Platform Settings section (NEW)
         console.print("  [bold]Platform Settings:[/bold]")
         console.print(f"    Default Platform: {s.default_platform or '(not set)'}")
-        console.print(f"    Default Jira Project: {s.default_jira_project or '(not set)'}")
         console.print()
 
         # Platform Status table (NEW)

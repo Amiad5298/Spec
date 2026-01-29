@@ -35,7 +35,6 @@ class Settings:
         default_model: Legacy default AI model for all phases
         planning_model: AI model for Steps 1-2 (Discovery & Planning)
         implementation_model: AI model for Step 3 (Execution)
-        default_jira_project: Default Jira project key for numeric ticket IDs
         jira_integration_status: Cached Jira integration status
         jira_check_timestamp: Unix timestamp of last Jira check
         auto_open_files: Whether to auto-open files in editor
@@ -59,7 +58,6 @@ class Settings:
     implementation_model: str = ""
 
     # Jira settings
-    default_jira_project: str = ""
     jira_integration_status: str = ""
     jira_check_timestamp: int = 0
 
@@ -105,7 +103,6 @@ class Settings:
             "DEFAULT_MODEL": "default_model",
             "PLANNING_MODEL": "planning_model",
             "IMPLEMENTATION_MODEL": "implementation_model",
-            "DEFAULT_JIRA_PROJECT": "default_jira_project",
             "JIRA_INTEGRATION_STATUS": "jira_integration_status",
             "JIRA_CHECK_TIMESTAMP": "jira_check_timestamp",
             "AUTO_OPEN_FILES": "auto_open_files",

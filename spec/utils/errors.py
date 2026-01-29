@@ -18,7 +18,7 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     GENERAL_ERROR = 1
     AUGGIE_NOT_INSTALLED = 2
-    JIRA_NOT_CONFIGURED = 3
+    PLATFORM_NOT_CONFIGURED = 3  # Platform not configured
     USER_CANCELLED = 4
     GIT_ERROR = 5
 
@@ -70,16 +70,40 @@ class AuggieNotInstalledError(SpecError):
     _default_exit_code: ClassVar[ExitCode] = ExitCode.AUGGIE_NOT_INSTALLED
 
 
-class JiraNotConfiguredError(SpecError):
-    """Jira integration is not configured in Auggie.
+class PlatformNotConfiguredError(SpecError):
+    """Platform integration is not configured.
 
     Raised when:
-    - Jira MCP server is not configured
-    - Jira API token is missing or invalid
-    - Jira integration check fails
+    - Platform MCP server is not configured (Jira, Linear, GitHub, etc.)
+    - Platform API credentials are missing or invalid
+    - Platform integration check fails
+
+    Supported platforms: Jira, Linear, GitHub, Azure DevOps, Monday, Trello
+
+    Attributes:
+        platform: The platform that is not configured (optional)
     """
 
-    _default_exit_code: ClassVar[ExitCode] = ExitCode.JIRA_NOT_CONFIGURED
+    _default_exit_code: ClassVar[ExitCode] = ExitCode.PLATFORM_NOT_CONFIGURED
+
+    def __init__(
+        self,
+        message: str,
+        platform: str | None = None,
+        exit_code: ExitCode | None = None,
+    ) -> None:
+        """Initialize the exception.
+
+        Args:
+            message: Error message describing what went wrong
+            platform: Optional platform name for context (included in message if provided)
+            exit_code: Optional override for the default exit code
+        """
+        self.platform = platform
+        if platform and not message.startswith(f"[{platform}]"):
+            # Surface platform context in the rendered message for clarity.
+            message = f"[{platform}] {message}"
+        super().__init__(message, exit_code)
 
 
 class UserCancelledError(SpecError):
@@ -112,8 +136,7 @@ __all__ = [
     "ExitCode",
     "SpecError",
     "AuggieNotInstalledError",
-    "JiraNotConfiguredError",
+    "PlatformNotConfiguredError",
     "UserCancelledError",
     "GitOperationError",
 ]
-

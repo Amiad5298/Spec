@@ -91,7 +91,6 @@ class TestCLIWorkflow:
         """Runs workflow when ticket is provided."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = "PROJ"
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["TEST-123"])
@@ -126,7 +125,6 @@ class TestCLIFlags:
         """--model flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--model", "claude-3", "TEST-123"])
@@ -142,7 +140,6 @@ class TestCLIFlags:
         """--skip-clarification flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--skip-clarification", "TEST-123"])
@@ -158,7 +155,6 @@ class TestCLIFlags:
         """--no-squash flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--no-squash", "TEST-123"])
@@ -180,7 +176,6 @@ class TestParallelFlags:
         """--parallel flag enables parallel execution."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--parallel", "TEST-123"])
@@ -196,7 +191,6 @@ class TestParallelFlags:
         """--no-parallel flag disables parallel execution."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--no-parallel", "TEST-123"])
@@ -212,7 +206,6 @@ class TestParallelFlags:
         """--max-parallel sets the maximum parallel tasks."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--max-parallel", "4", "TEST-123"])
@@ -239,7 +232,6 @@ class TestParallelFlags:
         """--fail-fast flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--fail-fast", "TEST-123"])
@@ -255,7 +247,6 @@ class TestParallelFlags:
         """--no-fail-fast flag is passed to workflow."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--no-fail-fast", "TEST-123"])
@@ -273,7 +264,6 @@ class TestParallelFlags:
         """No --max-parallel flag passes None to workflow (uses config)."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["TEST-123"])
@@ -291,7 +281,6 @@ class TestParallelFlags:
         """No --fail-fast/--no-fail-fast flag passes None to workflow (uses config)."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["TEST-123"])
@@ -311,7 +300,6 @@ class TestRetryFlags:
         """--max-retries sets the maximum retry count."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--max-retries", "10", "TEST-123"])
@@ -327,7 +315,6 @@ class TestRetryFlags:
         """--max-retries 0 disables retries."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--max-retries", "0", "TEST-123"])
@@ -345,7 +332,6 @@ class TestRetryFlags:
         """--retry-base-delay sets the base delay."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--retry-base-delay", "5.0", "TEST-123"])
@@ -367,7 +353,6 @@ class TestAutoUpdateDocsFlags:
         """--auto-update-docs flag enables documentation updates."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--auto-update-docs", "TEST-123"])
@@ -385,7 +370,6 @@ class TestAutoUpdateDocsFlags:
         """--no-auto-update-docs flag disables documentation updates."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["--no-auto-update-docs", "TEST-123"])
@@ -403,7 +387,6 @@ class TestAutoUpdateDocsFlags:
         """No --auto-update-docs flag passes None to workflow (uses config)."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         runner.invoke(app, ["TEST-123"])
@@ -440,7 +423,6 @@ class TestExceptionHandlers:
 
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
         mock_run.side_effect = UserCancelledError("User cancelled")
 
@@ -458,7 +440,6 @@ class TestExceptionHandlers:
 
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
         mock_run.side_effect = SpecError("Something went wrong", ExitCode.GENERAL_ERROR)
 
@@ -488,7 +469,6 @@ class TestDirtyTreePolicy:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -518,7 +498,6 @@ class TestDirtyTreePolicy:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -548,7 +527,6 @@ class TestDirtyTreePolicy:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -608,7 +586,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -639,7 +616,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -670,7 +646,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -699,7 +674,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -730,7 +704,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
@@ -760,7 +733,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True  # Config says True
@@ -791,7 +763,6 @@ class TestEffectiveValueOverrides:
         mock_config.settings.default_model = "test-model"
         mock_config.settings.planning_model = ""
         mock_config.settings.implementation_model = ""
-        mock_config.settings.default_jira_project = ""
         mock_config.settings.skip_clarification = False
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = False  # Config says False
@@ -1268,7 +1239,6 @@ class TestAmbiguousIdWithPlatformFlag:
         """Ambiguous ID with explicit --platform flag does not prompt user."""
         mock_prereq.return_value = True
         mock_config = MagicMock()
-        mock_config.settings.default_jira_project = ""
         mock_config_class.return_value = mock_config
 
         # Run with ambiguous ID but explicit platform

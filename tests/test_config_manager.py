@@ -1437,7 +1437,7 @@ class TestFetchConfigDataclasses:
 
         config = AgentConfig()
         assert config.platform == AgentPlatform.AUGGIE
-        assert config.integrations == {}
+        assert config.integrations is None  # None means no explicit config
 
     def test_agent_config_supports_platform(self):
         """AgentConfig.supports_platform() works correctly."""
@@ -1577,7 +1577,7 @@ class TestConfigManagerGetAgentConfig:
 
         config = manager.get_agent_config()
         assert config.platform == AgentPlatform.AUGGIE
-        assert config.integrations == {}
+        assert config.integrations is None  # None means no explicit config
 
     def test_get_agent_config_custom_platform(self, tmp_path):
         """Parses AGENT_PLATFORM from config."""

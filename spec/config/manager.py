@@ -570,17 +570,22 @@ class ConfigManager:
         Parses AGENT_PLATFORM and AGENT_INTEGRATION_* keys from config.
 
         Returns:
-            AgentConfig instance with platform and integrations
+            AgentConfig instance with platform and integrations.
+            integrations is None if no AGENT_INTEGRATION_* keys are set,
+            or a dict if any are explicitly configured.
 
         Raises:
             ConfigValidationError: If AGENT_PLATFORM has an invalid value
         """
         platform_str = self._raw_values.get("AGENT_PLATFORM")
-        integrations: dict[str, bool] = {}
+        integrations: dict[str, bool] | None = None
 
         # Parse AGENT_INTEGRATION_* keys
+        # Only create dict if at least one key is found
         for key, value in self._raw_values.items():
             if key.startswith("AGENT_INTEGRATION_"):
+                if integrations is None:
+                    integrations = {}
                 platform_name = key.replace("AGENT_INTEGRATION_", "").lower()
                 integrations[platform_name] = value.lower() in ("true", "1", "yes")
 

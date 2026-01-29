@@ -2,6 +2,15 @@
 
 > Complete documentation for configuring credentials for SPEC's 6 supported ticket platforms.
 
+## Quick Start Checklist
+
+1. **Choose your platform(s)** – Identify which ticket platforms you'll use (Jira, Linear, GitHub, Azure DevOps, Monday, Trello)
+2. **Set default platform** *(optional)* – Add `DEFAULT_PLATFORM=<platform>` to `~/.spec-config` to avoid using `--platform` flag
+3. **Configure fallback credentials** *(if required)* – Azure DevOps, Monday, and Trello **require** credentials; Jira/Linear/GitHub need them only as a backup
+4. **Verify configuration** – Run `spec --config` to confirm your setup
+
+---
+
 ## Overview
 
 SPEC supports fetching tickets from 6 platforms:
@@ -15,19 +24,20 @@ SPEC supports fetching tickets from 6 platforms:
 
 ### Two Authentication Modes
 
-SPEC uses two authentication modes to fetch tickets:
+SPEC uses two authentication modes to fetch tickets. **"Agent integration"** refers to using an AI coding assistant's built-in platform connections (e.g., Auggie MCP tools), while **"fallback credentials"** means providing your own API keys for direct API access.
 
-1. **Auggie MCP Integration (Primary)**
+1. **Agent Integration via Auggie MCP (Primary)**
    - Platforms: Jira, Linear, GitHub
-   - Authentication is handled by Auggie's built-in integrations
-   - No configuration needed in SPEC—works out of the box
+   - Authentication is handled by Auggie's built-in MCP (Model Context Protocol) integrations
+   - No configuration needed in SPEC—works out of the box when using Auggie
    - Credentials are managed in your Auggie agent settings
+   - **Note:** "Auggie" is the specific AI agent implementation; if you're using a different agent or running SPEC standalone, use fallback credentials instead
 
 2. **Fallback Credentials (Direct API)**
    - Platforms: **All 6** (Azure DevOps, Monday, Trello **require** this)
    - Authentication via `FALLBACK_*` configuration keys
    - Credentials stored in `~/.spec-config` or `.spec` file
-   - Used when Auggie integration is unavailable or for platforms without Auggie support
+   - Used when agent integration is unavailable or for platforms without agent support
 
 ### How Authentication Works
 
@@ -79,25 +89,28 @@ SPEC supports multiple configuration files with a cascading hierarchy. Settings 
 | 1 (Highest) | Environment Variables | Shell environment | CI/CD, temporary overrides |
 | 2 | Local Config | `.spec` in project directory | Project-specific settings |
 | 3 | Global Config | `~/.spec-config` | User defaults |
-| 4 (Lowest) | Built-in Defaults | Hardcoded in SPEC | Fallback values |
+| 4 (Lowest) | Built-in Defaults | Hardcoded in SPEC | Non-secret defaults only (e.g., default platform) |
+
+> **Note:** Built-in defaults apply only to non-secret settings like `DEFAULT_PLATFORM`. Credentials have no defaults—you must provide them explicitly.
 
 ### Local Config (`.spec`)
 
-SPEC searches for a `.spec` file starting from the current directory and traversing up to the repository root (detected by `.git` directory). This allows project-specific configuration that overrides global settings.
+SPEC searches upward from the current directory for a `.spec` file. This allows project-specific configuration that overrides global settings.
 
 **Example project structure:**
 ```
 my-project/
-├── .git/
-├── .spec           ← Project-specific config
+├── .spec           ← Project-specific config (if needed)
 └── src/
     └── ...
 ```
 
 **Use cases for local config:**
-- Team-shared credentials for a specific project
+- Team-shared non-secret settings (e.g., default platform, fetch strategy)
 - Project-specific default platform
 - CI/CD settings for a particular repository
+
+> **⚠️ Security Warning:** Never commit secrets or credentials to a `.spec` file if it is tracked in version control. Use environment variables for secrets (see [Security Best Practices](#security-best-practices)). If your `.spec` file contains personal credentials, add it to `.gitignore`.
 
 ### Global Config (`~/.spec-config`)
 
@@ -411,10 +424,12 @@ Trello requires fallback credentials—there is no Auggie MCP integration.
 
 #### Required Credentials
 
-| Config Key | Description |
-|------------|-------------|
-| `FALLBACK_TRELLO_API_KEY` | API key from Trello Power-Up Admin |
-| `FALLBACK_TRELLO_TOKEN` | OAuth token for your account |
+| Config Key | Trello Official Term | Description |
+|------------|---------------------|-------------|
+| `FALLBACK_TRELLO_API_KEY` | **API Key** | Your Trello API Key from the Power-Up Admin portal |
+| `FALLBACK_TRELLO_TOKEN` | **Token** | Authorization Token generated for your account |
+
+> **Terminology Note:** Trello's official terms are "API Key" and "Token". SPEC also accepts `api_token` as an alias for `token` (see [Credential Key Aliases](#credential-key-aliases)).
 
 #### Getting Credentials (Two-Step Process)
 
@@ -422,16 +437,16 @@ Trello requires fallback credentials—there is no Auggie MCP integration.
 
 1. Go to [Trello Power-Up Admin](https://trello.com/power-ups/admin)
 2. Click **"New"** to create a new Power-Up (or use an existing one)
-3. Copy your **API Key**
+3. Copy your **API Key** — this is the value for `FALLBACK_TRELLO_API_KEY`
 
-**Step 2: Generate an OAuth Token**
+**Step 2: Generate a Token**
 
-1. Visit this URL (replace `YOUR_API_KEY` with your actual key):
+1. Visit this URL (replace `YOUR_API_KEY` with the API Key from Step 1):
    ```
    https://trello.com/1/authorize?expiration=never&scope=read&response_type=token&key=YOUR_API_KEY
    ```
 2. Click **"Allow"** to authorize
-3. Copy the token displayed
+3. Copy the **Token** displayed — this is the value for `FALLBACK_TRELLO_TOKEN`
 4. Store both in environment variables:
    ```bash
    export TRELLO_API_KEY="your-api-key-here"
@@ -697,5 +712,5 @@ spec https://linear.app/team/issue/ENG-456
 
 If you're still having issues:
 1. Check the [SPEC README](../README.md) for general usage
-2. Review the [config template](../spec/config/templates/fetch_config.template) for all options
+2. Review the [configuration template](../spec/config/templates/fetch_config.template) for a complete example with all available options, including fetch strategy, agent integrations, caching, and timeouts
 3. Open an issue on the project repository

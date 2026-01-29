@@ -1,8 +1,23 @@
 # Implementation Plan: AMI-41 - Create Platform Configuration Guide
 
 **Ticket:** [AMI-41](https://linear.app/amiadspec/issue/AMI-41/create-platform-configuration-guide)
-**Status:** In Progress
+**Status:** Implemented
 **Date:** 2026-01-28
+
+---
+
+## Changes in this PR
+
+This PR adds the following documentation enhancements to `docs/platform-configuration.md`:
+
+- ✅ **Added:** "Quick Start" checklist for rapid onboarding at the top of the guide
+- ✅ **Added:** "Configuration File Locations & Precedence" section documenting `.spec` local config and `~/.spec-config` global config hierarchy
+- ✅ **Added:** Instructions for verifying configuration using `spec --config`
+- ✅ **Added:** Security warning about never committing secrets to version control
+- ✅ **Added:** Clarification of terminology (Auggie vs. Agent integration) in the Authentication Modes section
+- ✅ **Updated:** Trello instructions to use official Atlassian terminology (API Key and Token)
+- ✅ **Fixed:** Technical accuracy in config file traversal documentation (removed implementation-specific `.git` reference)
+- ✅ **Added:** Reference to the configuration template file (`spec/config/templates/fetch_config.template`)
 
 ---
 
@@ -23,7 +38,7 @@ This ticket creates comprehensive documentation for configuring credentials and 
 
 **Target File:** `docs/platform-configuration.md`
 
-**Current State:** A comprehensive guide already exists in `docs/platform-configuration.md` (702 lines) that covers all acceptance criteria. This plan validates the existing content against requirements.
+**Current State:** The base documentation structure exists in `docs/platform-configuration.md`. This PR adds the missing "Configuration File Locations & Precedence" section, `spec --config` documentation, security best practices enhancements, and terminology clarifications.
 
 ---
 
@@ -76,28 +91,33 @@ The guide follows a logical structure that helps users understand:
 
 ### `docs/platform-configuration.md`
 
-**Change Type:** Validation and minor updates (content already exists)
+**Change Type:** Add new sections and update existing content
 
-**Current Content (702 lines):**
-The file already contains comprehensive documentation including:
-- Overview with two authentication modes explained (Lines 1-41)
-- Quick Reference Table (Lines 43-52)
-- Credential Key Aliases section (Lines 56-68)
-- Configuration File Locations & Precedence (Lines 71-120)
-- Default Platform configuration (Lines 123-156)
-- Platforms with Auggie Integration: Jira, Linear, GitHub (Lines 159-300)
-- Platforms Requiring Fallback Credentials: Azure DevOps, Monday, Trello (Lines 303-452)
-- Complete Configuration Example (Lines 455-503)
-- Security Best Practices (Lines 507-582)
-- Verifying Configuration (Lines 585-618)
-- Troubleshooting section (Lines 620-702)
+**Additions in This PR:**
+- **NEW:** Quick Start checklist (top of document)
+- **NEW:** Configuration File Locations & Precedence section (Lines 71-120)
+- **NEW:** `spec --config` documentation (Lines 108-120)
+- **NEW:** Security warning about secrets in version control
+
+**Updates in This PR:**
+- **UPDATED:** Authentication Modes section with Auggie/Agent terminology clarification
+- **UPDATED:** Local Config section to remove implementation-specific `.git` traversal claim
+- **UPDATED:** Trello section to use official Atlassian terminology (API Key, Token)
+- **UPDATED:** Precedence table to clarify that Built-in Defaults apply to non-secret settings only
+
+**Template Reference:** The configuration template at `spec/config/templates/fetch_config.template` is referenced in the Troubleshooting section for users who want a complete configuration example.
 
 **Required Actions:**
-1. Validate all content against acceptance criteria
-2. Verify credential keys match `PLATFORM_REQUIRED_CREDENTIALS` in `spec/config/fetch_config.py`
-3. Verify credential aliases match `CREDENTIAL_ALIASES` in `spec/config/fetch_config.py`
-4. Ensure all external links are valid
-5. Test configuration examples for correctness
+1. Add Quick Start checklist at top
+2. Add Configuration File Locations & Precedence section
+3. Add security warning about credentials in version control
+4. Clarify terminology (Auggie = specific agent implementation)
+5. Fix local config traversal documentation
+6. Update Trello terminology
+7. Verify credential keys match `PLATFORM_REQUIRED_CREDENTIALS` in `spec/config/fetch_config.py`
+8. Verify credential aliases match `CREDENTIAL_ALIASES` in `spec/config/fetch_config.py`
+9. Ensure all external links are valid
+10. Test configuration examples for correctness
 
 ---
 

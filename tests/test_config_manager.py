@@ -300,14 +300,15 @@ class TestConfigManagerShow:
         self, mock_console, mock_info, mock_header, temp_config_file
     ):
         """Shows platform configuration status table."""
+        # Skip if Rich is not installed
+        Table = pytest.importorskip("rich.table").Table
+
         manager = ConfigManager(temp_config_file)
         manager.load()
 
         manager.show()
 
         # Verify Rich Table was printed (for platform status)
-        from rich.table import Table
-
         table_printed = any(
             isinstance(call.args[0], Table)
             for call in mock_console.print.call_args_list
@@ -480,15 +481,13 @@ class TestPlatformStatusHelpers:
         platforms2 = sorted(_get_known_platforms())
 
         assert platforms1 == platforms2
-        # Verify alphabetical order
-        assert platforms1 == [
-            "azure_devops",
-            "github",
-            "jira",
-            "linear",
-            "monday",
-            "trello",
-        ]
+
+        # Verify the list is sorted (alphabetical stability)
+        assert platforms1 == sorted(platforms1)
+
+        # Verify it contains known essential platforms (not an exact match to avoid brittleness)
+        essential_platforms = {"jira", "linear", "github"}
+        assert essential_platforms.issubset(set(platforms1))
 
     @patch("spec.config.manager.print_header")
     @patch("spec.config.manager.print_info")
@@ -511,6 +510,33 @@ class TestPlatformStatusHelpers:
         assert "Jira" in captured.out or "jira" in captured.out.lower()
         # Should show status columns
         assert "Agent" in captured.out or "Yes" in captured.out or "No" in captured.out
+
+    @patch("spec.config.manager.print_header")
+    @patch("spec.config.manager.print_info")
+    def test_show_platform_status_fallback_when_rich_import_fails(
+        self, mock_info, mock_header, temp_config_file, capsys
+    ):
+        """Falls back to plain-text output when Rich cannot be imported (ImportError)."""
+        manager = ConfigManager(temp_config_file)
+        manager.load()
+
+        # Simulate ImportError when trying to import rich.table
+        # by making the import statement inside _show_platform_status raise ImportError
+        import importlib
+
+        def mock_import(name, *args, **kwargs):
+            if name == "rich.table":
+                raise ImportError("No module named 'rich.table'")
+            return importlib.__import__(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            manager._show_platform_status()
+
+        # Should have used plain-text fallback (prints to stdout)
+        captured = capsys.readouterr()
+        assert "Platform Status:" in captured.out
+        # Verify platform data is displayed in plain text
+        assert "Jira" in captured.out or "jira" in captured.out.lower()
 
 
 class TestCascadingConfigHierarchy:

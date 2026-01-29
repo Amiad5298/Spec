@@ -14,6 +14,7 @@ trackers to have project-specific settings while maintaining global defaults.
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import re
@@ -59,22 +60,21 @@ PLATFORM_DISPLAY_NAMES: dict[str, str] = {
     "trello": "Trello",
 }
 
-# Cached KNOWN_PLATFORMS to avoid redundant imports
-_KNOWN_PLATFORMS_CACHE: frozenset[str] | None = None
 
-
+@functools.lru_cache(maxsize=1)
 def _get_known_platforms() -> frozenset[str]:
     """Get KNOWN_PLATFORMS with lazy import to avoid circular dependencies.
 
-    Returns:
-        Frozenset of known platform names.
-    """
-    global _KNOWN_PLATFORMS_CACHE
-    if _KNOWN_PLATFORMS_CACHE is None:
-        from spec.config.fetch_config import KNOWN_PLATFORMS
+    Uses lru_cache instead of a global mutable variable for thread-safety
+    and simpler code.
 
-        _KNOWN_PLATFORMS_CACHE = KNOWN_PLATFORMS
-    return _KNOWN_PLATFORMS_CACHE
+    Returns:
+        Frozenset of known platform names (immutable).
+    """
+    from spec.config.fetch_config import KNOWN_PLATFORMS
+
+    # Return a frozenset to ensure immutability matches the type hint
+    return frozenset(KNOWN_PLATFORMS)
 
 
 class ConfigManager:
@@ -912,11 +912,14 @@ class ConfigManager:
 
         Reads from AgentConfig which is populated from AGENT_INTEGRATION_* config keys.
         Falls back to default Auggie integrations ONLY if:
-        1. No explicit config is set, AND
+        1. No explicit config is set (integrations is None, not empty dict), AND
         2. The agent platform is AUGGIE
 
         For non-Auggie platforms (manual, cursor, etc.) with no explicit integrations,
         returns False for all platforms to avoid falsely reporting agent support.
+
+        Note: An empty dict `{}` means the user explicitly disabled all integrations,
+        which is different from None (no config set).
 
         Returns:
             Dict mapping platform names to their agent integration status.
@@ -925,12 +928,15 @@ class ConfigManager:
         agent_config = self.get_agent_config()
 
         # Default integrations for Auggie agent (Jira, Linear, GitHub have MCP integrations)
+        # TODO: Consider fetching this from a centralized source (e.g., AgentPlatform metadata)
+        # to avoid drift when new MCP integrations are added.
         default_integrations = {"jira", "linear", "github"}
 
         result = {}
         for platform in known_platforms:
-            # Check explicit config first
-            if agent_config.integrations:
+            # Check explicit config first - use 'is not None' to allow empty dict
+            # (empty dict means user explicitly disabled all integrations)
+            if agent_config.integrations is not None:
                 result[platform] = agent_config.supports_platform(platform)
             else:
                 # No explicit config - only use Auggie defaults if platform is AUGGIE
@@ -954,7 +960,7 @@ class ConfigManager:
 
         known_platforms = _get_known_platforms()
         auth = AuthenticationManager(self)
-        result = {}
+        result: dict[str, bool] = {}
         for platform_name in known_platforms:
             try:
                 platform_enum = Platform[platform_name.upper()]
@@ -963,8 +969,9 @@ class ConfigManager:
                 # Platform enum not found - mark as not configured
                 logger.debug(f"Platform enum not found for '{platform_name}'")
                 result[platform_name] = False
-            except (OSError, ValueError) as e:
-                # Known credential checking errors (file access, parsing)
+            except Exception as e:
+                # Catch all exceptions to prevent one platform from crashing
+                # the entire status table. Log to debug and continue.
                 logger.debug(f"Error checking fallback for {platform_name}: {e}")
                 result[platform_name] = False
 
@@ -999,6 +1006,11 @@ class ConfigManager:
 
         Handles errors gracefully - if Rich is unavailable or fails,
         falls back to plain-text output to maintain status visibility.
+
+        Error handling strategy:
+        1. If status computation fails: show error message and return
+        2. If Rich Table creation/printing fails: fall back to plain-text
+        3. Uses standard print() for error messages to avoid Rich dependency issues
         """
         # Get status data first (before Rich-specific code)
         # This allows fallback to use the same data
@@ -1011,10 +1023,17 @@ class ConfigManager:
             fallback_status = self._get_fallback_status()
             ready_status = self._get_platform_ready_status(agent_integrations, fallback_status)
         except Exception as e:
-            # Status computation failed - show error and return
-            console.print("  [bold]Platform Status:[/bold]")
-            console.print(f"  [dim]Unable to determine platform status: {e}[/dim]")
-            console.print()
+            # Status computation failed - use standard print() for robustness
+            # (console.print may fail if Rich is not installed or broken)
+            try:
+                console.print("  [bold]Platform Status:[/bold]")
+                console.print(f"  [dim]Unable to determine platform status: {e}[/dim]")
+                console.print()
+            except Exception:
+                # Fall back to standard print if Rich console also fails
+                print("  Platform Status:")
+                print(f"  Unable to determine platform status: {e}")
+                print()
             return
 
         try:
@@ -1054,7 +1073,7 @@ class ConfigManager:
             console.print()
 
         except Exception:
-            # Rich failed - fall back to plain-text output
+            # Rich failed - fall back to plain-text output using standard print()
             self._show_platform_status_plain_text(agent_integrations, fallback_status, ready_status)
 
     def _show_platform_status_plain_text(
@@ -1065,26 +1084,53 @@ class ConfigManager:
     ) -> None:
         """Display platform status as plain text (fallback when Rich fails).
 
+        Uses dynamic column widths to accommodate platform names of any length.
+
         Args:
             agent_integrations: Dict of agent integration status per platform
             fallback_status: Dict of fallback credential status per platform
             ready_status: Dict of ready status per platform
         """
-        print("  Platform Status:")
-        print("  " + "-" * 60)
-        print(f"  {'Platform':<15} {'Agent':<10} {'Credentials':<15} {'Status':<15}")
-        print("  " + "-" * 60)
-
         known_platforms = _get_known_platforms()
+
+        # Build row data first to calculate dynamic column widths
+        rows: list[tuple[str, str, str, str]] = []
         for platform in sorted(known_platforms):
             display_name = PLATFORM_DISPLAY_NAMES.get(platform, platform.title())
             agent = "Yes" if agent_integrations.get(platform, False) else "No"
             creds = "Configured" if fallback_status.get(platform, False) else "None"
             status = "Ready" if ready_status.get(platform, False) else "Needs Config"
+            rows.append((display_name, agent, creds, status))
 
-            print(f"  {display_name:<15} {agent:<10} {creds:<15} {status:<15}")
+        # Calculate dynamic column widths (max of header vs content + padding)
+        headers = ("Platform", "Agent", "Credentials", "Status")
+        col_widths = [
+            max(len(headers[i]), max((len(row[i]) for row in rows), default=0)) + 2
+            for i in range(4)
+        ]
 
-        print("  " + "-" * 60)
+        # Total width for separator line
+        total_width = sum(col_widths)
+
+        print("  Platform Status:")
+        print("  " + "-" * total_width)
+        print(
+            f"  {headers[0]:<{col_widths[0]}}"
+            f"{headers[1]:<{col_widths[1]}}"
+            f"{headers[2]:<{col_widths[2]}}"
+            f"{headers[3]:<{col_widths[3]}}"
+        )
+        print("  " + "-" * total_width)
+
+        for row in rows:
+            print(
+                f"  {row[0]:<{col_widths[0]}}"
+                f"{row[1]:<{col_widths[1]}}"
+                f"{row[2]:<{col_widths[2]}}"
+                f"{row[3]:<{col_widths[3]}}"
+            )
+
+        print("  " + "-" * total_width)
 
         # Show hint for unconfigured platforms
         unconfigured = [p for p, ready in ready_status.items() if not ready]

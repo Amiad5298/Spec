@@ -68,6 +68,58 @@ For convenience, SPEC accepts alternative key names that are automatically norma
 
 ---
 
+## Configuration File Locations & Precedence
+
+SPEC supports multiple configuration files with a cascading hierarchy. Settings from higher-priority sources override lower-priority ones.
+
+### Configuration Precedence (Highest to Lowest)
+
+| Priority | Source | Location | Use Case |
+|----------|--------|----------|----------|
+| 1 (Highest) | Environment Variables | Shell environment | CI/CD, temporary overrides |
+| 2 | Local Config | `.spec` in project directory | Project-specific settings |
+| 3 | Global Config | `~/.spec-config` | User defaults |
+| 4 (Lowest) | Built-in Defaults | Hardcoded in SPEC | Fallback values |
+
+### Local Config (`.spec`)
+
+SPEC searches for a `.spec` file starting from the current directory and traversing up to the repository root (detected by `.git` directory). This allows project-specific configuration that overrides global settings.
+
+**Example project structure:**
+```
+my-project/
+├── .git/
+├── .spec           ← Project-specific config
+└── src/
+    └── ...
+```
+
+**Use cases for local config:**
+- Team-shared credentials for a specific project
+- Project-specific default platform
+- CI/CD settings for a particular repository
+
+### Global Config (`~/.spec-config`)
+
+The global config file stores user-wide defaults. This is the recommended location for personal credentials and preferences.
+
+**Location:** `~/.spec-config` (in your home directory)
+
+### Viewing Current Configuration
+
+Use `spec --config` to see your current configuration:
+
+```bash
+spec --config
+```
+
+This displays:
+- Active configuration file locations
+- Current settings and their sources
+- Which platforms are configured
+
+---
+
 ## Setting Default Platform
 
 Configure a default platform to avoid specifying `--platform` on every command.

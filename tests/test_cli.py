@@ -1330,3 +1330,63 @@ class TestForceIntegrationCheckWarning:
 
         assert result is True
         mock_print_warning.assert_not_called()
+
+
+class TestCLIProviderRegistryReset:
+    """Tests for ProviderRegistry reset on CLI startup."""
+
+    def setup_method(self):
+        """Reset ProviderRegistry before each test."""
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        ProviderRegistry.reset_instances()
+
+    def teardown_method(self):
+        """Reset ProviderRegistry after each test."""
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        ProviderRegistry.reset_instances()
+
+    @patch("spec.cli.show_banner")
+    @patch("spec.cli._check_prerequisites")
+    @patch("spec.cli._run_main_menu")
+    @patch("spec.cli.ConfigManager")
+    def test_multi_run_clears_stale_config(
+        self, mock_config_class, mock_menu, mock_prereq, mock_banner
+    ):
+        """CLI invoked twice clears stale config from first run.
+
+        Verifies that running CLI initialization twice in the same process
+        (first with a default Jira project set, then without) does not
+        keep the old default - the key acceptance criteria for Task 1.
+        """
+        from spec.integrations.providers.registry import ProviderRegistry
+
+        mock_prereq.return_value = True
+
+        # First run: config has DEFAULT_JIRA_PROJECT set
+        mock_config_first = MagicMock()
+        mock_config_first.settings.default_jira_project = "PROJ1"
+        mock_config_class.return_value = mock_config_first
+
+        runner.invoke(app, [])
+
+        # Capture config after first run
+        first_run_config = ProviderRegistry._config.copy()
+
+        # Second run: config has NO default Jira project (empty string)
+        mock_config_second = MagicMock()
+        mock_config_second.settings.default_jira_project = ""
+        mock_config_class.return_value = mock_config_second
+
+        runner.invoke(app, [])
+
+        # Capture config after second run
+        second_run_config = ProviderRegistry._config.copy()
+
+        # First run should have had the project configured
+        assert first_run_config.get("default_jira_project") == "PROJ1"
+
+        # Second run should NOT have the stale config from first run
+        # It should be empty string (the default when not configured)
+        assert second_run_config.get("default_jira_project") == ""

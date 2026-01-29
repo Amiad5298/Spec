@@ -539,9 +539,9 @@ def main(
         config = ConfigManager()
         config.load()
 
-        # Always set ProviderRegistry config at startup to ensure deterministic state
+        # Reset and reconfigure ProviderRegistry at startup to ensure deterministic state
         # This prevents stale config from previous runs (e.g., in tests or daemon mode)
-        # If default_jira_project is not configured, explicitly set to empty string
+        ProviderRegistry.reset_instances()
         ProviderRegistry.set_config(
             {
                 "default_jira_project": config.settings.default_jira_project or "",

@@ -198,6 +198,11 @@ def canonicalize_credentials(
     return canonicalized
 
 
+# Default integrations for Auggie agent (Jira, Linear, GitHub have MCP integrations)
+# Used when no explicit AGENT_INTEGRATION_* config is set
+AUGGIE_DEFAULT_INTEGRATIONS: frozenset[str] = frozenset({"jira", "linear", "github"})
+
+
 @dataclass
 class AgentConfig:
     """Configuration for the connected AI agent.
@@ -215,15 +220,26 @@ class AgentConfig:
     def supports_platform(self, platform: str) -> bool:
         """Check if agent has integration for platform.
 
+        When integrations is None (no explicit config), applies default
+        integrations for Auggie platform (jira, linear, github).
+        For other platforms with no config, returns False.
+
         Args:
             platform: Platform name (e.g., 'jira', 'linear', 'github')
 
         Returns:
             True if the agent has an integration for this platform
         """
+        platform_lower = platform.lower()
+
         if self.integrations is None:
+            # No explicit config - apply defaults for Auggie platform
+            if self.platform == AgentPlatform.AUGGIE:
+                return platform_lower in AUGGIE_DEFAULT_INTEGRATIONS
+            # Non-Auggie platforms without explicit config have no integrations
             return False
-        return self.integrations.get(platform.lower(), False)
+
+        return self.integrations.get(platform_lower, False)
 
 
 @dataclass

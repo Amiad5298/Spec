@@ -932,24 +932,10 @@ class ConfigManager:
         known_platforms = _get_known_platforms()
         agent_config = self.get_agent_config()
 
-        # Default integrations for Auggie agent (Jira, Linear, GitHub have MCP integrations)
-        # TODO: Consider fetching this from a centralized source (e.g., AgentPlatform metadata)
-        # to avoid drift when new MCP integrations are added.
-        default_integrations = {"jira", "linear", "github"}
-
+        # Now that AgentConfig.supports_platform handles defaults, we can simplify
         result = {}
         for platform in known_platforms:
-            # Check explicit config first - use 'is not None' to allow empty dict
-            # (empty dict means user explicitly disabled all integrations)
-            if agent_config.integrations is not None:
-                result[platform] = agent_config.supports_platform(platform)
-            else:
-                # No explicit config - only use Auggie defaults if platform is AUGGIE
-                if agent_config.platform == AgentPlatform.AUGGIE:
-                    result[platform] = platform in default_integrations
-                else:
-                    # Non-Auggie platforms without explicit config have no integrations
-                    result[platform] = False
+            result[platform] = agent_config.supports_platform(platform)
 
         return result
 

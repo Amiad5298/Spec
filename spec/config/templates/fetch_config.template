@@ -21,7 +21,7 @@
 # Configure which AI agent platform is being used and which
 # ticket platforms it has integrations for.
 
-# Agent platform: auggie, claude_desktop, cursor, aider, manual
+# Agent platform: auggie, claude, cursor, aider, manual
 AGENT_PLATFORM=auggie
 
 # Agent integrations - set to true for platforms the agent can access

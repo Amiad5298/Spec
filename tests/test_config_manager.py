@@ -1407,7 +1407,7 @@ class TestFetchConfigEnums:
         from spec.config.fetch_config import AgentPlatform
 
         assert AgentPlatform.AUGGIE.value == "auggie"
-        assert AgentPlatform.CLAUDE_DESKTOP.value == "claude_desktop"
+        assert AgentPlatform.CLAUDE.value == "claude"
         assert AgentPlatform.CURSOR.value == "cursor"
         assert AgentPlatform.AIDER.value == "aider"
         assert AgentPlatform.MANUAL.value == "manual"
@@ -1417,6 +1417,7 @@ class TestFetchConfigEnums:
         from spec.config.fetch_config import AgentPlatform
 
         assert AgentPlatform("auggie") == AgentPlatform.AUGGIE
+        assert AgentPlatform("claude") == AgentPlatform.CLAUDE
         assert AgentPlatform("cursor") == AgentPlatform.CURSOR
 
     def test_agent_platform_invalid_value(self):

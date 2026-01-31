@@ -51,14 +51,14 @@ class AgentPlatform(Enum):
 
     Attributes:
         AUGGIE: Augment Code agent
-        CLAUDE_DESKTOP: Claude Desktop application
+        CLAUDE: Claude Code CLI
         CURSOR: Cursor IDE
         AIDER: Aider CLI tool
         MANUAL: Manual/no agent (direct API only)
     """
 
     AUGGIE = "auggie"
-    CLAUDE_DESKTOP = "claude_desktop"
+    CLAUDE = "claude"
     CURSOR = "cursor"
     AIDER = "aider"
     MANUAL = "manual"

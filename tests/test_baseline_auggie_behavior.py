@@ -260,29 +260,35 @@ class TestAuggieClientSemantics:
             assert not line.endswith("\n"), "Callback lines should be stripped"
 
     def test_run_with_callback_failure_returns_false(self):
-        """Verify run_with_callback returns False on command failure.
+        """Verify run_argv_with_callback returns False on CLI failure.
 
         Contract:
         - Returns (bool, str) tuple
         - success is False when command fails (returncode != 0)
         - Output is still captured even on failure (as str, possibly empty)
+
+        NOTE: This test uses run_argv_with_callback (not run_with_callback)
+        because run_with_callback embeds its input as a prompt string, NOT as
+        CLI argv. To test deterministic CLI failure, we need raw argv control.
+
+        The "--invalid-flag-xyz" is passed directly as a CLI flag to auggie,
+        causing the CLI parser to reject it with a non-zero exit code.
         """
         from spec.integrations.auggie import AuggieClient
 
         client = AuggieClient()
 
-        # Use an invalid subcommand/flag that reliably returns non-zero
-        # --invalid-flag-that-does-not-exist is not a valid auggie flag
-        success, output = client.run_with_callback(
-            "--invalid-flag-that-does-not-exist",
+        # Use run_argv_with_callback to pass raw CLI args (not a prompt)
+        # This guarantees CLI-level failure regardless of LLM/network state
+        success, output = client.run_argv_with_callback(
+            ["--invalid-flag-xyz"],
             output_callback=lambda x: None,
-            dont_save_session=True,
         )
 
         # Verify return type semantics (stable contract)
         assert isinstance(success, bool), "First element must be bool"
         assert isinstance(output, str), "Second element must be str"
-        # An invalid flag should reliably fail
+        # An invalid flag passed as argv reliably fails at CLI level
         assert success is False, "Invalid CLI flag must return success=False"
 
 

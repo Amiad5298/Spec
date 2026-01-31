@@ -318,9 +318,7 @@ def install_auggie() -> bool:
     node_version = get_node_version()
 
     if not node_version:
-        print_error(
-            f"Node.js is not installed. Please install Node.js {REQUIRED_NODE_VERSION}+"
-        )
+        print_error(f"Node.js is not installed. Please install Node.js {REQUIRED_NODE_VERSION}+")
         print_info("Visit: https://nodejs.org/")
         return False
 
@@ -328,8 +326,7 @@ def install_auggie() -> bool:
         major_version = int(node_version.split(".")[0])
         if major_version < REQUIRED_NODE_VERSION:
             print_error(
-                f"Node.js version {node_version} is too old. "
-                f"Required: {REQUIRED_NODE_VERSION}+"
+                f"Node.js version {node_version} is too old. " f"Required: {REQUIRED_NODE_VERSION}+"
             )
             print_info("Please upgrade Node.js: https://nodejs.org/")
             return False
@@ -436,8 +433,7 @@ class AuggieClient:
                 # Prepend agent's system prompt to user's prompt
                 if agent_def.prompt:
                     effective_prompt = (
-                        f"## Agent Instructions\n\n{agent_def.prompt}\n\n"
-                        f"## Task\n\n{prompt}"
+                        f"## Agent Instructions\n\n{agent_def.prompt}\n\n" f"## Task\n\n{prompt}"
                     )
             else:
                 # Agent not found, fall back to default model
@@ -628,7 +624,46 @@ class AuggieClient:
             print_mode=True,
             dont_save_session=dont_save_session,
         )
+        return self._run_command_with_callback(cmd, output_callback)
 
+    def run_argv_with_callback(
+        self,
+        argv: list[str],
+        *,
+        output_callback: Callable[[str], None],
+    ) -> tuple[bool, str]:
+        """Run auggie with raw argv arguments (for testing CLI error paths).
+
+        Unlike run_with_callback which builds a prompt-based command,
+        this method passes argv directly to the auggie subprocess.
+        This is useful for testing CLI failure modes (e.g., invalid flags).
+
+        Args:
+            argv: Raw argument list to pass after 'auggie' (e.g., ['--invalid-flag'])
+            output_callback: Callback function invoked for each output line
+
+        Returns:
+            Tuple of (success: bool, full_output: str)
+        """
+        cmd = ["auggie"] + argv
+        return self._run_command_with_callback(cmd, output_callback)
+
+    def _run_command_with_callback(
+        self,
+        cmd: list[str],
+        output_callback: Callable[[str], None],
+    ) -> tuple[bool, str]:
+        """Execute a command with streaming output callback.
+
+        Internal helper used by run_with_callback and run_argv_with_callback.
+
+        Args:
+            cmd: Full command list to execute
+            output_callback: Callback function invoked for each output line
+
+        Returns:
+            Tuple of (success: bool, full_output: str)
+        """
         log_message(f"Running auggie command with callback: {' '.join(cmd[:3])}...")
 
         process = subprocess.Popen(
@@ -725,4 +760,3 @@ __all__ = [
     "SPECFLOW_AGENT_REVIEWER",
     "SPECFLOW_AGENT_DOC_UPDATER",
 ]
-

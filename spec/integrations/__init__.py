@@ -8,10 +8,6 @@ This package contains:
 """
 
 from spec.integrations.auggie import (
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_TASKLIST,
     AuggieClient,
     AuggieModel,
     check_auggie_installed,
@@ -57,6 +53,14 @@ from spec.integrations.ticket_service import (
     TicketService,
     create_ticket_service,
 )
+from spec.workflow.constants import (
+    SPECFLOW_AGENT_DOC_UPDATER,
+    SPECFLOW_AGENT_IMPLEMENTER,
+    SPECFLOW_AGENT_PLANNER,
+    SPECFLOW_AGENT_REVIEWER,
+    SPECFLOW_AGENT_TASKLIST,
+    SPECFLOW_AGENT_TASKLIST_REFINER,
+)
 
 __all__ = [
     # Authentication
@@ -100,11 +104,13 @@ __all__ = [
     "check_auggie_installed",
     "install_auggie",
     "list_models",
-    # Subagent constants
+    # Subagent constants (all 6 now exported)
     "SPECFLOW_AGENT_PLANNER",
     "SPECFLOW_AGENT_TASKLIST",
+    "SPECFLOW_AGENT_TASKLIST_REFINER",
     "SPECFLOW_AGENT_IMPLEMENTER",
     "SPECFLOW_AGENT_REVIEWER",
+    "SPECFLOW_AGENT_DOC_UPDATER",
     # TicketService
     "TicketService",
     "create_ticket_service",

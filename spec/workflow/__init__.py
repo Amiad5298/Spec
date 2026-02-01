@@ -11,6 +11,17 @@ This package contains:
 - runner: Workflow orchestration
 """
 
+from spec.workflow.constants import (
+    DEFAULT_EXECUTION_TIMEOUT,
+    FIRST_RUN_TIMEOUT,
+    ONBOARDING_SMOKE_TEST_TIMEOUT,
+    SPECFLOW_AGENT_DOC_UPDATER,
+    SPECFLOW_AGENT_IMPLEMENTER,
+    SPECFLOW_AGENT_PLANNER,
+    SPECFLOW_AGENT_REVIEWER,
+    SPECFLOW_AGENT_TASKLIST,
+    SPECFLOW_AGENT_TASKLIST_REFINER,
+)
 from spec.workflow.events import (
     TaskEvent,
     TaskEventCallback,
@@ -50,6 +61,17 @@ from spec.workflow.tasks import (
 )
 
 __all__ = [
+    # Subagent Constants
+    "SPECFLOW_AGENT_PLANNER",
+    "SPECFLOW_AGENT_TASKLIST",
+    "SPECFLOW_AGENT_TASKLIST_REFINER",
+    "SPECFLOW_AGENT_IMPLEMENTER",
+    "SPECFLOW_AGENT_REVIEWER",
+    "SPECFLOW_AGENT_DOC_UPDATER",
+    # Timeout Constants
+    "DEFAULT_EXECUTION_TIMEOUT",
+    "FIRST_RUN_TIMEOUT",
+    "ONBOARDING_SMOKE_TEST_TIMEOUT",
     # State
     "WorkflowState",
     # Tasks
@@ -89,4 +111,3 @@ __all__ = [
     "run_spec_driven_workflow",
     "workflow_cleanup",
 ]
-

@@ -8,8 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from spec.integrations.providers import GenericTicket
+
 # Import subagent constants as single source of truth
-from spec.integrations.auggie import (
+from spec.workflow.constants import (
     SPECFLOW_AGENT_DOC_UPDATER,
     SPECFLOW_AGENT_IMPLEMENTER,
     SPECFLOW_AGENT_PLANNER,
@@ -17,7 +19,6 @@ from spec.integrations.auggie import (
     SPECFLOW_AGENT_TASKLIST,
     SPECFLOW_AGENT_TASKLIST_REFINER,
 )
-from spec.integrations.providers import GenericTicket
 from spec.workflow.git_utils import DirtyTreePolicy
 
 if TYPE_CHECKING:

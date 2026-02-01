@@ -80,7 +80,7 @@ After (target state):
 | 1.2 | AMI-48 | AIBackend Protocol | ✅ Done |
 | 1.3 | AMI-49 | BaseBackend Abstract Class | ✅ Done |
 | **1.4** | **AMI-50** | **Move Subagent Constants** | ← **This Ticket** |
-| 1.5 | AMI-51 | Backend Config Resolution | 🔜 Ready |
+| 1.5 | AMI-51 | Create AuggieBackend | 🔜 Ready |
 
 ---
 
@@ -753,7 +753,7 @@ None - this ticket can be implemented independently.
 
 | Ticket | Status | Description |
 |--------|--------|-------------|
-| AMI-51 | 🔜 Ready | Backend Config Resolution - May import from `spec.workflow.constants` |
+| AMI-51 | 🔜 Ready | Create AuggieBackend |
 
 ### Related Tickets
 

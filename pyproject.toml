@@ -30,6 +30,7 @@ dependencies = [
     "questionary>=2.0.0",
     "packaging>=23.0",
     "httpx>=0.27.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,7 @@ dev = [
     "pytest-timeout>=2.2.0",    # Timeout for hanging tests
     "pytest-asyncio>=1.0.0",    # Async test support
     "mypy>=1.0.0",
+    "types-PyYAML>=6.0.0",      # Type stubs for PyYAML
     "ruff>=0.1.0",
     "pre-commit>=3.6.0",        # Git hook management
     "ipython>=8.0.0",           # Enhanced REPL for debugging

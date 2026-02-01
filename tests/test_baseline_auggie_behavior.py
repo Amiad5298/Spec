@@ -59,7 +59,7 @@ class TestImportability:
     def test_specflow_agent_constants_are_importable(self):
         """Verify SPECFLOW_AGENT_* constants can be imported."""
         try:
-            from spec.integrations.auggie import (
+            from spec.workflow.constants import (
                 SPECFLOW_AGENT_DOC_UPDATER,
                 SPECFLOW_AGENT_IMPLEMENTER,
                 SPECFLOW_AGENT_PLANNER,
@@ -496,11 +496,11 @@ class TestWorkflowStepBehavior:
         assert mock_state.subagent_names["doc_updater"] == "spec-doc-updater"
 
     def test_subagent_names_match_constants(self, mock_state):
-        """Verify subagent names match the constants in auggie.py.
+        """Verify subagent names match the constants in spec.workflow.constants.
 
         Contract: WorkflowState defaults must match SPECFLOW_AGENT_* constants.
         """
-        from spec.integrations.auggie import (
+        from spec.workflow.constants import (
             SPECFLOW_AGENT_DOC_UPDATER,
             SPECFLOW_AGENT_IMPLEMENTER,
             SPECFLOW_AGENT_PLANNER,

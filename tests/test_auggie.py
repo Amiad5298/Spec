@@ -4,11 +4,6 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 from spec.integrations.auggie import (
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_TASKLIST,
-    SPECFLOW_AGENT_TASKLIST_REFINER,
     AgentDefinition,
     AuggieClient,
     AuggieRateLimitError,
@@ -19,6 +14,16 @@ from spec.integrations.auggie import (
     get_auggie_version,
     get_node_version,
     version_gte,
+)
+from spec.workflow.constants import (
+    DEFAULT_EXECUTION_TIMEOUT,
+    FIRST_RUN_TIMEOUT,
+    ONBOARDING_SMOKE_TEST_TIMEOUT,
+    SPECFLOW_AGENT_IMPLEMENTER,
+    SPECFLOW_AGENT_PLANNER,
+    SPECFLOW_AGENT_REVIEWER,
+    SPECFLOW_AGENT_TASKLIST,
+    SPECFLOW_AGENT_TASKLIST_REFINER,
 )
 
 
@@ -669,3 +674,19 @@ class TestSubagentConstants:
     def test_reviewer_constant(self):
         """SPECFLOW_AGENT_REVIEWER has correct value."""
         assert SPECFLOW_AGENT_REVIEWER == "spec-reviewer"
+
+
+class TestTimeoutConstants:
+    """Tests for timeout constants."""
+
+    def test_default_execution_timeout(self):
+        """DEFAULT_EXECUTION_TIMEOUT has correct value."""
+        assert DEFAULT_EXECUTION_TIMEOUT == 60
+
+    def test_first_run_timeout(self):
+        """FIRST_RUN_TIMEOUT has correct value."""
+        assert FIRST_RUN_TIMEOUT == 120
+
+    def test_onboarding_smoke_test_timeout(self):
+        """ONBOARDING_SMOKE_TEST_TIMEOUT has correct value."""
+        assert ONBOARDING_SMOKE_TEST_TIMEOUT == 60

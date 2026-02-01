@@ -14,17 +14,17 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from spec import __version__
-from spec.integrations.auggie import (
+from spec.integrations.auggie import version_gte
+from spec.integrations.git import find_repo_root
+from spec.utils.console import print_info, print_step, print_success, print_warning
+from spec.utils.logging import log_message
+from spec.workflow.constants import (
     SPECFLOW_AGENT_IMPLEMENTER,
     SPECFLOW_AGENT_PLANNER,
     SPECFLOW_AGENT_REVIEWER,
     SPECFLOW_AGENT_TASKLIST,
     SPECFLOW_AGENT_TASKLIST_REFINER,
-    version_gte,
 )
-from spec.integrations.git import find_repo_root
-from spec.utils.console import print_info, print_step, print_success, print_warning
-from spec.utils.logging import log_message
 
 # --- Frontmatter and Hash Utilities ---
 
@@ -218,7 +218,7 @@ AGENT_METADATA = {
 
 # Agent body content (prompts) - without frontmatter
 AGENT_BODIES = {
-    SPECFLOW_AGENT_PLANNER: '''
+    SPECFLOW_AGENT_PLANNER: """
 You are an implementation planning AI assistant working within the SPEC workflow.
 Your role is to analyze requirements and create a comprehensive implementation plan.
 
@@ -265,8 +265,8 @@ What this implementation explicitly does NOT include.
 - Keep the plan focused on the ticket scope - don't expand unnecessarily
 - Include estimated complexity/effort hints where helpful
 - Use codebase-retrieval to understand the current architecture before planning
-''',
-    SPECFLOW_AGENT_TASKLIST: '''
+""",
+    SPECFLOW_AGENT_TASKLIST: """
 You are a task list generation AI assistant working within the SPEC workflow.
 Your job is to convert an implementation plan into an executable task list optimized for AI agents:
 - FUNDAMENTAL tasks: sequential (dependency-enabling)
@@ -368,8 +368,8 @@ INDEPENDENT `group:` must be one of: `testing`, `implementation`, `docs`, `ui`
 - INDEPENDENT `group:` values are ONLY one of: `testing`, `implementation`, `docs`, `ui`
 
 If any check fails, rewrite the output until it passes.
-''',
-    SPECFLOW_AGENT_TASKLIST_REFINER: '''
+""",
+    SPECFLOW_AGENT_TASKLIST_REFINER: """
 You are a task list post-processor for the SPEC workflow.
 
 # Your Single Job
@@ -461,8 +461,8 @@ AFTER:
 ```
 
 Output ONLY the refined task list markdown. No explanations.
-''',
-    SPECFLOW_AGENT_IMPLEMENTER: '''
+""",
+    SPECFLOW_AGENT_IMPLEMENTER: """
 You are a task execution AI assistant working within the SPEC workflow.
 Your role is to complete ONE specific implementation task.
 
@@ -514,8 +514,8 @@ When complete, briefly summarize:
 - Any issues encountered or decisions made
 
 Do not output the full file contents unless specifically helpful.
-''',
-    SPECFLOW_AGENT_REVIEWER: '''
+""",
+    SPECFLOW_AGENT_REVIEWER: """
 You are a task validation AI assistant working within the SPEC workflow.
 Your role is to quickly verify that a completed task meets requirements.
 
@@ -581,7 +581,7 @@ Keep reviews quick and focused - this is a sanity check, not a full code review.
 - Trust the implementing agent made reasonable decisions
 - Only flag genuine problems, not style preferences
 - A quick pass is better than no review
-''',
+""",
 }
 
 
@@ -829,7 +829,8 @@ def ensure_gitignore_configured(quiet: bool = False) -> bool:
 
     # Find missing patterns
     missing_patterns = [
-        pattern for pattern in SPECFLOW_GITIGNORE_PATTERNS
+        pattern
+        for pattern in SPECFLOW_GITIGNORE_PATTERNS
         if not _check_gitignore_has_pattern(existing_content, pattern)
     ]
 
@@ -895,7 +896,9 @@ def ensure_agents_installed(quiet: bool = False) -> bool:
     # Note: We don't fail the workflow if gitignore update fails, but we log a warning
     if not ensure_gitignore_configured(quiet=quiet):
         if not quiet:
-            print_warning("Could not configure .gitignore - workflow artifacts may appear as unversioned")
+            print_warning(
+                "Could not configure .gitignore - workflow artifacts may appear as unversioned"
+            )
         log_message("ensure_gitignore_configured returned False")
 
     agents_dir = get_agents_dir()
@@ -1010,4 +1013,3 @@ __all__ = [
     "normalize_content",
     "is_agent_customized",
 ]
-

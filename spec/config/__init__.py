@@ -11,7 +11,7 @@ The official configuration format is flat KEY=VALUE (environment variable style)
 See spec/config/templates/fetch_config.template for the complete format reference.
 
 Examples:
-    AGENT_PLATFORM=auggie
+    AI_BACKEND=auggie
     FETCH_STRATEGY_DEFAULT=auto
     FALLBACK_JIRA_TOKEN=${JIRA_API_TOKEN}
 

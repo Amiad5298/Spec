@@ -108,7 +108,7 @@ def parse_agent_platform(
     Args:
         value: The string value to parse (e.g., "auggie", "cursor", "manual")
         default: Default platform to return if value is None or empty
-        context: Context string for error messages (e.g., "AGENT_PLATFORM")
+        context: Context string for error messages (e.g., "AI_BACKEND")
 
     Returns:
         Parsed AgentPlatform enum member

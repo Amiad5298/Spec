@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from spec.config.fetch_config import AgentPlatform
 from spec.integrations.cache import CacheKey, InMemoryTicketCache
 from spec.integrations.fetchers.exceptions import (
     AgentFetchError,
@@ -498,9 +499,10 @@ class TestCreateTicketService:
     """Test create_ticket_service factory function."""
 
     @pytest.mark.asyncio
-    async def test_create_with_auggie_client(self):
+    async def test_create_with_auggie_backend(self):
         """Should create service with AuggieMediatedFetcher as primary."""
         mock_auggie = MagicMock()
+        mock_auggie.platform = AgentPlatform.AUGGIE
         mock_auth = MagicMock()
 
         with patch(
@@ -576,6 +578,7 @@ class TestCreateTicketService:
     async def test_create_without_fallback(self):
         """Should disable fallback when enable_fallback=False."""
         mock_auggie = MagicMock()
+        mock_auggie.platform = AgentPlatform.AUGGIE
         mock_auth = MagicMock()
 
         with patch(
@@ -593,3 +596,52 @@ class TestCreateTicketService:
             assert service.fallback_fetcher_name is None
 
             await service.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "platform",
+        [
+            AgentPlatform.MANUAL,
+            AgentPlatform.AIDER,
+            AgentPlatform.CLAUDE,
+            AgentPlatform.CURSOR,
+        ],
+        ids=["manual", "aider", "claude", "cursor"],
+    )
+    async def test_create_with_non_auggie_platform_uses_direct_api(self, platform):
+        """Should use DirectAPIFetcher as primary when backend platform has no mediated fetcher."""
+        mock_backend = MagicMock()
+        mock_backend.platform = platform
+        mock_auth = MagicMock()
+
+        with patch("spec.integrations.ticket_service.DirectAPIFetcher") as mock_cls:
+            mock_cls.return_value.name = "DirectAPIFetcher"
+            mock_cls.return_value.close = AsyncMock()
+
+            service = await create_ticket_service(
+                backend=mock_backend,
+                auth_manager=mock_auth,
+            )
+
+            assert service.primary_fetcher_name == "DirectAPIFetcher"
+            assert service.fallback_fetcher_name is None
+            await service.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "platform",
+        [
+            AgentPlatform.MANUAL,
+            AgentPlatform.AIDER,
+            AgentPlatform.CLAUDE,
+            AgentPlatform.CURSOR,
+        ],
+        ids=["manual", "aider", "claude", "cursor"],
+    )
+    async def test_create_with_non_auggie_platform_no_fallback_raises(self, platform):
+        """Should raise ValueError when backend has no mediated fetcher and no fallback."""
+        mock_backend = MagicMock()
+        mock_backend.platform = platform
+
+        with pytest.raises(ValueError, match="no fetchers configured"):
+            await create_ticket_service(backend=mock_backend)

@@ -16,6 +16,7 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from spec.config.fetch_config import AgentPlatform
 from spec.integrations.cache import CacheKey, InMemoryTicketCache, TicketCache
 from spec.integrations.fetchers import (
     AgentFetchError,
@@ -300,8 +301,10 @@ async def create_ticket_service(
 ) -> TicketService:
     """Create a TicketService with standard configuration.
 
-    Factory function that creates a TicketService with:
-    - AuggieMediatedFetcher as primary (if backend provided)
+    Factory function that creates a TicketService with platform-based
+    fetcher selection:
+    - AUGGIE platform: AuggieMediatedFetcher as primary
+    - Other platforms: no mediated fetcher (direct API only)
     - DirectAPIFetcher as fallback (if enable_fallback=True and auth_manager provided)
     - InMemoryTicketCache (if no cache provided)
 
@@ -351,12 +354,39 @@ async def create_ticket_service(
     primary: TicketFetcherProtocol | None = None
     fallback: TicketFetcherProtocol | None = None
 
-    # Configure primary fetcher
-    if backend:
-        primary = AuggieMediatedFetcher(
-            backend=backend,
-            config_manager=config_manager,
-        )
+    # Configure primary fetcher based on backend platform
+    if backend is not None:
+        if backend.platform == AgentPlatform.AUGGIE:
+            primary = AuggieMediatedFetcher(
+                backend=backend,
+                config_manager=config_manager,
+            )
+        elif backend.platform == AgentPlatform.CLAUDE:
+            # TODO: Phase 2.x - Add ClaudeMediatedFetcher when implemented
+            logger.info(
+                "ClaudeMediatedFetcher not yet implemented for platform %s; "
+                "using direct API only",
+                backend.platform.value,
+            )
+        elif backend.platform == AgentPlatform.CURSOR:
+            # TODO: Phase 2.x - Add CursorMediatedFetcher when implemented
+            logger.info(
+                "CursorMediatedFetcher not yet implemented for platform %s; "
+                "using direct API only",
+                backend.platform.value,
+            )
+        elif backend.platform in (AgentPlatform.AIDER, AgentPlatform.MANUAL):
+            # AIDER and MANUAL have no mediated fetcher by design
+            logger.debug(
+                "Platform %s has no mediated fetcher by design; " "using direct API only",
+                backend.platform.value,
+            )
+        else:
+            # Defensive: unknown platform added to enum but not handled here
+            logger.warning(
+                "Unknown platform %s has no mediated fetcher; " "using direct API only",
+                backend.platform.value,
+            )
 
     # Configure fallback fetcher (TicketService owns its lifecycle)
     if enable_fallback and auth_manager:

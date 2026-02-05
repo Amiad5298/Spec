@@ -1,7 +1,7 @@
 # Implementation Plan: AMI-103 - Phase 1.0.1: Update Config Template for Claude Rename
 
 **Ticket:** [AMI-103](https://linear.app/amiadspec/issue/AMI-103/phase-101-update-config-template-for-claude-rename)
-**Status:** Verified (pending Linear closure)
+**Status:** Done (verification complete; ready to close in Linear)
 **Date:** 2026-02-02
 **Labels:** MultiAgent
 **Reference:** [Pluggable Multi-Agent Support.md](./Pluggable%20Multi-Agent%20Support.md) - Phase 1.0 follow-up
@@ -209,9 +209,9 @@ No automated tests are required or affected by this change.
 - [x] No other references to `claude_desktop` in template files
 - [x] Verification command returns no matches
 
-### Manual Admin Step (Post-Verification)
+### Administrative Closeout (Out of Repo)
 
-- [ ] AMI-103 ticket moved to Done in Linear
+- [ ] Move AMI-103 ticket to Done in Linear
 
 ---
 
@@ -240,5 +240,5 @@ Since the acceptance criteria are already satisfied, this ticket can be marked a
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-02-02 | AI Assistant | Initial draft created - noted template already updated |
-| 2026-02-02 | AI Assistant | Updated status to Complete; added Testing Strategy, Definition of Done, and verification date |
+| 2026-02-02 | AI Assistant | Finalized status and DoD wording; clarified Linear closeout as manual |
 | 2026-02-02 | AI Assistant | Added: commit evidence (440fc046), Out of Scope section, parent spec reference, clarified grep→rg commands, fixed Status/DoD inconsistency |

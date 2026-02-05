@@ -746,3 +746,77 @@ class TestCLIErrorContract:
             or "not configured" in output.lower()
             or "not supported" in output.lower()
         ), f"Expected platform-related message in output: {output}"
+
+    @patch("spec.cli.show_banner")
+    @patch("spec.cli._check_prerequisites", return_value=True)
+    @patch("spec.cli.ConfigManager")
+    def test_backend_not_configured_error_via_cli(
+        self,
+        mock_config_class,
+        mock_prereq,
+        mock_banner,
+    ):
+        """BackendNotConfiguredError surfaces with backend/init message.
+
+        Mocking: create_ticket_service_from_config raises BackendNotConfiguredError
+        directly (error fires from factory function before TicketService is created).
+        """
+        from spec.integrations.backends.errors import BackendNotConfiguredError
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+        mock_config_class.return_value = mock_config
+
+        with patch(
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=BackendNotConfiguredError(
+                "No AI backend configured. Run 'spec init' or use --backend flag."
+            ),
+        ):
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
+
+        # Compare against ExitCode.X.value for explicit int comparison
+        assert result.exit_code == ExitCode.GENERAL_ERROR.value
+        output = result.output.lower()
+        # Should mention spec init or backend (per cli.py:852-854)
+        assert (
+            "spec init" in output or "backend" in output
+        ), f"Expected 'spec init' or 'backend' in output: {result.output}"
+
+    @patch("spec.cli.show_banner")
+    @patch("spec.cli._check_prerequisites", return_value=True)
+    @patch("spec.cli.ConfigManager")
+    def test_backend_not_installed_error_via_cli(
+        self,
+        mock_config_class,
+        mock_prereq,
+        mock_banner,
+    ):
+        """BackendNotInstalledError surfaces with installation guidance.
+
+        Mocking: create_ticket_service_from_config raises BackendNotInstalledError
+        directly (error fires from factory function before TicketService is created).
+        """
+        from spec.integrations.backends.errors import BackendNotInstalledError
+
+        mock_config = MagicMock()
+        mock_config.settings.get_default_platform.return_value = None
+        mock_config_class.return_value = mock_config
+
+        with patch(
+            "spec.cli.create_ticket_service_from_config",
+            side_effect=BackendNotInstalledError(
+                "Auggie CLI is not installed. Install with: pip install auggie"
+            ),
+        ):
+            with runner.isolated_filesystem():
+                result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
+
+        # Compare against ExitCode.X.value for explicit int comparison
+        assert result.exit_code == ExitCode.GENERAL_ERROR.value
+        output = result.output.lower()
+        # Should mention not installed or auggie (per cli.py:855-857)
+        assert (
+            "not installed" in output or "auggie" in output
+        ), f"Expected 'not installed' or 'auggie' in output: {result.output}"

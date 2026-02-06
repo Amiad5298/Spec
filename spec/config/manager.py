@@ -31,7 +31,7 @@ from spec.config.fetch_config import (
     FetchStrategyConfig,
     canonicalize_credentials,
     get_active_platforms,
-    parse_agent_platform,
+    parse_ai_backend,
     parse_fetch_strategy,
     validate_credentials,
     validate_strategy_for_platform,
@@ -628,7 +628,7 @@ class ConfigManager:
                 integrations[platform_name] = value.lower() in ("true", "1", "yes")
 
         # Use safe parser - raises ConfigValidationError for invalid values
-        platform = parse_agent_platform(
+        platform = parse_ai_backend(
             platform_str,
             default=AgentPlatform.AUGGIE,
             context="AI_BACKEND",

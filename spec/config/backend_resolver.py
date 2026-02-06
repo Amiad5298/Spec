@@ -10,7 +10,7 @@ This enforces the "no default backend" policy, ensuring users explicitly
 choose their AI provider.
 """
 
-from spec.config.fetch_config import AgentPlatform, parse_agent_platform
+from spec.config.fetch_config import AgentPlatform, parse_ai_backend
 from spec.config.manager import ConfigManager
 from spec.integrations.backends.errors import BackendNotConfiguredError
 
@@ -41,7 +41,7 @@ def resolve_backend_platform(
     # 1. CLI override takes precedence (one-run override)
     # Note: Check both truthiness and non-whitespace to handle "" and "   " cases
     if cli_backend_override and cli_backend_override.strip():
-        return parse_agent_platform(cli_backend_override.strip())
+        return parse_ai_backend(cli_backend_override.strip())
 
     # 2. Check AI_BACKEND in persisted config
     # Note: Legacy AGENT_PLATFORM migration is handled separately.
@@ -49,7 +49,7 @@ def resolve_backend_platform(
     # is out of scope for this ticket.
     ai_backend = config_manager.get("AI_BACKEND", "")
     if ai_backend.strip():
-        return parse_agent_platform(ai_backend)
+        return parse_ai_backend(ai_backend)
 
     # 3. No backend configured - raise error with helpful message
     raise BackendNotConfiguredError(

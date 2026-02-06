@@ -152,7 +152,7 @@ class TestNoDefaultBackendPolicy:
     """Verify 'no default backend' policy is enforced at the resolver level.
 
     Note: The policy is enforced by resolve_backend_platform(), NOT by BackendFactory.
-    BackendFactory.create("") defaults to AUGGIE via parse_agent_platform().
+    BackendFactory.create("") defaults to AUGGIE via parse_ai_backend().
     The resolver prevents reaching the factory without explicit configuration.
     """
 
@@ -168,7 +168,7 @@ class TestNoDefaultBackendPolicy:
         assert "spec init" in str(exc_info.value)
 
     def test_factory_defaults_to_auggie_for_empty_string(self):
-        """Factory defaults to AUGGIE for empty string (via parse_agent_platform).
+        """Factory defaults to AUGGIE for empty string (via parse_ai_backend).
 
         This is expected behavior - the resolver prevents reaching the factory
         without explicit configuration, so the factory's default is never used

@@ -87,7 +87,7 @@ class TestResolveBackendPlatformNoBackend:
         """Whitespace-only CLI + empty config raises BackendNotConfiguredError.
 
         This ensures whitespace CLI doesn't silently fall through to
-        parse_agent_platform()'s default (AUGGIE).
+        parse_ai_backend()'s default (AUGGIE).
         """
         config = MagicMock()
         config.get.return_value = ""
@@ -100,7 +100,7 @@ class TestResolveBackendPlatformInvalidInput:
     """Tests for invalid platform string handling.
 
     Note: The Linear ticket states that invalid platforms raise ValueError,
-    but the actual behavior is ConfigValidationError because parse_agent_platform()
+    but the actual behavior is ConfigValidationError because parse_ai_backend()
     raises ConfigValidationError for invalid values. This test reflects the
     actual implementation behavior per the parent specification.
     """
@@ -115,7 +115,7 @@ class TestResolveBackendPlatformInvalidInput:
 
         # Check error message indicates invalid platform (avoid asserting full list
         # of allowed values to prevent test brittleness when enum changes)
-        assert "Invalid agent platform" in str(exc_info.value)
+        assert "Invalid AI backend" in str(exc_info.value)
         assert "chatgpt" in str(exc_info.value)
 
     def test_invalid_config_value_raises_config_validation_error(self) -> None:

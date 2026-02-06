@@ -105,7 +105,7 @@ class TestBackendFactoryInvalidInput:
         """Unknown platform string raises ConfigValidationError.
 
         Note: The parent spec's TestBackendFactory shows pytest.raises(ValueError),
-        but the actual behavior is ConfigValidationError because parse_agent_platform()
+        but the actual behavior is ConfigValidationError because parse_ai_backend()
         raises ConfigValidationError for invalid values.
         """
         with pytest.raises(ConfigValidationError):
@@ -128,7 +128,7 @@ class TestBackendFactoryStringNormalization:
     def test_create_empty_string_returns_default(self):
         """Empty string returns default platform (AUGGIE).
 
-        Note: This behavior comes from parse_agent_platform() which has
+        Note: This behavior comes from parse_ai_backend() which has
         default=AgentPlatform.AUGGIE.
         """
         backend = BackendFactory.create("")

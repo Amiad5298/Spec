@@ -98,16 +98,12 @@ def parse_fetch_strategy(
         ) from None
 
 
-def parse_agent_platform(
+def parse_ai_backend(
     value: str | None,
     default: AgentPlatform = AgentPlatform.AUGGIE,
     context: str = "",
 ) -> AgentPlatform:
     """Safely parse an AgentPlatform from a string value.
-
-    This function parses AI backend configuration values. The function name
-    is retained for backward compatibility; prefer using parse_ai_backend
-    alias in new code.
 
     Args:
         value: The string value to parse (e.g., "auggie", "cursor", "manual")
@@ -134,10 +130,6 @@ def parse_agent_platform(
             f"Invalid AI backend '{value}'{context_msg}. "
             f"Allowed values: {', '.join(valid_values)}"
         ) from None
-
-
-# Alias for clarity in new code - preferred name going forward
-parse_ai_backend = parse_agent_platform
 
 
 # Known ticket platforms for validation
@@ -583,7 +575,6 @@ __all__ = [
     "MAX_RETRIES",
     "MAX_RETRY_DELAY_SECONDS",
     "parse_fetch_strategy",
-    "parse_agent_platform",
     "parse_ai_backend",
     "canonicalize_credentials",
     "get_active_platforms",

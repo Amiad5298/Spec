@@ -5,7 +5,7 @@ by platform. It encapsulates backend-specific import logic (lazy imports to
 avoid circular dependencies) and validates CLI installation when requested.
 """
 
-from spec.config.fetch_config import AgentPlatform, parse_agent_platform
+from spec.config.fetch_config import AgentPlatform, parse_ai_backend
 from spec.integrations.backends.base import AIBackend
 from spec.integrations.backends.errors import BackendNotInstalledError
 
@@ -45,14 +45,14 @@ class BackendFactory:
 
         Raises:
             ConfigValidationError: If the platform string is invalid
-                (from parse_agent_platform)
+                (from parse_ai_backend)
             NotImplementedError: If the platform is planned but not yet
                 implemented (Claude, Cursor)
             ValueError: If the platform is not supported (Aider, Manual)
             BackendNotInstalledError: If verify_installed=True and CLI is missing
         """
         if isinstance(platform, str):
-            platform = parse_agent_platform(platform)
+            platform = parse_ai_backend(platform)
 
         backend: AIBackend
 

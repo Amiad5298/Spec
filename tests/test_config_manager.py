@@ -355,12 +355,12 @@ class TestPlatformStatusHelpers:
     def test_get_agent_integrations_no_defaults_for_non_auggie(self, tmp_path):
         """Non-Auggie platform with no explicit integrations returns all False.
 
-        This prevents falsely reporting agent support when AGENT_PLATFORM is
+        This prevents falsely reporting agent support when AI_BACKEND is
         set to manual, cursor, or other non-Auggie platforms without explicit
         AGENT_INTEGRATION_* keys.
         """
         config_file = tmp_path / ".spec-config"
-        config_file.write_text('AGENT_PLATFORM="manual"\n')
+        config_file.write_text('AI_BACKEND="manual"\n')
         manager = ConfigManager(config_file)
         manager.load()
 
@@ -375,7 +375,7 @@ class TestPlatformStatusHelpers:
     def test_get_agent_integrations_non_auggie_with_explicit_config(self, tmp_path):
         """Non-Auggie platform respects explicit integration config."""
         config_file = tmp_path / ".spec-config"
-        config_file.write_text('AGENT_PLATFORM="cursor"\n' 'AGENT_INTEGRATION_JIRA="true"\n')
+        config_file.write_text('AI_BACKEND="cursor"\n' 'AGENT_INTEGRATION_JIRA="true"\n')
         manager = ConfigManager(config_file)
         manager.load()
 
@@ -1580,11 +1580,11 @@ class TestConfigManagerGetAgentConfig:
         assert config.integrations is None  # None means no explicit config
 
     def test_get_agent_config_custom_platform(self, tmp_path):
-        """Parses AGENT_PLATFORM from config."""
+        """Parses AI_BACKEND from config."""
         from spec.config.fetch_config import AgentPlatform
 
         config_path = tmp_path / "config"
-        config_path.write_text('AGENT_PLATFORM="cursor"\n')
+        config_path.write_text('AI_BACKEND="cursor"\n')
         manager = ConfigManager(config_path)
         manager.load()
 
@@ -1596,7 +1596,7 @@ class TestConfigManagerGetAgentConfig:
         from spec.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
-        config_path.write_text('AGENT_PLATFORM="invalid_platform"\n')
+        config_path.write_text('AI_BACKEND="invalid_platform"\n')
         manager = ConfigManager(config_path)
         manager.load()
 
@@ -1886,7 +1886,7 @@ class TestFetchConfigEndToEnd:
         config_path = tmp_path / "config"
         config_path.write_text(
             """# Agent configuration
-AGENT_PLATFORM=cursor
+AI_BACKEND=cursor
 AGENT_INTEGRATION_JIRA=true
 AGENT_INTEGRATION_LINEAR=true
 AGENT_INTEGRATION_GITHUB=false
@@ -2159,7 +2159,7 @@ class TestNoSecretLeakage:
         assert is_sensitive_key("MY_PASSWORD") is True
         assert is_sensitive_key("CREDENTIAL_DATA") is True
         assert is_sensitive_key("DEFAULT_MODEL") is False
-        assert is_sensitive_key("AGENT_PLATFORM") is False
+        assert is_sensitive_key("AI_BACKEND") is False
 
     def test_fallback_credentials_not_in_settings(self, tmp_path):
         """Fallback credentials are not exposed in settings attributes."""
@@ -2227,7 +2227,7 @@ class TestValidateFetchConfig:
 
         config_path = tmp_path / "config"
         config_path.write_text(
-            """AGENT_PLATFORM=auggie
+            """AI_BACKEND=auggie
 AGENT_INTEGRATION_JIRA=true
 FETCH_STRATEGY_DEFAULT=auto
 FALLBACK_JIRA_URL=https://example.atlassian.net
@@ -2249,7 +2249,7 @@ FALLBACK_JIRA_TOKEN=${JIRA_TOKEN}
         # Configure active platforms with agent strategy but no integrations
         # This triggers validation errors for those platforms
         config_path.write_text(
-            """AGENT_PLATFORM=manual
+            """AI_BACKEND=manual
 FETCH_STRATEGY_JIRA=agent
 FETCH_STRATEGY_LINEAR=agent
 """
@@ -2267,7 +2267,7 @@ FETCH_STRATEGY_LINEAR=agent
         from spec.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
-        config_path.write_text("AGENT_PLATFORM=invalid_platform\n")
+        config_path.write_text("AI_BACKEND=invalid_platform\n")
         manager = ConfigManager(config_path)
         manager.load()
 
@@ -2277,7 +2277,7 @@ FETCH_STRATEGY_LINEAR=agent
     def test_validate_fetch_config_nonstrict_collects_invalid_agent_platform(self, tmp_path):
         """strict=False collects error for invalid agent platform without raising."""
         config_path = tmp_path / "config"
-        config_path.write_text("AGENT_PLATFORM=invalid_platform\n")
+        config_path.write_text("AI_BACKEND=invalid_platform\n")
         manager = ConfigManager(config_path)
         manager.load()
 
@@ -2319,7 +2319,7 @@ FETCH_STRATEGY_LINEAR=agent
         config_path = tmp_path / "config"
         # Multiple invalid values
         config_path.write_text(
-            """AGENT_PLATFORM=bad_platform
+            """AI_BACKEND=bad_platform
 FETCH_STRATEGY_DEFAULT=bad_strategy
 FETCH_STRATEGY_JIRA=also_invalid
 """
@@ -2514,7 +2514,7 @@ FALLBACK_AZURE_DEVOPS_ORG=my-org
         config_file = tmp_path / "config"
         # Configure only Jira with agent strategy (requires integration)
         config_file.write_text(
-            """AGENT_PLATFORM=auggie
+            """AI_BACKEND=auggie
 AGENT_INTEGRATION_JIRA=true
 FETCH_STRATEGY_JIRA=agent
 """
@@ -2592,7 +2592,7 @@ FALLBACK_AZURE_DEVOPS_PAT=${AZURE_PAT}
 
         config_file = tmp_path / "config"
         config_file.write_text(
-            """AGENT_PLATFORM=auggie
+            """AI_BACKEND=auggie
 AGENT_INTEGRATION_TRELLO=false
 FETCH_STRATEGY_TRELLO=auto
 FALLBACK_TRELLO_API_KEY=${TRELLO_KEY}
@@ -2614,7 +2614,7 @@ FALLBACK_TRELLO_TOKEN=some_token
 
         config_file = tmp_path / "config"
         config_file.write_text(
-            """AGENT_PLATFORM=auggie
+            """AI_BACKEND=auggie
 AGENT_INTEGRATION_JIRA=true
 FETCH_STRATEGY_JIRA=auto
 FALLBACK_JIRA_URL=https://example.atlassian.net
@@ -2639,7 +2639,7 @@ FALLBACK_JIRA_TOKEN=${JIRA_TOKEN}
 
         config_file = tmp_path / "config"
         config_file.write_text(
-            """AGENT_PLATFORM=auggie
+            """AI_BACKEND=auggie
 AGENT_INTEGRATION_LINEAR=true
 FETCH_STRATEGY_LINEAR=agent
 FALLBACK_LINEAR_API_KEY=${MISSING_TOKEN}
@@ -2652,3 +2652,112 @@ FALLBACK_LINEAR_API_KEY=${MISSING_TOKEN}
         # Should NOT have errors about missing env vars (using agent, not direct)
         error_text = " ".join(errors).lower()
         assert "missing_token" not in error_text
+
+
+class TestLegacyKeyMigration:
+    """Tests for legacy config key migration (AGENT_PLATFORM -> AI_BACKEND)."""
+
+    def test_agent_platform_migrated_to_ai_backend(self, tmp_path):
+        """Legacy AGENT_PLATFORM key is transparently migrated to AI_BACKEND."""
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=cursor\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        # Should be accessible via new key
+        assert manager.get("AI_BACKEND") == "cursor"
+        # Old key should be removed
+        assert manager.get("AGENT_PLATFORM") == ""
+
+    def test_ai_backend_takes_precedence_over_agent_platform(self, tmp_path):
+        """AI_BACKEND wins when both keys exist in config."""
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=manual\nAI_BACKEND=cursor\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager.get("AI_BACKEND") == "cursor"
+        assert manager.get("AGENT_PLATFORM") == ""
+
+    def test_migrated_value_works_with_get_agent_config(self, tmp_path):
+        """Migrated AGENT_PLATFORM value flows through to get_agent_config()."""
+        from spec.config.fetch_config import AgentPlatform
+
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=cursor\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        config = manager.get_agent_config()
+        assert config.platform == AgentPlatform.CURSOR
+
+    def test_migrated_value_works_with_backend_resolver(self, tmp_path):
+        """Migrated value is accessible via manager.get('AI_BACKEND')."""
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=aider\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager.get("AI_BACKEND") == "aider"
+
+    def test_no_migration_when_only_ai_backend_set(self, tmp_path):
+        """No migration needed when only AI_BACKEND is set."""
+        config_path = tmp_path / "config"
+        config_path.write_text("AI_BACKEND=claude\n")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager.get("AI_BACKEND") == "claude"
+        assert manager.get("AGENT_PLATFORM") == ""
+
+    def test_migration_logs_deprecation_warning(self, tmp_path, caplog):
+        """Migration logs a deprecation warning."""
+        import logging
+
+        config_path = tmp_path / "config"
+        config_path.write_text("AGENT_PLATFORM=cursor\n")
+        manager = ConfigManager(config_path)
+
+        with caplog.at_level(logging.WARNING, logger="spec.config.manager"):
+            manager.load()
+
+        assert any(
+            "AGENT_PLATFORM" in record.message and "deprecated" in record.message
+            for record in caplog.records
+        )
+
+    def test_agent_platform_env_var_migrated(self, tmp_path, monkeypatch):
+        """AGENT_PLATFORM set as env var is migrated to AI_BACKEND."""
+        monkeypatch.setenv("AGENT_PLATFORM", "cursor")
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager.get("AI_BACKEND") == "cursor"
+        assert manager.get("AGENT_PLATFORM") == ""
+
+    def test_ai_backend_env_var_wins_over_agent_platform_env_var(self, tmp_path, monkeypatch):
+        """AI_BACKEND env var takes precedence over AGENT_PLATFORM env var."""
+        monkeypatch.setenv("AGENT_PLATFORM", "manual")
+        monkeypatch.setenv("AI_BACKEND", "cursor")
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        assert manager.get("AI_BACKEND") == "cursor"
+        assert manager.get("AGENT_PLATFORM") == ""
+
+    def test_agent_platform_env_var_flows_to_get_agent_config(self, tmp_path, monkeypatch):
+        """AGENT_PLATFORM env var is migrated and usable via get_agent_config()."""
+        from spec.config.fetch_config import AgentPlatform
+
+        monkeypatch.setenv("AGENT_PLATFORM", "aider")
+        config_path = tmp_path / "config"
+        config_path.write_text("")
+        manager = ConfigManager(config_path)
+        manager.load()
+
+        config = manager.get_agent_config()
+        assert config.platform == AgentPlatform.AIDER

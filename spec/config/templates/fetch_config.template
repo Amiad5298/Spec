@@ -21,8 +21,8 @@
 # Configure which AI agent platform is being used and which
 # ticket platforms it has integrations for.
 
-# Agent platform: auggie, claude, cursor, aider, manual
-AGENT_PLATFORM=auggie
+# AI backend: auggie, claude, cursor, aider, manual
+AI_BACKEND=auggie
 
 # Agent integrations - set to true for platforms the agent can access
 # These determine whether "agent" fetch strategy is viable per platform

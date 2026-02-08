@@ -6,12 +6,16 @@ rate limit detection, and command execution.
 Key difference from Auggie: Subagent instructions use --append-system-prompt
 instead of being embedded in the user prompt. This is a cleaner separation
 native to Claude Code CLI.
+
+Note on ARG_MAX: The --append-system-prompt flag passes content inline on
+the command line. Very long subagent prompts could hit OS argument limits.
+The Claude CLI does not currently support --append-system-prompt-file, so
+there is no file-based alternative. Subagent prompts should be kept concise.
 """
 
 import shutil
 import subprocess
 from collections.abc import Callable
-from pathlib import Path
 
 from spec.utils.logging import log_command, log_message
 
@@ -33,8 +37,9 @@ def check_claude_installed() -> tuple[bool, str]:
             [CLAUDE_CLI_NAME, "--version"],
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
         )
-        log_command("claude --version", result.returncode)
+        log_command(f"{CLAUDE_CLI_NAME} --version", result.returncode)
 
         version_output = result.stdout.strip() or result.stderr.strip()
         if result.returncode == 0 and version_output:
@@ -76,75 +81,12 @@ def _looks_like_rate_limit(output: str) -> bool:
     return any(p in output_lower for p in patterns)
 
 
-def _load_subagent_prompt(subagent: str) -> str | None:
-    """Load subagent prompt from agent definition file.
-
-    Reads the markdown file from .augment/agents/{subagent}.md,
-    strips any YAML frontmatter, and returns the body only.
-
-    Args:
-        subagent: Name of the subagent
-
-    Returns:
-        The prompt body (without frontmatter) if found, None otherwise
-    """
-    agent_path = Path(".augment/agents") / f"{subagent}.md"
-    if not agent_path.exists():
-        return None
-
-    try:
-        content = agent_path.read_text()
-
-        # Strip YAML frontmatter if present
-        if content.startswith("---"):
-            # Find the closing --- marker
-            end_marker = content.find("---", 3)
-            if end_marker != -1:
-                body = content[end_marker + 3 :].strip()
-                return body if body else None
-
-        return content.strip() if content.strip() else None
-    except OSError:
-        return None
-
-
-def _parse_frontmatter_model(subagent: str) -> str | None:
-    """Extract model from subagent YAML frontmatter.
-
-    Args:
-        subagent: Name of the subagent
-
-    Returns:
-        Model string from frontmatter, or None if not found
-    """
-    agent_path = Path(".augment/agents") / f"{subagent}.md"
-    if not agent_path.exists():
-        return None
-
-    try:
-        content = agent_path.read_text()
-        if not content.startswith("---"):
-            return None
-
-        end_marker = content.find("---", 3)
-        if end_marker == -1:
-            return None
-
-        frontmatter_str = content[3:end_marker].strip()
-        # Simple key: value parsing (same as auggie.py pattern)
-        for line in frontmatter_str.split("\n"):
-            line = line.strip()
-            if line.startswith("model:"):
-                _, _, value = line.partition(":")
-                model = value.strip()
-                return model if model else None
-        return None
-    except OSError:
-        return None
-
-
 class ClaudeClient:
     """Wrapper for Claude Code CLI commands.
+
+    This is a thin subprocess wrapper. Model resolution and subagent parsing
+    are handled by ClaudeBackend (via BaseBackend). The client accepts
+    pre-resolved values.
 
     Attributes:
         model: Default model to use for commands
@@ -158,25 +100,24 @@ class ClaudeClient:
         """
         self.model = model
 
-    def _build_command(
+    def build_command(
         self,
         prompt: str,
         *,
-        subagent: str | None = None,
         model: str | None = None,
+        system_prompt: str | None = None,
         print_mode: bool = False,
         dont_save_session: bool = False,
     ) -> list[str]:
         """Build claude command list.
 
-        When a subagent is specified, the subagent prompt is injected via
-        --append-system-prompt (keeping the user prompt clean). The model
-        from the subagent frontmatter is used if no explicit model is given.
+        All parameters are pre-resolved by the caller (typically ClaudeBackend).
+        This method just assembles the CLI arguments.
 
         Args:
             prompt: The prompt to send to Claude
-            subagent: Subagent name (loads prompt from .augment/agents/{name}.md)
-            model: Override model for this command
+            model: Resolved model name (None = use instance default)
+            system_prompt: Resolved subagent prompt body (injected via --append-system-prompt)
             print_mode: Use -p (print) flag
             dont_save_session: Use --no-session-persistence flag
 
@@ -188,13 +129,8 @@ class ClaudeClient:
         if print_mode:
             cmd.append("-p")
 
-        # Determine model: explicit > subagent frontmatter > instance default
+        # Use explicit model or fall back to instance default
         effective_model = model or self.model
-        if not effective_model and subagent:
-            frontmatter_model = _parse_frontmatter_model(subagent)
-            if frontmatter_model:
-                effective_model = frontmatter_model
-
         if effective_model:
             cmd.extend(["--model", effective_model])
 
@@ -202,10 +138,8 @@ class ClaudeClient:
             cmd.append("--no-session-persistence")
 
         # Inject subagent prompt via --append-system-prompt
-        if subagent:
-            subagent_prompt = _load_subagent_prompt(subagent)
-            if subagent_prompt:
-                cmd.extend(["--append-system-prompt", subagent_prompt])
+        if system_prompt:
+            cmd.extend(["--append-system-prompt", system_prompt])
 
         # Prompt as final positional argument
         cmd.append(prompt)
@@ -216,8 +150,8 @@ class ClaudeClient:
         prompt: str,
         *,
         output_callback: Callable[[str], None],
-        subagent: str | None = None,
         model: str | None = None,
+        system_prompt: str | None = None,
         dont_save_session: bool = False,
     ) -> tuple[bool, str]:
         """Run with streaming output callback.
@@ -228,22 +162,22 @@ class ClaudeClient:
         Args:
             prompt: The prompt to send to Claude
             output_callback: Callback function invoked for each output line
-            subagent: Subagent name
-            model: Override model for this command
+            model: Resolved model name
+            system_prompt: Resolved subagent prompt body
             dont_save_session: If True, use --no-session-persistence
 
         Returns:
             Tuple of (success: bool, full_output: str)
         """
-        cmd = self._build_command(
+        cmd = self.build_command(
             prompt,
-            subagent=subagent,
             model=model,
+            system_prompt=system_prompt,
             print_mode=True,
             dont_save_session=dont_save_session,
         )
 
-        log_message(f"Running claude command with callback: {' '.join(cmd[:3])}...")
+        log_message(f"Running {CLAUDE_CLI_NAME} with callback (streaming)")
 
         process = subprocess.Popen(
             cmd,
@@ -262,7 +196,7 @@ class ClaudeClient:
                 output_lines.append(line)
 
         process.wait()
-        log_command(" ".join(cmd), process.returncode)
+        log_command(CLAUDE_CLI_NAME, process.returncode)
 
         return process.returncode == 0, "".join(output_lines)
 
@@ -270,75 +204,99 @@ class ClaudeClient:
         self,
         prompt: str,
         *,
-        subagent: str | None = None,
         model: str | None = None,
+        system_prompt: str | None = None,
         dont_save_session: bool = False,
     ) -> tuple[bool, str]:
         """Run with -p flag, return success status and captured output.
 
-        Uses run_with_callback internally to both display and capture output.
+        Captures output silently (no stdout printing). The backend layer
+        does not own terminal output; SPEC owns the TUI.
 
         Args:
             prompt: The prompt to send
-            subagent: Subagent name
-            model: Override model for this command
+            model: Resolved model name
+            system_prompt: Resolved subagent prompt body
             dont_save_session: If True, use --no-session-persistence
 
         Returns:
             Tuple of (success: bool, output: str)
         """
-        return self.run_with_callback(
+        cmd = self.build_command(
             prompt,
-            output_callback=lambda line: print(line),
-            subagent=subagent,
             model=model,
+            system_prompt=system_prompt,
+            print_mode=True,
             dont_save_session=dont_save_session,
         )
+
+        log_message(f"Running {CLAUDE_CLI_NAME} with output capture")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
+        log_command(CLAUDE_CLI_NAME, result.returncode)
+
+        success = result.returncode == 0
+        output = result.stdout or ""
+
+        # Include stderr context when CLI fails with no stdout
+        if not success and not output and result.stderr:
+            output = result.stderr
+
+        return success, output
 
     def run_print_quiet(
         self,
         prompt: str,
         *,
-        subagent: str | None = None,
         model: str | None = None,
+        system_prompt: str | None = None,
         dont_save_session: bool = False,
     ) -> str:
         """Run with -p flag quietly, return output only.
 
         Args:
             prompt: The prompt to send
-            subagent: Subagent name
-            model: Override model for this command
+            model: Resolved model name
+            system_prompt: Resolved subagent prompt body
             dont_save_session: If True, use --no-session-persistence
 
         Returns:
-            Command stdout
+            Command stdout (or stderr if stdout is empty and command failed)
         """
-        cmd = self._build_command(
+        cmd = self.build_command(
             prompt,
-            subagent=subagent,
             model=model,
+            system_prompt=system_prompt,
             print_mode=True,
             dont_save_session=dont_save_session,
         )
 
-        log_message(f"Running claude command quietly: {' '.join(cmd[:3])}...")
+        log_message(f"Running {CLAUDE_CLI_NAME} quietly")
 
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
         )
-        log_command(" ".join(cmd), result.returncode)
+        log_command(CLAUDE_CLI_NAME, result.returncode)
 
-        return str(result.stdout) if result.stdout else ""
+        output = result.stdout or ""
+
+        # Include stderr context when CLI fails with no stdout
+        if not output and result.returncode != 0 and result.stderr:
+            output = result.stderr
+
+        return output
 
 
 __all__ = [
     "CLAUDE_CLI_NAME",
     "ClaudeClient",
     "check_claude_installed",
-    "_looks_like_rate_limit",
-    "_load_subagent_prompt",
-    "_parse_frontmatter_model",
 ]

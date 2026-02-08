@@ -8,9 +8,12 @@ ClaudeBackend follows the same delegation pattern as AuggieBackend:
 - Implements the AIBackend protocol
 - Wraps the ClaudeClient (delegation pattern)
 
-Key difference from AuggieBackend: ClaudeClient uses 'subagent' natively
-(no parameter mapping needed), and subagent instructions are injected via
---append-system-prompt instead of being embedded in the user prompt.
+Key difference from AuggieBackend: ClaudeClient uses system_prompt natively
+(via --append-system-prompt), and subagent instructions are injected via
+that flag instead of being embedded in the user prompt.
+
+Model resolution and subagent parsing happen ONLY in this backend layer
+(via BaseBackend helpers). The client receives pre-resolved values.
 """
 
 from collections.abc import Callable
@@ -29,6 +32,10 @@ class ClaudeBackend(BaseBackend):
 
     Extends BaseBackend to inherit shared logic (subagent parsing, model resolution).
     Wraps the ClaudeClient for actual CLI execution.
+
+    Model resolution and subagent prompt parsing happen here (via BaseBackend
+    helpers). The ClaudeClient receives pre-resolved model and system_prompt
+    values, avoiding double I/O and duplicated parsing logic.
 
     Attributes:
         _client: The underlying ClaudeClient instance for CLI execution.
@@ -58,6 +65,38 @@ class ClaudeBackend(BaseBackend):
         """Return whether this backend supports parallel execution."""
         return True
 
+    def _resolve_subagent(
+        self,
+        subagent: str | None,
+        model: str | None,
+    ) -> tuple[str | None, str | None]:
+        """Resolve subagent and model in one pass.
+
+        Uses BaseBackend._parse_subagent_prompt() to get both the system
+        prompt body and model from frontmatter. Avoids reading the subagent
+        file multiple times.
+
+        Args:
+            subagent: Optional subagent name.
+            model: Optional explicit model override.
+
+        Returns:
+            Tuple of (resolved_model, system_prompt).
+        """
+        system_prompt: str | None = None
+
+        if subagent:
+            metadata, prompt_body = self._parse_subagent_prompt(subagent)
+            system_prompt = prompt_body if prompt_body else None
+
+            # Model precedence: explicit > frontmatter > instance default
+            if not model and metadata.model:
+                model = metadata.model
+
+        # Fall back to instance default if nothing else set
+        resolved_model = model or self._model or None
+        return resolved_model, system_prompt
+
     def run_with_callback(
         self,
         prompt: str,
@@ -86,13 +125,13 @@ class ClaudeBackend(BaseBackend):
         Raises:
             BackendTimeoutError: If timeout_seconds is specified and exceeded.
         """
-        resolved_model = self._resolve_model(model, subagent)
+        resolved_model, system_prompt = self._resolve_subagent(subagent, model)
 
         if timeout_seconds is not None:
-            cmd = self._client._build_command(
+            cmd = self._client.build_command(
                 prompt,
-                subagent=subagent,
                 model=resolved_model,
+                system_prompt=system_prompt,
                 print_mode=True,
                 dont_save_session=dont_save_session,
             )
@@ -107,8 +146,8 @@ class ClaudeBackend(BaseBackend):
             return self._client.run_with_callback(
                 prompt,
                 output_callback=output_callback,
-                subagent=subagent,
                 model=resolved_model,
+                system_prompt=system_prompt,
                 dont_save_session=dont_save_session,
             )
 
@@ -126,11 +165,11 @@ class ClaudeBackend(BaseBackend):
         Warning: timeout_seconds is accepted per protocol but NOT enforced in
         this version.
         """
-        resolved_model = self._resolve_model(model, subagent)
+        resolved_model, system_prompt = self._resolve_subagent(subagent, model)
         return self._client.run_print_with_output(
             prompt,
-            subagent=subagent,
             model=resolved_model,
+            system_prompt=system_prompt,
             dont_save_session=dont_save_session,
         )
 
@@ -148,11 +187,11 @@ class ClaudeBackend(BaseBackend):
         Warning: timeout_seconds is accepted per protocol but NOT enforced in
         this version.
         """
-        resolved_model = self._resolve_model(model, subagent)
+        resolved_model, system_prompt = self._resolve_subagent(subagent, model)
         return self._client.run_print_quiet(
             prompt,
-            subagent=subagent,
             model=resolved_model,
+            system_prompt=system_prompt,
             dont_save_session=dont_save_session,
         )
 

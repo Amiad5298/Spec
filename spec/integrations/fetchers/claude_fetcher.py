@@ -5,8 +5,7 @@ ticket data through the Claude Code CLI's MCP tool integrations for
 Jira, Linear, and GitHub.
 
 This follows the exact same pattern as AuggieMediatedFetcher.
-The prompt templates are duplicated (not shared) to allow future
-divergence between backends.
+Prompt templates are shared via fetchers.templates module.
 """
 
 from __future__ import annotations
@@ -23,6 +22,11 @@ from spec.integrations.fetchers.exceptions import (
     AgentResponseParseError,
     PlatformNotSupportedError,
 )
+from spec.integrations.fetchers.templates import (
+    PLATFORM_PROMPT_TEMPLATES,
+    REQUIRED_FIELDS,
+    SUPPORTED_PLATFORMS,
+)
 from spec.integrations.providers.base import Platform
 
 if TYPE_CHECKING:
@@ -32,76 +36,6 @@ logger = logging.getLogger(__name__)
 
 # Default timeout for agent execution (seconds)
 DEFAULT_TIMEOUT_SECONDS: float = 60.0
-
-# Platforms supported by AI backend MCP integrations
-SUPPORTED_PLATFORMS = {Platform.JIRA, Platform.LINEAR, Platform.GITHUB}
-
-# Required fields per platform for validation
-REQUIRED_FIELDS: dict[Platform, set[str]] = {
-    Platform.JIRA: {"key", "summary"},
-    Platform.LINEAR: {"identifier", "title"},
-    Platform.GITHUB: {"number", "title"},
-}
-
-# Platform-specific prompt templates for structured JSON responses
-PLATFORM_PROMPT_TEMPLATES: dict[Platform, str] = {
-    Platform.JIRA: """Use your Jira tool to fetch issue {ticket_id}.
-
-Return ONLY a valid JSON object with these fields (no markdown, no explanation).
-Fields marked (optional) can be null if not available.
-
-{{
-  "key": "PROJ-123",
-  "summary": "ticket title",
-  "description": "full description text",
-  "status": "Open",
-  "issuetype": "Bug",
-  "assignee": null,
-  "labels": ["label1", "label2"],
-  "created": "2024-01-15T10:30:00Z",
-  "updated": "2024-01-16T14:20:00Z",
-  "priority": "High",
-  "project": {{"key": "PROJ", "name": "Project Name"}}
-}}""",
-    Platform.LINEAR: """Use your Linear tool to fetch issue {ticket_id}.
-
-Return ONLY a valid JSON object with these fields (no markdown, no explanation).
-Fields can be null if not available.
-
-{{
-  "identifier": "TEAM-123",
-  "title": "issue title",
-  "description": "full description text",
-  "state": {{"name": "Todo"}},
-  "assignee": null,
-  "labels": {{"nodes": [{{"name": "label1"}}]}},
-  "createdAt": "2024-01-15T10:30:00Z",
-  "updatedAt": "2024-01-16T14:20:00Z",
-  "priority": 2,
-  "team": {{"key": "TEAM"}},
-  "url": "https://linear.app/team/issue/TEAM-123"
-}}""",
-    Platform.GITHUB: """Use your GitHub API tool to fetch issue or PR {ticket_id}.
-
-The ticket_id format is "owner/repo#number" (e.g., "microsoft/vscode#12345").
-
-Return ONLY a valid JSON object with these fields (no markdown, no explanation).
-Fields can be null if not available.
-
-{{
-  "number": 123,
-  "title": "issue/PR title",
-  "body": "full description text",
-  "state": "open",
-  "user": {{"login": "username"}},
-  "labels": [{{"name": "label1"}}],
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-16T14:20:00Z",
-  "html_url": "https://github.com/owner/repo/issues/123",
-  "milestone": null,
-  "assignee": null
-}}""",
-}
 
 
 class ClaudeMediatedFetcher(AgentMediatedFetcher):
@@ -232,13 +166,14 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
         Args:
             prompt: Structured prompt to send to the backend
             platform: Target platform (for logging/context)
-            timeout_seconds: Timeout for this execution
+            timeout_seconds: Timeout for this execution (falls back to instance default)
 
         Returns:
             Raw response string from the backend
 
         Raises:
             AgentFetchError: If execution fails or times out
+            AgentIntegrationError: If agent integration is misconfigured (passes through)
         """
         effective_timeout = (
             timeout_seconds if timeout_seconds is not None else self._timeout_seconds
@@ -263,6 +198,8 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
                 message=(f"Backend execution timed out after {effective_timeout}s"),
                 agent_name=self.name,
             ) from None
+        except (AgentIntegrationError, AgentFetchError, AgentResponseParseError):
+            raise
         except Exception as e:
             raise AgentFetchError(
                 message=f"Backend invocation failed: {e}",
@@ -358,10 +295,12 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
             response = await self._execute_fetch_prompt(
                 prompt, platform, timeout_seconds=timeout_seconds
             )
-        except AgentIntegrationError:
+        except (AgentIntegrationError, AgentFetchError, AgentResponseParseError):
+            raise
+        except asyncio.CancelledError:
             raise
         except Exception as e:
-            raise AgentIntegrationError(
+            raise AgentFetchError(
                 message=f"Unexpected error during agent communication: {e}",
                 agent_name=self.name,
                 original_error=e,

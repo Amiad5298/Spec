@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from spec.integrations.backends.base import AIBackend
+from spec.integrations.backends.errors import BackendTimeoutError
 from spec.integrations.fetchers.base import AgentMediatedFetcher
 from spec.integrations.fetchers.exceptions import (
     AgentFetchError,
@@ -150,10 +151,7 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
             AgentResponseParseError: If response cannot be parsed or validated
         """
         platform_enum = self._resolve_platform(platform)
-        effective_timeout = (
-            timeout_seconds if timeout_seconds is not None else self._timeout_seconds
-        )
-        return await self.fetch_raw(ticket_id, platform_enum, timeout_seconds=effective_timeout)
+        return await self.fetch_raw(ticket_id, platform_enum, timeout_seconds=timeout_seconds)
 
     async def _execute_fetch_prompt(
         self,
@@ -162,6 +160,9 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
         timeout_seconds: float | None = None,
     ) -> str:
         """Execute fetch prompt via AI backend with timeout.
+
+        This is the single place that resolves the effective timeout.
+        Callers pass timeout_seconds=None to use the instance default.
 
         Args:
             prompt: Structured prompt to send to the backend
@@ -184,16 +185,25 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
             effective_timeout,
         )
 
+        # Timeout is enforced at the subprocess level (via backend → client →
+        # subprocess.run(timeout=)). asyncio.wait_for acts as a safety net
+        # with a generous buffer in case something else blocks.
+        safety_timeout = effective_timeout + 10
+
         try:
             loop = asyncio.get_running_loop()
             result = await asyncio.wait_for(
                 loop.run_in_executor(
                     None,
-                    lambda: self._backend.run_print_quiet(prompt, dont_save_session=True),
+                    lambda: self._backend.run_print_quiet(
+                        prompt,
+                        dont_save_session=True,
+                        timeout_seconds=effective_timeout,
+                    ),
                 ),
-                timeout=effective_timeout,
+                timeout=safety_timeout,
             )
-        except TimeoutError:
+        except (TimeoutError, BackendTimeoutError):
             raise AgentFetchError(
                 message=(f"Backend execution timed out after {effective_timeout}s"),
                 agent_name=self.name,

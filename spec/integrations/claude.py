@@ -3,19 +3,18 @@
 This module provides the Claude Code CLI wrapper, installation checking,
 rate limit detection, and command execution.
 
-Key difference from Auggie: Subagent instructions use --append-system-prompt
-instead of being embedded in the user prompt. This is a cleaner separation
-native to Claude Code CLI.
-
-Note on ARG_MAX: The --append-system-prompt flag passes content inline on
-the command line. Very long subagent prompts could hit OS argument limits.
-The Claude CLI does not currently support --append-system-prompt-file, so
-there is no file-based alternative. Subagent prompts should be kept concise.
+Key difference from Auggie: Subagent instructions are injected via
+--append-system-prompt-file (print mode only), which keeps prompt
+content out of the process argument list (avoids ps/proc exposure
+and OS ARG_MAX limits).
 """
 
+import os
 import shutil
 import subprocess
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 from spec.utils.logging import log_command, log_message
 
@@ -81,12 +80,56 @@ def _looks_like_rate_limit(output: str) -> bool:
     return any(p in output_lower for p in patterns)
 
 
+@contextmanager
+def _system_prompt_file_context(
+    system_prompt: str | None,
+) -> Iterator[str | None]:
+    """Write system_prompt to a temp file for --append-system-prompt-file.
+
+    Yields the temp file path if system_prompt is provided, None otherwise.
+    The file is cleaned up when the context exits.
+    """
+    if not system_prompt:
+        yield None
+        return
+
+    fd, path = tempfile.mkstemp(suffix=".md", prefix="claude-sp-")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(system_prompt)
+        yield path
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _log_command_metadata(
+    *,
+    model: str | None = None,
+    has_system_prompt: bool = False,
+    timeout: float | None = None,
+) -> None:
+    """Log sanitized command metadata for debugging without leaking prompts."""
+    parts = []
+    if model:
+        parts.append(f"model={model}")
+    if has_system_prompt:
+        parts.append("system_prompt=yes")
+    if timeout is not None:
+        parts.append(f"timeout={timeout}s")
+    if parts:
+        log_message(f"  {CLAUDE_CLI_NAME} metadata: {', '.join(parts)}")
+
+
 class ClaudeClient:
     """Wrapper for Claude Code CLI commands.
 
     This is a thin subprocess wrapper. Model resolution and subagent parsing
     are handled by ClaudeBackend (via BaseBackend). The client accepts
-    pre-resolved values.
+    pre-resolved values. System prompts are written to temp files and passed
+    via --append-system-prompt-file to avoid ARG_MAX and process list exposure.
 
     Attributes:
         model: Default model to use for commands
@@ -105,7 +148,7 @@ class ClaudeClient:
         prompt: str,
         *,
         model: str | None = None,
-        system_prompt: str | None = None,
+        system_prompt_file: str | None = None,
         print_mode: bool = False,
         dont_save_session: bool = False,
     ) -> list[str]:
@@ -117,7 +160,8 @@ class ClaudeClient:
         Args:
             prompt: The prompt to send to Claude
             model: Resolved model name (None = use instance default)
-            system_prompt: Resolved subagent prompt body (injected via --append-system-prompt)
+            system_prompt_file: Path to file containing system prompt
+                (injected via --append-system-prompt-file, print mode only)
             print_mode: Use -p (print) flag
             dont_save_session: Use --no-session-persistence flag
 
@@ -137,9 +181,9 @@ class ClaudeClient:
         if dont_save_session:
             cmd.append("--no-session-persistence")
 
-        # Inject subagent prompt via --append-system-prompt
-        if system_prompt:
-            cmd.extend(["--append-system-prompt", system_prompt])
+        # Inject subagent prompt via file (avoids ARG_MAX / ps exposure)
+        if system_prompt_file:
+            cmd.extend(["--append-system-prompt-file", system_prompt_file])
 
         # Prompt as final positional argument
         cmd.append(prompt)
@@ -169,34 +213,36 @@ class ClaudeClient:
         Returns:
             Tuple of (success: bool, full_output: str)
         """
-        cmd = self.build_command(
-            prompt,
-            model=model,
-            system_prompt=system_prompt,
-            print_mode=True,
-            dont_save_session=dont_save_session,
-        )
-
         log_message(f"Running {CLAUDE_CLI_NAME} with callback (streaming)")
+        _log_command_metadata(model=model, has_system_prompt=bool(system_prompt))
 
-        process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,  # Line buffered
-        )
+        with _system_prompt_file_context(system_prompt) as prompt_file:
+            cmd = self.build_command(
+                prompt,
+                model=model,
+                system_prompt_file=prompt_file,
+                print_mode=True,
+                dont_save_session=dont_save_session,
+            )
 
-        output_lines: list[str] = []
-        if process.stdout is not None:
-            for line in process.stdout:
-                stripped = line.rstrip("\n")
-                output_callback(stripped)
-                output_lines.append(line)
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,  # Line buffered
+            )
 
-        process.wait()
-        log_command(CLAUDE_CLI_NAME, process.returncode)
+            output_lines: list[str] = []
+            if process.stdout is not None:
+                for line in process.stdout:
+                    stripped = line.rstrip("\n")
+                    output_callback(stripped)
+                    output_lines.append(line)
+
+            process.wait()
+            log_command(CLAUDE_CLI_NAME, process.returncode)
 
         return process.returncode == 0, "".join(output_lines)
 
@@ -207,6 +253,7 @@ class ClaudeClient:
         model: str | None = None,
         system_prompt: str | None = None,
         dont_save_session: bool = False,
+        timeout_seconds: float | None = None,
     ) -> tuple[bool, str]:
         """Run with -p flag, return success status and captured output.
 
@@ -218,27 +265,37 @@ class ClaudeClient:
             model: Resolved model name
             system_prompt: Resolved subagent prompt body
             dont_save_session: If True, use --no-session-persistence
+            timeout_seconds: Maximum execution time. When exceeded the
+                subprocess is killed and subprocess.TimeoutExpired is raised.
 
         Returns:
             Tuple of (success: bool, output: str)
+
+        Raises:
+            subprocess.TimeoutExpired: If timeout_seconds is exceeded.
         """
-        cmd = self.build_command(
-            prompt,
-            model=model,
-            system_prompt=system_prompt,
-            print_mode=True,
-            dont_save_session=dont_save_session,
-        )
-
         log_message(f"Running {CLAUDE_CLI_NAME} with output capture")
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
+        _log_command_metadata(
+            model=model, has_system_prompt=bool(system_prompt), timeout=timeout_seconds
         )
-        log_command(CLAUDE_CLI_NAME, result.returncode)
+
+        with _system_prompt_file_context(system_prompt) as prompt_file:
+            cmd = self.build_command(
+                prompt,
+                model=model,
+                system_prompt_file=prompt_file,
+                print_mode=True,
+                dont_save_session=dont_save_session,
+            )
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=timeout_seconds,
+            )
+            log_command(CLAUDE_CLI_NAME, result.returncode)
 
         success = result.returncode == 0
         output = result.stdout or ""
@@ -256,6 +313,7 @@ class ClaudeClient:
         model: str | None = None,
         system_prompt: str | None = None,
         dont_save_session: bool = False,
+        timeout_seconds: float | None = None,
     ) -> str:
         """Run with -p flag quietly, return output only.
 
@@ -264,27 +322,37 @@ class ClaudeClient:
             model: Resolved model name
             system_prompt: Resolved subagent prompt body
             dont_save_session: If True, use --no-session-persistence
+            timeout_seconds: Maximum execution time. When exceeded the
+                subprocess is killed and subprocess.TimeoutExpired is raised.
 
         Returns:
             Command stdout (or stderr if stdout is empty and command failed)
+
+        Raises:
+            subprocess.TimeoutExpired: If timeout_seconds is exceeded.
         """
-        cmd = self.build_command(
-            prompt,
-            model=model,
-            system_prompt=system_prompt,
-            print_mode=True,
-            dont_save_session=dont_save_session,
-        )
-
         log_message(f"Running {CLAUDE_CLI_NAME} quietly")
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
+        _log_command_metadata(
+            model=model, has_system_prompt=bool(system_prompt), timeout=timeout_seconds
         )
-        log_command(CLAUDE_CLI_NAME, result.returncode)
+
+        with _system_prompt_file_context(system_prompt) as prompt_file:
+            cmd = self.build_command(
+                prompt,
+                model=model,
+                system_prompt_file=prompt_file,
+                print_mode=True,
+                dont_save_session=dont_save_session,
+            )
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=timeout_seconds,
+            )
+            log_command(CLAUDE_CLI_NAME, result.returncode)
 
         output = result.stdout or ""
 

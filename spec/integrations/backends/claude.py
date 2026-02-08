@@ -9,20 +9,26 @@ ClaudeBackend follows the same delegation pattern as AuggieBackend:
 - Wraps the ClaudeClient (delegation pattern)
 
 Key difference from AuggieBackend: ClaudeClient uses system_prompt natively
-(via --append-system-prompt), and subagent instructions are injected via
+(via --append-system-prompt-file), and subagent instructions are injected via
 that flag instead of being embedded in the user prompt.
 
 Model resolution and subagent parsing happen ONLY in this backend layer
 (via BaseBackend helpers). The client receives pre-resolved values.
+System prompts are passed to the client as strings; the client writes
+them to temp files for --append-system-prompt-file (avoids ARG_MAX
+and hides prompts from the process list).
 """
 
+import subprocess
 from collections.abc import Callable
 
 from spec.config.fetch_config import AgentPlatform
 from spec.integrations.backends.base import BaseBackend
+from spec.integrations.backends.errors import BackendTimeoutError
 from spec.integrations.claude import (
     ClaudeClient,
     _looks_like_rate_limit,
+    _system_prompt_file_context,
     check_claude_installed,
 )
 
@@ -128,18 +134,19 @@ class ClaudeBackend(BaseBackend):
         resolved_model, system_prompt = self._resolve_subagent(subagent, model)
 
         if timeout_seconds is not None:
-            cmd = self._client.build_command(
-                prompt,
-                model=resolved_model,
-                system_prompt=system_prompt,
-                print_mode=True,
-                dont_save_session=dont_save_session,
-            )
-            exit_code, output = self._run_streaming_with_timeout(
-                cmd,
-                output_callback=output_callback,
-                timeout_seconds=timeout_seconds,
-            )
+            with _system_prompt_file_context(system_prompt) as prompt_file:
+                cmd = self._client.build_command(
+                    prompt,
+                    model=resolved_model,
+                    system_prompt_file=prompt_file,
+                    print_mode=True,
+                    dont_save_session=dont_save_session,
+                )
+                exit_code, output = self._run_streaming_with_timeout(
+                    cmd,
+                    output_callback=output_callback,
+                    timeout_seconds=timeout_seconds,
+                )
             success = exit_code == 0
             return success, output
         else:
@@ -162,16 +169,23 @@ class ClaudeBackend(BaseBackend):
     ) -> tuple[bool, str]:
         """Run with -p flag, return success status and captured output.
 
-        Warning: timeout_seconds is accepted per protocol but NOT enforced in
-        this version.
+        Raises:
+            BackendTimeoutError: If timeout_seconds is exceeded.
         """
         resolved_model, system_prompt = self._resolve_subagent(subagent, model)
-        return self._client.run_print_with_output(
-            prompt,
-            model=resolved_model,
-            system_prompt=system_prompt,
-            dont_save_session=dont_save_session,
-        )
+        try:
+            return self._client.run_print_with_output(
+                prompt,
+                model=resolved_model,
+                system_prompt=system_prompt,
+                dont_save_session=dont_save_session,
+                timeout_seconds=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            raise BackendTimeoutError(
+                f"Operation timed out after {timeout_seconds}s",
+                timeout_seconds=timeout_seconds,
+            ) from None
 
     def run_print_quiet(
         self,
@@ -184,16 +198,23 @@ class ClaudeBackend(BaseBackend):
     ) -> str:
         """Run with -p flag quietly, return output only.
 
-        Warning: timeout_seconds is accepted per protocol but NOT enforced in
-        this version.
+        Raises:
+            BackendTimeoutError: If timeout_seconds is exceeded.
         """
         resolved_model, system_prompt = self._resolve_subagent(subagent, model)
-        return self._client.run_print_quiet(
-            prompt,
-            model=resolved_model,
-            system_prompt=system_prompt,
-            dont_save_session=dont_save_session,
-        )
+        try:
+            return self._client.run_print_quiet(
+                prompt,
+                model=resolved_model,
+                system_prompt=system_prompt,
+                dont_save_session=dont_save_session,
+                timeout_seconds=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            raise BackendTimeoutError(
+                f"Operation timed out after {timeout_seconds}s",
+                timeout_seconds=timeout_seconds,
+            ) from None
 
     def run_streaming(
         self,

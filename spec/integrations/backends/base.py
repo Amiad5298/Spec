@@ -95,6 +95,16 @@ class AIBackend(Protocol):
         ...
 
     @property
+    def model(self) -> str:
+        """Default model for this backend instance.
+
+        Returns the model string configured at creation time.
+        Used by BackendFactory to forward the model when creating
+        fresh backend instances (e.g., for parallel execution workers).
+        """
+        ...
+
+    @property
     def supports_parallel(self) -> bool:
         """Whether this backend supports parallel execution.
 
@@ -316,6 +326,11 @@ class BaseBackend(ABC):
             model: Default model to use when not specified per-call or in frontmatter
         """
         self._model = model
+
+    @property
+    def model(self) -> str:
+        """Default model for this backend instance."""
+        return self._model
 
     @property
     @abstractmethod

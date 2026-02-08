@@ -596,8 +596,8 @@ def _execute_parallel_fallback(
         if stop_flag.is_set():
             return task, None  # Skipped
 
-        # Create a fresh backend for this worker thread
-        worker_backend = BackendFactory.create(backend.platform)
+        # Create a fresh backend for this worker thread, forwarding the model
+        worker_backend = BackendFactory.create(backend.platform, model=backend.model)
 
         log_filename = format_log_filename(idx, task.name)
         log_path = log_dir / log_filename
@@ -724,8 +724,8 @@ def _execute_parallel_with_tui(
         if stop_flag.is_set():
             return idx, task, None  # type: ignore[return-value]
 
-        # Create a fresh backend for this worker thread
-        worker_backend = BackendFactory.create(backend.platform)
+        # Create a fresh backend for this worker thread, forwarding the model
+        worker_backend = BackendFactory.create(backend.platform, model=backend.model)
 
         # Post TASK_STARTED event to queue (thread-safe)
         start_event = create_task_started_event(idx, task.name)

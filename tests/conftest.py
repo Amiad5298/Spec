@@ -109,6 +109,7 @@ def mock_backend():
     backend = MagicMock()
     backend.name = "MockBackend"
     backend.platform = AgentPlatform.AUGGIE
+    backend.model = ""
     backend.supports_parallel = True
     backend.run_with_callback.return_value = (True, "output")
     backend.run_print_with_output.return_value = (True, "output")

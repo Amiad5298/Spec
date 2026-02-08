@@ -74,9 +74,10 @@ def detect_context_conflict(
     if not user_context.strip():
         return False, ""
 
-    ticket_info = f"Title: {ticket.title or 'Not available'}\nDescription: {ticket.description or 'Not available'}"
     if not ticket.description and not ticket.title:
         return False, ""
+
+    ticket_info = f"Title: {ticket.title or 'Not available'}\nDescription: {ticket.description or 'Not available'}"
 
     # Build prompt from template
     prompt = CONFLICT_DETECTION_PROMPT_TEMPLATE.format(

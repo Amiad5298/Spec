@@ -40,7 +40,7 @@ from spec.workflow.state import RateLimitConfig, WorkflowState
 from spec.workflow.step1_plan import step_1_create_plan
 from spec.workflow.step2_tasklist import step_2_create_tasklist
 from spec.workflow.step3_execute import step_3_execute
-from spec.workflow.step4_update_docs import step_4_update_docs
+from spec.workflow.step4_update_docs import Step4Result, step_4_update_docs
 
 
 def run_spec_driven_workflow(
@@ -210,7 +210,7 @@ def run_spec_driven_workflow(
         if auto_update_docs:
             print_info("Starting Step 4: Update Documentation")
             # Note: This step is non-blocking - failures don't stop the workflow
-            step4_result = step_4_update_docs(state, backend=backend)
+            step4_result: Step4Result = step_4_update_docs(state, backend=backend)
             if step4_result.non_doc_reverted:
                 log_message(
                     f"Step 4 enforcement: reverted {len(step4_result.non_doc_reverted)} non-doc file(s)"

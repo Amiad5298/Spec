@@ -37,6 +37,8 @@ class FakeBackend:
         *,
         installed: bool = True,
         platform: AgentPlatform = AgentPlatform.AUGGIE,
+        name: str = "FakeBackend",
+        supports_parallel: bool = True,
     ) -> None:
         """Initialize with a list of (success, output) responses.
 
@@ -45,10 +47,15 @@ class FakeBackend:
                        Raises IndexError if more calls than responses.
             installed: Value returned by check_installed(). Default True.
             platform: AgentPlatform to report. Default AUGGIE.
+            name: Human-readable backend name. Default "FakeBackend".
+            supports_parallel: Whether backend supports parallel execution. Default True.
         """
         self._responses = responses
         self._installed = installed
         self._platform = platform
+        self._name = name
+        self._supports_parallel = supports_parallel
+        self.closed: bool = False
         self.call_count: int = 0
         self.calls: list[tuple[str, dict]] = []
         self.quiet_calls: list[tuple[str, dict]] = []
@@ -68,7 +75,7 @@ class FakeBackend:
 
     @property
     def name(self) -> str:
-        return "FakeBackend"
+        return self._name
 
     @property
     def platform(self) -> AgentPlatform:
@@ -80,7 +87,7 @@ class FakeBackend:
 
     @property
     def supports_parallel(self) -> bool:
-        return True
+        return self._supports_parallel
 
     def run_with_callback(
         self,
@@ -169,7 +176,31 @@ class FakeBackend:
         return self.supports_parallel
 
     def close(self) -> None:
-        pass
+        self.closed = True
+
+
+def make_successful_backend(output: str = "success") -> FakeBackend:
+    """Create a FakeBackend that returns a single successful response.
+
+    Args:
+        output: The output string to return. Default "success".
+
+    Returns:
+        Configured FakeBackend instance.
+    """
+    return FakeBackend([(True, output)])
+
+
+def make_failing_backend(error: str = "error") -> FakeBackend:
+    """Create a FakeBackend that returns a single failed response.
+
+    Args:
+        error: The error output string to return. Default "error".
+
+    Returns:
+        Configured FakeBackend instance.
+    """
+    return FakeBackend([(False, error)])
 
 
 def make_rate_limited_backend(fail_count: int = 2) -> FakeBackend:

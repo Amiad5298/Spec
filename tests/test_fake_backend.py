@@ -181,22 +181,13 @@ class TestFakeBackendProperties:
 class TestFakeBackendClose:
     """Test close() and closed attribute tracking."""
 
-    def test_closed_initially_false(self):
-        """closed is False before close() is called."""
+    def test_close_lifecycle(self):
+        """closed starts False, becomes True after close(), and is idempotent."""
         fb = FakeBackend([(True, "ok")])
         assert fb.closed is False
-
-    def test_closed_after_close(self):
-        """closed is True after close() is called."""
-        fb = FakeBackend([(True, "ok")])
         fb.close()
         assert fb.closed is True
-
-    def test_close_idempotent(self):
-        """close() can be called multiple times safely."""
-        fb = FakeBackend([(True, "ok")])
-        fb.close()
-        fb.close()
+        fb.close()  # idempotent
         assert fb.closed is True
 
 
@@ -305,41 +296,30 @@ class TestFakeBackendEdgeCases:
 
     def test_empty_responses_all_methods_fail(self):
         """All run methods fail with IndexError on empty responses."""
-        fb1 = FakeBackend([])
-        with pytest.raises(IndexError):
-            fb1.run_print_quiet("p")
+        for method_name, call_kwargs in [
+            ("run_print_quiet", {}),
+            ("run_streaming", {}),
+            ("run_with_callback", {"output_callback": lambda _: None}),
+        ]:
+            fb = FakeBackend([])
+            with pytest.raises(IndexError):
+                getattr(fb, method_name)("p", **call_kwargs)
 
-        fb2 = FakeBackend([])
-        with pytest.raises(IndexError):
-            fb2.run_streaming("p")
-
-        fb3 = FakeBackend([])
-        with pytest.raises(IndexError):
-            fb3.run_with_callback("p", output_callback=lambda _: None)
-
-    def test_model_recorded_in_run_with_callback(self):
-        """model kwarg is recorded in run_with_callback calls."""
+    @pytest.mark.parametrize(
+        "method,call_list_attr,extra_kwargs",
+        [
+            ("run_with_callback", "calls", {"output_callback": lambda _: None}),
+            ("run_print_with_output", "print_with_output_calls", {}),
+            ("run_print_quiet", "quiet_calls", {}),
+            ("run_streaming", "streaming_calls", {}),
+        ],
+    )
+    def test_model_kwarg_recorded(self, method: str, call_list_attr: str, extra_kwargs: dict):
+        """model kwarg is recorded across all run methods."""
         fb = FakeBackend([(True, "ok")])
-        fb.run_with_callback("p", output_callback=lambda _: None, model="claude-3")
-        assert fb.calls[0][1]["model"] == "claude-3"
-
-    def test_model_recorded_in_run_print_with_output(self):
-        """model kwarg is recorded in run_print_with_output calls."""
-        fb = FakeBackend([(True, "ok")])
-        fb.run_print_with_output("p", model="gpt-4")
-        assert fb.print_with_output_calls[0][1]["model"] == "gpt-4"
-
-    def test_model_recorded_in_run_print_quiet(self):
-        """model kwarg is recorded in run_print_quiet calls."""
-        fb = FakeBackend([(True, "ok")])
-        fb.run_print_quiet("p", model="sonnet")
-        assert fb.quiet_calls[0][1]["model"] == "sonnet"
-
-    def test_model_recorded_in_run_streaming(self):
-        """model kwarg is recorded in run_streaming calls."""
-        fb = FakeBackend([(True, "ok")])
-        fb.run_streaming("p", model="opus")
-        assert fb.streaming_calls[0][1]["model"] == "opus"
+        getattr(fb, method)("p", model="test-model", **extra_kwargs)
+        call_list = getattr(fb, call_list_attr)
+        assert call_list[0][1]["model"] == "test-model"
 
     def test_model_none_by_default(self):
         """model defaults to None when not specified."""
@@ -368,7 +348,6 @@ class TestFakeBackendEdgeCases:
         success, output = fb.run_with_callback("p", output_callback=lines.append)
         assert success is True
         assert output == ""
-        # splitlines() on empty string returns [], so callback is never called
         assert lines == []
 
     def test_mixed_method_calls_share_call_count(self):

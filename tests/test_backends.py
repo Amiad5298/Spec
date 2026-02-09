@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from spec.config.compatibility import get_platform_support
-from spec.config.fetch_config import AgentPlatform
+from spec.config.fetch_config import AgentPlatform, ConfigValidationError
 from spec.integrations.backends.base import AIBackend
 from spec.integrations.backends.factory import BackendFactory
 from spec.integrations.providers.base import Platform
@@ -57,8 +57,8 @@ class TestBackendFactory:
         assert backend.platform == AgentPlatform.CURSOR
 
     def test_create_unknown_backend_raises(self):
-        """Factory raises for unknown string platforms."""
-        with pytest.raises((ValueError, Exception)):
+        """Factory raises ConfigValidationError for unknown string platforms."""
+        with pytest.raises(ConfigValidationError, match="Invalid AI backend"):
             BackendFactory.create("unknown")
 
     def test_manual_backend_raises(self):
@@ -83,91 +83,54 @@ class TestBackendFactory:
         assert b1 is not b2
 
 
+_RATE_LIMIT_PLATFORMS = [
+    AgentPlatform.AUGGIE,
+    AgentPlatform.CLAUDE,
+    AgentPlatform.CURSOR,
+]
+
+
+@pytest.mark.parametrize("platform", _RATE_LIMIT_PLATFORMS, ids=lambda p: p.value)
 class TestRateLimitDetection:
-    """Tests for per-backend rate limit detection."""
+    """Tests for per-backend rate limit detection.
 
-    def test_auggie_detects_429(self):
-        """AuggieBackend detects HTTP 429."""
-        from spec.integrations.backends.auggie import AuggieBackend
+    All backends share matches_common_rate_limit() so 429 and keyword
+    detection should be consistent. Backend-specific keywords (e.g.
+    Cursor's 'quota exceeded') are tested in the specific methods below.
+    """
 
-        backend = AuggieBackend()
+    def test_detects_429(self, platform: AgentPlatform):
+        """Backend detects HTTP 429."""
+        backend = BackendFactory.create(platform)
         assert backend.detect_rate_limit("Error 429: Too many requests") is True
 
-    def test_auggie_detects_rate_limit_keyword(self):
-        """AuggieBackend detects 'rate limit' text."""
-        from spec.integrations.backends.auggie import AuggieBackend
-
-        backend = AuggieBackend()
+    def test_detects_rate_limit_keyword(self, platform: AgentPlatform):
+        """Backend detects 'rate limit' text."""
+        backend = BackendFactory.create(platform)
         assert backend.detect_rate_limit("rate limit exceeded") is True
 
-    def test_auggie_normal_output_not_rate_limited(self):
-        """AuggieBackend returns False for normal output."""
-        from spec.integrations.backends.auggie import AuggieBackend
-
-        backend = AuggieBackend()
+    def test_normal_output_not_rate_limited(self, platform: AgentPlatform):
+        """Backend returns False for normal output."""
+        backend = BackendFactory.create(platform)
         assert backend.detect_rate_limit("Task completed successfully") is False
 
-    def test_claude_detects_429(self):
-        """ClaudeBackend detects HTTP 429."""
-        from spec.integrations.backends.claude import ClaudeBackend
 
-        backend = ClaudeBackend()
-        assert backend.detect_rate_limit("Error 429: Too many requests") is True
-
-    def test_claude_detects_rate_limit_keyword(self):
-        """ClaudeBackend detects 'rate limit' text."""
-        from spec.integrations.backends.claude import ClaudeBackend
-
-        backend = ClaudeBackend()
-        assert backend.detect_rate_limit("rate limit exceeded") is True
-
-    def test_claude_normal_output_not_rate_limited(self):
-        """ClaudeBackend returns False for normal output."""
-        from spec.integrations.backends.claude import ClaudeBackend
-
-        backend = ClaudeBackend()
-        assert backend.detect_rate_limit("Task completed successfully") is False
-
-    def test_cursor_detects_429(self):
-        """CursorBackend detects HTTP 429."""
-        from spec.integrations.backends.cursor import CursorBackend
-
-        backend = CursorBackend()
-        assert backend.detect_rate_limit("Error 429: Too many requests") is True
+class TestRateLimitDetectionBackendSpecific:
+    """Backend-specific rate-limit keyword tests."""
 
     def test_cursor_detects_quota_exceeded(self):
         """CursorBackend detects 'quota exceeded' text."""
-        from spec.integrations.backends.cursor import CursorBackend
-
-        backend = CursorBackend()
+        backend = BackendFactory.create(AgentPlatform.CURSOR)
         assert backend.detect_rate_limit("quota exceeded") is True
-
-    def test_cursor_normal_output_not_rate_limited(self):
-        """CursorBackend returns False for normal output."""
-        from spec.integrations.backends.cursor import CursorBackend
-
-        backend = CursorBackend()
-        assert backend.detect_rate_limit("Task completed successfully") is False
-
-    def test_all_backends_detect_429(self):
-        """All backends detect HTTP 429 consistently."""
-        for platform in (AgentPlatform.AUGGIE, AgentPlatform.CLAUDE, AgentPlatform.CURSOR):
-            backend = BackendFactory.create(platform)
-            assert (
-                backend.detect_rate_limit("Error 429: rate limit") is True
-            ), f"{backend.name} failed to detect 429"
-
-    def test_all_backends_reject_normal_output(self):
-        """All backends return False for normal output."""
-        for platform in (AgentPlatform.AUGGIE, AgentPlatform.CLAUDE, AgentPlatform.CURSOR):
-            backend = BackendFactory.create(platform)
-            assert (
-                backend.detect_rate_limit("Task completed successfully") is False
-            ), f"{backend.name} false positive on normal output"
 
 
 class TestCompatibilityMatrix:
-    """Tests for the backend-platform MCP support compatibility matrix."""
+    """Tests for the backend-platform MCP support compatibility matrix.
+
+    These tests mirror the current state of MCP_SUPPORT and API_SUPPORT
+    in spec/config/compatibility.py. If those dicts change, update these
+    tests accordingly.
+    """
 
     def test_auggie_supports_jira_mcp(self):
         """Auggie supports Jira via MCP."""

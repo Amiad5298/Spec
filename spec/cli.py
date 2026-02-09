@@ -9,12 +9,11 @@ Supports tickets from all 6 platforms: Jira, Linear, GitHub, Azure DevOps, Monda
 import asyncio
 import re
 from collections.abc import Callable, Coroutine
-from typing import Annotated, TypeVar
+from typing import Annotated, NoReturn, TypeVar
 
 import typer
 
 from spec.config.manager import ConfigManager
-from spec.integrations.auggie import check_auggie_installed, install_auggie
 from spec.integrations.auth import AuthenticationManager
 from spec.integrations.backends.base import AIBackend
 from spec.integrations.backends.errors import BackendNotConfiguredError, BackendNotInstalledError
@@ -27,6 +26,7 @@ from spec.integrations.providers.exceptions import (
 )
 from spec.integrations.providers.registry import ProviderRegistry
 from spec.integrations.ticket_service import TicketService, create_ticket_service
+from spec.onboarding import is_first_run, run_onboarding
 from spec.ui.menus import MainMenuChoice, show_main_menu
 from spec.utils.console import (
     print_error,
@@ -646,16 +646,11 @@ def _check_prerequisites(config: ConfigManager, force_integration_check: bool) -
         print_error("Not in a git repository. Please run from a git repository.")
         return False
 
-    # Check Auggie installation
-    is_valid, message = check_auggie_installed()
-    if not is_valid:
-        print_error(message)
-        from spec.ui.prompts import prompt_confirm
-
-        if prompt_confirm("Would you like to install Auggie CLI now?"):
-            if not install_auggie():
-                return False
-        else:
+    # Run onboarding if no backend is configured
+    if is_first_run(config):
+        result = run_onboarding(config)
+        if not result.success:
+            print_error(result.error_message or "Backend setup cancelled.")
             return False
 
     # Warn user if they provided --force-integration-check flag
@@ -771,6 +766,97 @@ def _configure_settings(config: ConfigManager) -> None:
     print_info("Configuration saved!")
 
 
+def _handle_fetch_error(exc: Exception) -> NoReturn:
+    """Map a ticket-fetch exception to a user-facing message and raise typer.Exit.
+
+    This provides a single source of truth for error-to-message mapping,
+    used by both the initial fetch and the retry-after-onboarding paths
+    in _fetch_ticket_with_onboarding.
+
+    Re-raises typer.Exit, SystemExit, and KeyboardInterrupt directly.
+    """
+    if isinstance(exc, typer.Exit | SystemExit | KeyboardInterrupt):
+        raise exc
+    if isinstance(exc, TicketNotFoundError):
+        print_error(f"Ticket not found: {exc}")
+    elif isinstance(exc, AuthenticationError):
+        print_error(f"Authentication failed: {exc}")
+    elif isinstance(exc, PlatformNotSupportedError):
+        print_error(f"Platform not supported: {exc}")
+    elif isinstance(exc, AsyncLoopAlreadyRunningError | BackendNotInstalledError):
+        print_error(str(exc))
+    elif isinstance(exc, NotImplementedError):
+        print_error(f"Backend not available: {exc}")
+    elif isinstance(exc, ValueError):
+        print_error(f"Invalid backend configuration: {exc}")
+    elif isinstance(exc, SpecError):
+        print_error(str(exc))
+        raise typer.Exit(exc.exit_code) from exc
+    else:
+        print_error(f"Failed to fetch ticket: {exc}")
+    raise typer.Exit(ExitCode.GENERAL_ERROR) from exc
+
+
+def _fetch_ticket_with_onboarding(
+    ticket: str,
+    config: ConfigManager,
+    effective_platform: Platform | None,
+    backend: str | None,
+) -> tuple[GenericTicket, AIBackend]:
+    """Fetch ticket, running onboarding if no backend is configured.
+
+    If the initial fetch fails with BackendNotConfiguredError, runs the
+    onboarding wizard and retries once.
+
+    Args:
+        ticket: Ticket ID or URL
+        config: Configuration manager
+        effective_platform: Resolved platform hint (may be None)
+        backend: CLI --backend override (may be None)
+
+    Returns:
+        Tuple of (GenericTicket, AIBackend)
+
+    Raises:
+        typer.Exit: On any unrecoverable error
+    """
+    try:
+        return run_async(
+            lambda: _fetch_ticket_async(
+                ticket,
+                config,
+                platform_hint=effective_platform,
+                cli_backend_override=backend,
+            )
+        )
+    except BackendNotConfiguredError as e:
+        # Reload config in case _check_prerequisites already ran onboarding
+        config.load()
+        if not is_first_run(config):
+            # Backend was saved but resolver failed for another reason
+            print_error(str(e))
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+
+        result = run_onboarding(config)
+        if not result.success:
+            print_error(result.error_message or "Backend setup cancelled.")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+        # Retry ticket fetch now that backend is configured
+        try:
+            return run_async(
+                lambda: _fetch_ticket_async(
+                    ticket,
+                    config,
+                    platform_hint=effective_platform,
+                    cli_backend_override=backend,
+                )
+            )
+        except Exception as retry_exc:
+            _handle_fetch_error(retry_exc)
+    except Exception as e:
+        _handle_fetch_error(e)
+
+
 def _run_workflow(
     ticket: str,
     config: ConfigManager,
@@ -825,50 +911,9 @@ def _run_workflow(
 
     # Fetch ticket using TicketService (async)
     # Use run_async helper to safely handle existing event loops
-    try:
-        generic_ticket, ai_backend = run_async(
-            lambda: _fetch_ticket_async(
-                ticket,
-                config,
-                platform_hint=effective_platform,
-                cli_backend_override=backend,
-            )
-        )
-    except TicketNotFoundError as e:
-        print_error(f"Ticket not found: {e}")
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except AuthenticationError as e:
-        print_error(f"Authentication failed: {e}")
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except PlatformNotSupportedError as e:
-        print_error(f"Platform not supported: {e}")
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except AsyncLoopAlreadyRunningError as e:
-        print_error(str(e))
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except BackendNotConfiguredError as e:
-        print_error(str(e))
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except BackendNotInstalledError as e:
-        print_error(str(e))
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except NotImplementedError as e:
-        print_error(f"Backend not available: {e}")
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except ValueError as e:
-        print_error(f"Invalid backend configuration: {e}")
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
-    except (typer.Exit, SystemExit, KeyboardInterrupt):
-        # Allow typer.Exit, SystemExit, and KeyboardInterrupt to propagate
-        raise
-    except SpecError as e:
-        # Handle any other SpecError subclasses
-        print_error(str(e))
-        raise typer.Exit(e.exit_code) from e
-    except Exception as e:
-        # Final catch-all for unexpected errors
-        print_error(f"Failed to fetch ticket: {e}")
-        raise typer.Exit(ExitCode.GENERAL_ERROR) from e
+    generic_ticket, ai_backend = _fetch_ticket_with_onboarding(
+        ticket, config, effective_platform, backend
+    )
 
     # Determine models
     effective_planning_model = (
@@ -902,7 +947,7 @@ def _run_workflow(
             effective_dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
         else:
             print_error(
-                f"Invalid --dirty-tree-policy '{dirty_tree_policy}'. " "Use 'fail-fast' or 'warn'."
+                f"Invalid --dirty-tree-policy '{dirty_tree_policy}'. Use 'fail-fast' or 'warn'."
             )
             raise typer.Exit(ExitCode.GENERAL_ERROR)
 

@@ -24,8 +24,11 @@ class FakeBackend:
     bugs.
 
     Attributes:
-        call_count: Total number of run_with_callback calls made.
-        calls: List of (prompt, kwargs) tuples for each call.
+        call_count: Total number of calls made (across all run_* methods).
+        calls: List of (prompt, kwargs) tuples for each run_with_callback call.
+        quiet_calls: List of (prompt, kwargs) tuples for each run_print_quiet call.
+        print_with_output_calls: List of (prompt, kwargs) tuples for each run_print_with_output call.
+        streaming_calls: List of (prompt, kwargs) tuples for each run_streaming call.
     """
 
     def __init__(
@@ -48,6 +51,9 @@ class FakeBackend:
         self._platform = platform
         self.call_count: int = 0
         self.calls: list[tuple[str, dict]] = []
+        self.quiet_calls: list[tuple[str, dict]] = []
+        self.print_with_output_calls: list[tuple[str, dict]] = []
+        self.streaming_calls: list[tuple[str, dict]] = []
 
     def _next_response(self) -> tuple[bool, str]:
         """Return the next response, raising IndexError if exhausted."""
@@ -108,6 +114,13 @@ class FakeBackend:
         dont_save_session: bool = False,
         timeout_seconds: float | None = None,
     ) -> tuple[bool, str]:
+        kwargs = {
+            "subagent": subagent,
+            "model": model,
+            "dont_save_session": dont_save_session,
+            "timeout_seconds": timeout_seconds,
+        }
+        self.print_with_output_calls.append((prompt, kwargs))
         return self._next_response()
 
     def run_print_quiet(
@@ -119,6 +132,13 @@ class FakeBackend:
         dont_save_session: bool = False,
         timeout_seconds: float | None = None,
     ) -> str:
+        kwargs = {
+            "subagent": subagent,
+            "model": model,
+            "dont_save_session": dont_save_session,
+            "timeout_seconds": timeout_seconds,
+        }
+        self.quiet_calls.append((prompt, kwargs))
         return self._next_response()[1]
 
     def run_streaming(
@@ -129,6 +149,12 @@ class FakeBackend:
         model: str | None = None,
         timeout_seconds: float | None = None,
     ) -> tuple[bool, str]:
+        kwargs = {
+            "subagent": subagent,
+            "model": model,
+            "timeout_seconds": timeout_seconds,
+        }
+        self.streaming_calls.append((prompt, kwargs))
         return self._next_response()
 
     def check_installed(self) -> tuple[bool, str]:

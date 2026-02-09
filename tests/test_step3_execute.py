@@ -2075,6 +2075,91 @@ class TestExecuteTaskWithCallbackRateLimit:
         assert result is False
 
 
+class TestRateLimitFlowWithFakeBackend:
+    """End-to-end rate limit retry flow tests using FakeBackend."""
+
+    def test_full_rate_limit_retry_flow(self, workflow_state):
+        """Rate-limited backend retries and eventually succeeds."""
+        from spec.workflow.state import RateLimitConfig
+        from spec.workflow.step3_execute import _execute_task_with_retry
+        from tests.fakes.fake_backend import make_rate_limited_backend
+
+        backend = make_rate_limited_backend(fail_count=2)
+        workflow_state.rate_limit_config = RateLimitConfig(
+            max_retries=3,
+            base_delay_seconds=0.01,
+            max_delay_seconds=0.1,
+            jitter_factor=0.0,
+        )
+
+        task = Task(name="Retry Task")
+        callback = MagicMock()
+        result = _execute_task_with_retry(
+            workflow_state,
+            task,
+            workflow_state.get_plan_path(),
+            backend=backend,
+            callback=callback,
+        )
+
+        assert result is True
+        assert backend.call_count == 3
+
+    def test_rate_limit_exhaustion_with_fake_backend(self, workflow_state):
+        """More failures than retries exhausts retries and returns False."""
+        from spec.workflow.state import RateLimitConfig
+        from spec.workflow.step3_execute import _execute_task_with_retry
+        from tests.fakes.fake_backend import FakeBackend
+
+        # 5 rate-limit failures, only 2 retries allowed
+        responses = [(False, "Error 429: rate limit hit")] * 5
+        backend = FakeBackend(responses)
+        workflow_state.rate_limit_config = RateLimitConfig(
+            max_retries=2,
+            base_delay_seconds=0.01,
+            max_delay_seconds=0.1,
+            jitter_factor=0.0,
+        )
+
+        task = Task(name="Exhaustion Task")
+        callback = MagicMock()
+        result = _execute_task_with_retry(
+            workflow_state,
+            task,
+            workflow_state.get_plan_path(),
+            backend=backend,
+            callback=callback,
+        )
+
+        assert result is False
+
+    def test_non_callback_path_retries_on_rate_limit(self, workflow_state):
+        """Non-callback path (_execute_task) also triggers retry on rate limit."""
+        from spec.workflow.state import RateLimitConfig
+        from spec.workflow.step3_execute import _execute_task_with_retry
+        from tests.fakes.fake_backend import make_rate_limited_backend
+
+        backend = make_rate_limited_backend(fail_count=1)
+        workflow_state.rate_limit_config = RateLimitConfig(
+            max_retries=3,
+            base_delay_seconds=0.01,
+            max_delay_seconds=0.1,
+            jitter_factor=0.0,
+        )
+
+        task = Task(name="No-Callback Retry Task")
+        result = _execute_task_with_retry(
+            workflow_state,
+            task,
+            workflow_state.get_plan_path(),
+            backend=backend,
+            callback=None,
+        )
+
+        assert result is True
+        assert backend.call_count == 2
+
+
 class TestCaptureBaselineForDiffs:
     """Tests for _capture_baseline_for_diffs function."""
 

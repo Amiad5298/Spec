@@ -155,6 +155,15 @@ def _is_retryable_error(error: Exception, config: "RateLimitConfig") -> bool:
     Returns:
         True if the error is retryable, False otherwise
     """
+    # Lazy imports to break circular dependency:
+    # auggie.py -> utils/console -> utils/__init__ -> utils/retry -> auggie.py
+    # backends/__init__.py eagerly imports all backends, which pull auggie.py
+    from spec.integrations.auggie import AuggieRateLimitError
+    from spec.integrations.backends.errors import BackendRateLimitError
+
+    if isinstance(error, BackendRateLimitError | AuggieRateLimitError):
+        return True
+
     error_str = str(error).lower()
 
     # Check for HTTP status codes in error message
@@ -180,4 +189,3 @@ __all__ = [
     "calculate_backoff_delay",
     "with_rate_limit_retry",
 ]
-

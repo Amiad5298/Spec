@@ -1,0 +1,149 @@
+"""Reusable FakeBackend for testing rate limit and retry flows.
+
+Provides a configurable fake that implements the AIBackend protocol,
+allowing tests to control responses, track calls, and simulate
+rate limit scenarios without real CLI invocations.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+from spec.config.fetch_config import AgentPlatform
+from spec.integrations.backends.base import matches_common_rate_limit
+
+
+class FakeBackend:
+    """Fake AIBackend that cycles through pre-configured responses.
+
+    Uses the same ``matches_common_rate_limit`` helper as real backends
+    so that rate-limit detection behaviour is consistent in tests.
+
+    Attributes:
+        call_count: Total number of run_with_callback calls made.
+        calls: List of (prompt, kwargs) tuples for each call.
+    """
+
+    def __init__(
+        self,
+        responses: list[tuple[bool, str]],
+    ) -> None:
+        """Initialize with a list of (success, output) responses.
+
+        Args:
+            responses: Ordered list of (success, output) tuples to return.
+                       Cycles back to start if more calls than responses.
+        """
+        self._responses = responses
+        self.call_count: int = 0
+        self.calls: list[tuple[str, dict]] = []
+
+    @property
+    def name(self) -> str:
+        return "FakeBackend"
+
+    @property
+    def platform(self) -> AgentPlatform:
+        return AgentPlatform.AUGGIE
+
+    @property
+    def model(self) -> str:
+        return ""
+
+    @property
+    def supports_parallel(self) -> bool:
+        return True
+
+    def run_with_callback(
+        self,
+        prompt: str,
+        *,
+        output_callback: Callable[[str], None],
+        subagent: str | None = None,
+        model: str | None = None,
+        dont_save_session: bool = False,
+        timeout_seconds: float | None = None,
+    ) -> tuple[bool, str]:
+        kwargs = {
+            "subagent": subagent,
+            "model": model,
+            "dont_save_session": dont_save_session,
+            "timeout_seconds": timeout_seconds,
+        }
+        self.calls.append((prompt, kwargs))
+        idx = self.call_count % len(self._responses)
+        self.call_count += 1
+        success, output = self._responses[idx]
+        # Stream output to callback line-by-line
+        for line in output.splitlines():
+            output_callback(line)
+        return success, output
+
+    def run_print_with_output(
+        self,
+        prompt: str,
+        *,
+        subagent: str | None = None,
+        model: str | None = None,
+        dont_save_session: bool = False,
+        timeout_seconds: float | None = None,
+    ) -> tuple[bool, str]:
+        idx = self.call_count % len(self._responses)
+        self.call_count += 1
+        return self._responses[idx]
+
+    def run_print_quiet(
+        self,
+        prompt: str,
+        *,
+        subagent: str | None = None,
+        model: str | None = None,
+        dont_save_session: bool = False,
+        timeout_seconds: float | None = None,
+    ) -> str:
+        idx = self.call_count % len(self._responses)
+        self.call_count += 1
+        return self._responses[idx][1]
+
+    def run_streaming(
+        self,
+        prompt: str,
+        *,
+        subagent: str | None = None,
+        model: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> tuple[bool, str]:
+        idx = self.call_count % len(self._responses)
+        self.call_count += 1
+        return self._responses[idx]
+
+    def check_installed(self) -> tuple[bool, str]:
+        return True, "FakeBackend 1.0.0"
+
+    def detect_rate_limit(self, output: str) -> bool:
+        return matches_common_rate_limit(output)
+
+    def supports_parallel_execution(self) -> bool:
+        return self.supports_parallel
+
+    def close(self) -> None:
+        pass
+
+
+def make_rate_limited_backend(fail_count: int = 2) -> FakeBackend:
+    """Create a FakeBackend that fails with rate limit output N times then succeeds.
+
+    The first `fail_count` calls return (False, "Error 429: rate limit hit").
+    Subsequent calls return (True, "Task completed successfully").
+
+    Args:
+        fail_count: Number of rate-limited failures before success.
+
+    Returns:
+        Configured FakeBackend instance.
+    """
+    responses: list[tuple[bool, str]] = []
+    for _ in range(fail_count):
+        responses.append((False, "Error 429: rate limit hit"))
+    responses.append((True, "Task completed successfully"))
+    return FakeBackend(responses)

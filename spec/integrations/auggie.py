@@ -141,7 +141,8 @@ def looks_like_rate_limit(output: str) -> bool:
     """Heuristic check for rate limit errors in output.
 
     Detects rate limit errors by checking for common HTTP status codes
-    and rate limit keywords in the output.
+    and rate limit keywords in the output.  Uses word-boundary matching
+    for numeric status codes to avoid false positives on ticket IDs.
 
     Args:
         output: The output string to check
@@ -149,20 +150,9 @@ def looks_like_rate_limit(output: str) -> bool:
     Returns:
         True if the output looks like a rate limit error
     """
-    output_lower = output.lower()
-    patterns = [
-        "429",
-        "rate limit",
-        "rate_limit",
-        "too many requests",
-        "quota exceeded",
-        "capacity",
-        "throttl",
-        "502",
-        "503",
-        "504",
-    ]
-    return any(p in output_lower for p in patterns)
+    from spec.integrations.backends.base import matches_common_rate_limit
+
+    return matches_common_rate_limit(output, extra_keywords=("capacity",))
 
 
 @dataclass

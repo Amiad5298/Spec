@@ -855,17 +855,23 @@ def _execute_task(
     prompt = _build_task_prompt(task, plan_path, is_parallel=False)
 
     try:
-        success, _ = backend.run_with_callback(
+        success, output = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["implementer"],
             output_callback=lambda _line: None,
             dont_save_session=True,
         )
+        if not success and backend.detect_rate_limit(output):
+            raise BackendRateLimitError(
+                "Rate limit detected", output=output, backend_name=backend.name
+            )
         if success:
             print_success(f"Task completed: {task.name}")
         else:
             print_warning(f"Task returned failure: {task.name}")
         return success
+    except BackendRateLimitError:
+        raise  # Let retry decorator handle
     except Exception as e:
         print_error(f"Task execution crashed: {e}")
         return False

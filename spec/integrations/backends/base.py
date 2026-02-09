@@ -10,6 +10,7 @@ User input is collected via the TUI, then included in prompts.
 """
 
 import logging
+import re
 import subprocess
 import threading
 from abc import ABC, abstractmethod
@@ -22,6 +23,45 @@ import yaml
 
 from spec.config.fetch_config import AgentPlatform
 from spec.integrations.backends.errors import BackendTimeoutError
+
+# ── Shared rate-limit detection ──────────────────────────────────────────────
+# Word-boundary regex prevents matching ticket IDs (e.g., "PROJ-4290").
+_HTTP_RATE_LIMIT_STATUS_RE = re.compile(r"\b(429|502|503|504)\b")
+
+_COMMON_RATE_LIMIT_KEYWORDS: tuple[str, ...] = (
+    "rate limit",
+    "rate_limit",
+    "too many requests",
+    "quota exceeded",
+    "throttl",
+)
+
+
+def matches_common_rate_limit(
+    output: str,
+    *,
+    extra_keywords: tuple[str, ...] = (),
+    extra_status_re: re.Pattern[str] | None = None,
+) -> bool:
+    """Check if output matches common rate-limit patterns.
+
+    Shared by all backend looks_like_rate_limit functions.  Backends call
+    this with their own ``extra_keywords`` / ``extra_status_re`` to layer
+    provider-specific patterns on top of the common set.
+
+    Args:
+        output: The output text to check.
+        extra_keywords: Additional substring-match keywords (e.g., "overloaded").
+        extra_status_re: Additional compiled regex for status codes (e.g., ``r"\\b529\\b"``).
+    """
+    output_lower = output.lower()
+    if _HTTP_RATE_LIMIT_STATUS_RE.search(output_lower):
+        return True
+    if extra_status_re and extra_status_re.search(output_lower):
+        return True
+    all_keywords = _COMMON_RATE_LIMIT_KEYWORDS + extra_keywords
+    return any(kw in output_lower for kw in all_keywords)
+
 
 logger = logging.getLogger(__name__)
 

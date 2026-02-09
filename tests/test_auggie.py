@@ -651,6 +651,14 @@ class TestLooksLikeRateLimit:
         assert looks_like_rate_limit("Rate Limit") is True
         assert looks_like_rate_limit("QUOTA EXCEEDED") is True
 
+    def test_none_output_returns_false(self):
+        """None output returns False without raising."""
+        assert looks_like_rate_limit(None) is False
+
+    def test_empty_string_returns_false(self):
+        """Empty string returns False."""
+        assert looks_like_rate_limit("") is False
+
 
 class TestSubagentConstants:
     """Tests for subagent constants."""

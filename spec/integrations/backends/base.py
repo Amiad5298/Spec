@@ -57,6 +57,8 @@ def matches_common_rate_limit(
         extra_keywords: Additional substring-match keywords (e.g., "overloaded").
         extra_status_re: Additional compiled regex for status codes (e.g., ``r"\\b529\\b"``).
     """
+    if not output:
+        return False
     output_lower = output.lower()
     if _HTTP_RATE_LIMIT_STATUS_RE.search(output_lower):
         return True

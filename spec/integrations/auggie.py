@@ -22,6 +22,7 @@ from spec.utils.console import (
     print_success,
     print_warning,
 )
+from spec.utils.errors import AuggieRateLimitError as AuggieRateLimitError
 from spec.utils.logging import log_command, log_message
 
 
@@ -127,14 +128,6 @@ def _parse_agent_definition(agent_name: str) -> AgentDefinition | None:
         )
     except OSError:
         return None
-
-
-class AuggieRateLimitError(Exception):
-    """Raised when Auggie CLI output indicates a rate limit error."""
-
-    def __init__(self, message: str, output: str):
-        super().__init__(message)
-        self.output = output
 
 
 def looks_like_rate_limit(output: str) -> bool:

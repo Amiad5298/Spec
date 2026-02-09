@@ -31,14 +31,21 @@ class FakeBackend:
     def __init__(
         self,
         responses: list[tuple[bool, str]],
+        *,
+        installed: bool = True,
+        platform: AgentPlatform = AgentPlatform.AUGGIE,
     ) -> None:
         """Initialize with a list of (success, output) responses.
 
         Args:
             responses: Ordered list of (success, output) tuples to return.
                        Raises IndexError if more calls than responses.
+            installed: Value returned by check_installed(). Default True.
+            platform: AgentPlatform to report. Default AUGGIE.
         """
         self._responses = responses
+        self._installed = installed
+        self._platform = platform
         self.call_count: int = 0
         self.calls: list[tuple[str, dict]] = []
 
@@ -59,7 +66,7 @@ class FakeBackend:
 
     @property
     def platform(self) -> AgentPlatform:
-        return AgentPlatform.AUGGIE
+        return self._platform
 
     @property
     def model(self) -> str:
@@ -125,7 +132,9 @@ class FakeBackend:
         return self._next_response()
 
     def check_installed(self) -> tuple[bool, str]:
-        return True, "FakeBackend 1.0.0"
+        if self._installed:
+            return True, "FakeBackend 1.0.0"
+        return False, "FakeBackend is not installed"
 
     def detect_rate_limit(self, output: str) -> bool:
         return matches_common_rate_limit(output)

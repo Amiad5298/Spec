@@ -473,6 +473,10 @@ class TestLooksLikeRateLimit:
         """Normal output returns False."""
         assert looks_like_rate_limit("Successfully generated code") is False
 
+    def test_none_output_returns_false(self):
+        """None output returns False without raising."""
+        assert looks_like_rate_limit(None) is False
+
     def test_empty_string_returns_false(self):
         """Empty string returns False."""
         assert looks_like_rate_limit("") is False

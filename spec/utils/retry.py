@@ -14,6 +14,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from spec.utils.errors import AuggieRateLimitError, BackendRateLimitError
+
 if TYPE_CHECKING:
     from spec.workflow.state import RateLimitConfig
 
@@ -156,12 +158,6 @@ def _is_retryable_error(error: Exception, config: "RateLimitConfig") -> bool:
     Returns:
         True if the error is retryable, False otherwise
     """
-    # Lazy imports to break circular dependency:
-    # auggie.py -> utils/console -> utils/__init__ -> utils/retry -> auggie.py
-    # backends/__init__.py eagerly imports all backends, which pull auggie.py
-    from spec.integrations.auggie import AuggieRateLimitError
-    from spec.integrations.backends.errors import BackendRateLimitError
-
     if isinstance(error, BackendRateLimitError | AuggieRateLimitError):
         return True
 
@@ -169,8 +165,10 @@ def _is_retryable_error(error: Exception, config: "RateLimitConfig") -> bool:
 
     # Check for HTTP status codes in error message using word boundaries
     # to avoid false positives (e.g., "PROJ-4290" should not match 429).
-    for status_code in config.retryable_status_codes:
-        if re.search(rf"\b{status_code}\b", error_str):
+    # Compile a single combined regex for all configured status codes.
+    if config.retryable_status_codes:
+        codes_pattern = "|".join(str(c) for c in config.retryable_status_codes)
+        if re.search(rf"\b(?:{codes_pattern})\b", error_str):
             return True
 
     # Check for common rate limit keywords

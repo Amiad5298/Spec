@@ -9,7 +9,7 @@ Supports tickets from all 6 platforms: Jira, Linear, GitHub, Azure DevOps, Monda
 import asyncio
 import re
 from collections.abc import Callable, Coroutine
-from typing import Annotated, NoReturn, TypeVar
+from typing import Annotated, NoReturn
 
 import typer
 
@@ -38,9 +38,6 @@ from ingot.utils.console import (
 )
 from ingot.utils.errors import ExitCode, IngotError, UserCancelledError
 from ingot.utils.logging import setup_logging
-
-# Type variable for async helper
-T = TypeVar("T")
 
 # Platforms that use the PROJECT-123 format and are ambiguous
 # (i.e., can't be distinguished from each other without additional context)
@@ -72,7 +69,7 @@ class AsyncLoopAlreadyRunningError(IngotError):
     _default_exit_code = ExitCode.GENERAL_ERROR
 
 
-def run_async(coro_factory: Callable[[], Coroutine[None, None, T]]) -> T:
+def run_async[T](coro_factory: Callable[[], Coroutine[None, None, T]]) -> T:
     """Run an async coroutine safely, handling existing event loops.
 
     This helper detects if an event loop is already running (e.g., in Jupyter

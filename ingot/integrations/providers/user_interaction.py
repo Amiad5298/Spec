@@ -9,13 +9,13 @@ that providers never call print() or input() directly. This enables:
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 
 
 @dataclass
-class SelectOption(Generic[T]):
+class SelectOption[T]:
     """An option for user selection.
 
     Attributes:

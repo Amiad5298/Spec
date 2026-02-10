@@ -1,8 +1,8 @@
-"""Tests for spec.workflow.events module."""
+"""Tests for ingot.workflow.events module."""
 
 import time
 
-from spec.workflow.events import (
+from ingot.workflow.events import (
     TaskEvent,
     TaskEventType,
     TaskRunRecord,
@@ -99,30 +99,22 @@ class TestTaskRunRecord:
 
     def test_status_icon_running(self):
         """RUNNING status returns correct icon."""
-        record = TaskRunRecord(
-            task_index=0, task_name="Test", status=TaskRunStatus.RUNNING
-        )
+        record = TaskRunRecord(task_index=0, task_name="Test", status=TaskRunStatus.RUNNING)
         assert record.get_status_icon() == "⟳"
 
     def test_status_icon_success(self):
         """SUCCESS status returns correct icon."""
-        record = TaskRunRecord(
-            task_index=0, task_name="Test", status=TaskRunStatus.SUCCESS
-        )
+        record = TaskRunRecord(task_index=0, task_name="Test", status=TaskRunStatus.SUCCESS)
         assert record.get_status_icon() == "✓"
 
     def test_status_icon_failed(self):
         """FAILED status returns correct icon."""
-        record = TaskRunRecord(
-            task_index=0, task_name="Test", status=TaskRunStatus.FAILED
-        )
+        record = TaskRunRecord(task_index=0, task_name="Test", status=TaskRunStatus.FAILED)
         assert record.get_status_icon() == "✗"
 
     def test_status_icon_skipped(self):
         """SKIPPED status returns correct icon."""
-        record = TaskRunRecord(
-            task_index=0, task_name="Test", status=TaskRunStatus.SKIPPED
-        )
+        record = TaskRunRecord(task_index=0, task_name="Test", status=TaskRunStatus.SKIPPED)
         assert record.get_status_icon() == "⊘"
 
     def test_status_color_mapping(self):
@@ -356,4 +348,3 @@ class TestEventFactories:
             "failed_count": 1,
             "skipped_count": 1,
         }
-

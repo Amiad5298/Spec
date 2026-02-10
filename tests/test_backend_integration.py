@@ -1,6 +1,6 @@
 """Integration tests for multi-backend system.
 
-All tests are gated behind SPEC_INTEGRATION_TESTS=1 and require the
+All tests are gated behind INGOT_INTEGRATION_TESTS=1 and require the
 actual backend CLIs to be installed. These tests verify real backend
 instances against the AIBackend protocol contract.
 
@@ -9,7 +9,7 @@ Usage:
     pytest tests/test_backend_integration.py -v
 
     # Run when enabled (requires CLIs installed):
-    SPEC_INTEGRATION_TESTS=1 pytest tests/test_backend_integration.py -v
+    INGOT_INTEGRATION_TESTS=1 pytest tests/test_backend_integration.py -v
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ import os
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.factory import BackendFactory
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests disabled. Set SPEC_INTEGRATION_TESTS=1 to enable.",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests disabled. Set INGOT_INTEGRATION_TESTS=1 to enable.",
 )
 
 _PLATFORMS = [

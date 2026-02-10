@@ -1,4 +1,4 @@
-"""Tests for GitHubProvider in spec.integrations.providers.github module.
+"""Tests for GitHubProvider in ingot.integrations.providers.github module.
 
 Tests cover:
 - Provider registration with ProviderRegistry
@@ -11,15 +11,15 @@ Tests cover:
 
 import pytest
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.github import (
+from ingot.integrations.providers.github import (
     GitHubProvider,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 @pytest.fixture(autouse=True)

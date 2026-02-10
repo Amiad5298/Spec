@@ -1,4 +1,4 @@
-"""Tests for the onboarding infrastructure (spec.onboarding)."""
+"""Tests for the onboarding infrastructure (ingot.onboarding)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.onboarding import OnboardingResult, is_first_run
-from spec.onboarding.flow import OnboardingFlow
-from spec.utils.errors import SpecError, UserCancelledError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.onboarding import OnboardingResult, is_first_run
+from ingot.onboarding.flow import OnboardingFlow
+from ingot.utils.errors import IngotError, UserCancelledError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,19 +80,19 @@ class TestIsFirstRun:
 
 
 class TestSelectBackend:
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_select_auggie(self, mock_select):
         mock_select.return_value = "Auggie (Augment Code CLI)"
         flow = OnboardingFlow(_make_config())
         assert flow._select_backend() == AgentPlatform.AUGGIE
 
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_select_claude(self, mock_select):
         mock_select.return_value = "Claude Code CLI"
         flow = OnboardingFlow(_make_config())
         assert flow._select_backend() == AgentPlatform.CLAUDE
 
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_select_cursor(self, mock_select):
         mock_select.return_value = "Cursor"
         flow = OnboardingFlow(_make_config())
@@ -105,8 +105,8 @@ class TestSelectBackend:
 
 
 class TestVerifyInstallation:
-    @patch("spec.onboarding.flow.print_success")
-    @patch("spec.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.BackendFactory")
     def test_installed_success(self, mock_factory, mock_print_success):
         backend_instance = MagicMock()
         backend_instance.check_installed.return_value = (True, "Auggie v1.2.3 found")
@@ -116,10 +116,10 @@ class TestVerifyInstallation:
         assert flow._verify_installation(AgentPlatform.AUGGIE) == AgentPlatform.AUGGIE
         mock_print_success.assert_called_once()
 
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.prompt_confirm")
-    @patch("spec.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.prompt_confirm")
+    @patch("ingot.onboarding.flow.BackendFactory")
     def test_not_installed_shows_instructions(
         self, mock_factory, mock_confirm, mock_error, mock_info
     ):
@@ -134,11 +134,11 @@ class TestVerifyInstallation:
         # Should have shown installation instructions
         mock_info.assert_called()
 
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.print_success")
-    @patch("spec.onboarding.flow.prompt_confirm")
-    @patch("spec.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.prompt_confirm")
+    @patch("ingot.onboarding.flow.BackendFactory")
     def test_retry_succeeds(
         self, mock_factory, mock_confirm, mock_print_success, mock_error, mock_info
     ):
@@ -155,12 +155,12 @@ class TestVerifyInstallation:
         flow = OnboardingFlow(_make_config())
         assert flow._verify_installation(AgentPlatform.AUGGIE) == AgentPlatform.AUGGIE
 
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.print_success")
-    @patch("spec.onboarding.flow.prompt_confirm")
-    @patch("spec.onboarding.flow.prompt_select")
-    @patch("spec.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.prompt_confirm")
+    @patch("ingot.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.BackendFactory")
     def test_switch_backend(
         self,
         mock_factory,
@@ -186,8 +186,8 @@ class TestVerifyInstallation:
         # Returns the switched-to backend, not the original
         assert flow._verify_installation(AgentPlatform.AUGGIE) == AgentPlatform.CLAUDE
 
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.BackendFactory")
     def test_factory_not_implemented_error(self, mock_factory, mock_error):
         """BackendFactory.create raising NotImplementedError returns None."""
         mock_factory.create.side_effect = NotImplementedError("Backend not implemented")
@@ -196,10 +196,10 @@ class TestVerifyInstallation:
         assert flow._verify_installation(AgentPlatform.AUGGIE) is None
         mock_error.assert_called_once()
 
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.prompt_confirm")
-    @patch("spec.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.prompt_confirm")
+    @patch("ingot.onboarding.flow.BackendFactory")
     def test_user_cancelled_during_retry_prompt(
         self, mock_factory, mock_confirm, mock_error, mock_info
     ):
@@ -220,7 +220,7 @@ class TestVerifyInstallation:
 
 
 class TestSaveConfiguration:
-    @patch("spec.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.print_success")
     def test_save_calls_config_save(self, mock_print_success):
         config = _make_config()
         # After save + reload, get should return the saved value
@@ -234,7 +234,7 @@ class TestSaveConfiguration:
         config.save.assert_called_once_with("AI_BACKEND", "claude")
         config.load.assert_called_once()
 
-    @patch("spec.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.print_success")
     def test_readback_verification(self, mock_print_success):
         config = _make_config()
         # Simulate readback returning the correct value
@@ -255,7 +255,7 @@ class TestSaveConfiguration:
         )
 
         flow = OnboardingFlow(config)
-        with pytest.raises(SpecError, match="readback mismatch"):
+        with pytest.raises(IngotError, match="readback mismatch"):
             flow._save_configuration(AgentPlatform.CLAUDE)
 
 
@@ -265,11 +265,11 @@ class TestSaveConfiguration:
 
 
 class TestFullFlow:
-    @patch("spec.onboarding.flow.print_success")
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_header")
-    @patch("spec.onboarding.flow.BackendFactory")
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_header")
+    @patch("ingot.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_full_flow_success(
         self,
         mock_select,
@@ -296,13 +296,13 @@ class TestFullFlow:
         assert result.backend == AgentPlatform.AUGGIE
         config.save.assert_called_once_with("AI_BACKEND", "auggie")
 
-    @patch("spec.onboarding.flow.print_success")
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.print_header")
-    @patch("spec.onboarding.flow.BackendFactory")
-    @patch("spec.onboarding.flow.prompt_confirm")
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.print_header")
+    @patch("ingot.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.prompt_confirm")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_full_flow_backend_switch_saves_correct_backend(
         self,
         mock_select,
@@ -338,9 +338,9 @@ class TestFullFlow:
         assert result.backend == AgentPlatform.CLAUDE
         config.save.assert_called_once_with("AI_BACKEND", "claude")
 
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_header")
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_header")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_full_flow_user_cancelled(self, mock_select, mock_header, mock_info):
         mock_select.side_effect = UserCancelledError("cancelled")
 
@@ -350,12 +350,12 @@ class TestFullFlow:
         assert result.success is False
         assert "cancelled" in result.error_message.lower()
 
-    @patch("spec.onboarding.flow.print_error")
-    @patch("spec.onboarding.flow.print_success")
-    @patch("spec.onboarding.flow.print_info")
-    @patch("spec.onboarding.flow.print_header")
-    @patch("spec.onboarding.flow.BackendFactory")
-    @patch("spec.onboarding.flow.prompt_select")
+    @patch("ingot.onboarding.flow.print_error")
+    @patch("ingot.onboarding.flow.print_success")
+    @patch("ingot.onboarding.flow.print_info")
+    @patch("ingot.onboarding.flow.print_header")
+    @patch("ingot.onboarding.flow.BackendFactory")
+    @patch("ingot.onboarding.flow.prompt_select")
     def test_full_flow_save_spec_error_returns_failure(
         self,
         mock_select,
@@ -365,7 +365,7 @@ class TestFullFlow:
         mock_print_success,
         mock_print_error,
     ):
-        """SpecError from _save_configuration returns failure result instead of crashing."""
+        """IngotError from _save_configuration returns failure result instead of crashing."""
         mock_select.return_value = "Auggie (Augment Code CLI)"
 
         backend_instance = MagicMock()
@@ -397,11 +397,11 @@ class TestFullFlow:
 
 
 class TestCLIIntegration:
-    @patch("spec.cli.run_onboarding")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.is_git_repo")
+    @patch("ingot.cli.run_onboarding")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.is_git_repo")
     def test_check_prerequisites_triggers_onboarding(self, mock_git, mock_first_run, mock_onboard):
-        from spec.cli import _check_prerequisites
+        from ingot.cli import _check_prerequisites
 
         mock_git.return_value = True
         mock_first_run.return_value = True
@@ -411,11 +411,11 @@ class TestCLIIntegration:
         assert _check_prerequisites(config, force_integration_check=False) is True
         mock_onboard.assert_called_once_with(config)
 
-    @patch("spec.cli.run_onboarding")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.is_git_repo")
+    @patch("ingot.cli.run_onboarding")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.is_git_repo")
     def test_check_prerequisites_onboarding_failure(self, mock_git, mock_first_run, mock_onboard):
-        from spec.cli import _check_prerequisites
+        from ingot.cli import _check_prerequisites
 
         mock_git.return_value = True
         mock_first_run.return_value = True
@@ -424,10 +424,10 @@ class TestCLIIntegration:
         config = _make_config()
         assert _check_prerequisites(config, force_integration_check=False) is False
 
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.is_git_repo")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.is_git_repo")
     def test_check_prerequisites_skips_onboarding_when_configured(self, mock_git, mock_first_run):
-        from spec.cli import _check_prerequisites
+        from ingot.cli import _check_prerequisites
 
         mock_git.return_value = True
         mock_first_run.return_value = False
@@ -444,30 +444,30 @@ class TestCLIIntegration:
 class TestCompatibilityMatrix:
     def test_mcp_support_covers_all_backends(self):
         """Every AgentPlatform member has an entry in MCP_SUPPORT."""
-        from spec.config.compatibility import MCP_SUPPORT
+        from ingot.config.compatibility import MCP_SUPPORT
 
         for member in AgentPlatform:
             assert member in MCP_SUPPORT, f"MCP_SUPPORT missing entry for {member}"
 
     def test_get_platform_support_mcp(self):
-        from spec.config.compatibility import get_platform_support
-        from spec.integrations.providers.base import Platform
+        from ingot.config.compatibility import get_platform_support
+        from ingot.integrations.providers.base import Platform
 
         supported, mechanism = get_platform_support(AgentPlatform.AUGGIE, Platform.JIRA)
         assert supported is True
         assert mechanism == "mcp"
 
     def test_get_platform_support_api_fallback(self):
-        from spec.config.compatibility import get_platform_support
-        from spec.integrations.providers.base import Platform
+        from ingot.config.compatibility import get_platform_support
+        from ingot.integrations.providers.base import Platform
 
         supported, mechanism = get_platform_support(AgentPlatform.MANUAL, Platform.JIRA)
         assert supported is True
         assert mechanism == "api"
 
     def test_get_platform_support_aider_no_mcp(self):
-        from spec.config.compatibility import get_platform_support
-        from spec.integrations.providers.base import Platform
+        from ingot.config.compatibility import get_platform_support
+        from ingot.integrations.providers.base import Platform
 
         supported, mechanism = get_platform_support(AgentPlatform.AIDER, Platform.GITHUB)
         assert supported is True
@@ -480,9 +480,9 @@ class TestCompatibilityMatrix:
 
 
 class TestFetchTicketWithOnboarding:
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli.run_async")
     def test_success_no_onboarding(self, mock_run_async):
-        from spec.cli import _fetch_ticket_with_onboarding
+        from ingot.cli import _fetch_ticket_with_onboarding
 
         mock_ticket = MagicMock()
         mock_backend = MagicMock()
@@ -492,12 +492,12 @@ class TestFetchTicketWithOnboarding:
         result = _fetch_ticket_with_onboarding("TICKET-1", config, None, None)
         assert result == (mock_ticket, mock_backend)
 
-    @patch("spec.cli.run_async")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.run_onboarding")
+    @patch("ingot.cli.run_async")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.run_onboarding")
     def test_onboarding_then_retry_succeeds(self, mock_onboard, mock_first_run, mock_run_async):
-        from spec.cli import _fetch_ticket_with_onboarding
-        from spec.integrations.backends.errors import BackendNotConfiguredError
+        from ingot.cli import _fetch_ticket_with_onboarding
+        from ingot.integrations.backends.errors import BackendNotConfiguredError
 
         mock_ticket = MagicMock()
         mock_backend = MagicMock()
@@ -514,14 +514,14 @@ class TestFetchTicketWithOnboarding:
         assert result == (mock_ticket, mock_backend)
         mock_onboard.assert_called_once()
 
-    @patch("spec.cli.run_async")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.run_onboarding")
+    @patch("ingot.cli.run_async")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.run_onboarding")
     def test_onboarding_cancelled_exits(self, mock_onboard, mock_first_run, mock_run_async):
         import typer
 
-        from spec.cli import _fetch_ticket_with_onboarding
-        from spec.integrations.backends.errors import BackendNotConfiguredError
+        from ingot.cli import _fetch_ticket_with_onboarding
+        from ingot.integrations.backends.errors import BackendNotConfiguredError
 
         mock_run_async.side_effect = BackendNotConfiguredError("No backend")
         mock_first_run.return_value = True
@@ -531,14 +531,14 @@ class TestFetchTicketWithOnboarding:
         with pytest.raises(typer.Exit):
             _fetch_ticket_with_onboarding("TICKET-1", config, None, None)
 
-    @patch("spec.cli.run_async")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.run_onboarding")
+    @patch("ingot.cli.run_async")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.run_onboarding")
     def test_retry_after_onboarding_fails_exits(self, mock_onboard, mock_first_run, mock_run_async):
         import typer
 
-        from spec.cli import _fetch_ticket_with_onboarding
-        from spec.integrations.backends.errors import BackendNotConfiguredError
+        from ingot.cli import _fetch_ticket_with_onboarding
+        from ingot.integrations.backends.errors import BackendNotConfiguredError
 
         mock_run_async.side_effect = [
             BackendNotConfiguredError("No backend"),
@@ -551,17 +551,17 @@ class TestFetchTicketWithOnboarding:
         with pytest.raises(typer.Exit):
             _fetch_ticket_with_onboarding("TICKET-1", config, None, None)
 
-    @patch("spec.cli.run_async")
-    @patch("spec.cli.run_onboarding")
-    @patch("spec.cli.is_first_run")
+    @patch("ingot.cli.run_async")
+    @patch("ingot.cli.run_onboarding")
+    @patch("ingot.cli.is_first_run")
     def test_no_double_onboarding_after_config_reload(
         self, mock_first_run, mock_onboard, mock_run_async
     ):
         """If config reload shows backend is already configured, skip onboarding."""
         import typer
 
-        from spec.cli import _fetch_ticket_with_onboarding
-        from spec.integrations.backends.errors import BackendNotConfiguredError
+        from ingot.cli import _fetch_ticket_with_onboarding
+        from ingot.integrations.backends.errors import BackendNotConfiguredError
 
         mock_run_async.side_effect = BackendNotConfiguredError("No backend")
         # After config.load(), is_first_run returns False (backend was configured)
@@ -576,19 +576,19 @@ class TestFetchTicketWithOnboarding:
         # Config should have been reloaded
         config.load.assert_called_once()
 
-    @patch("spec.cli.print_error")
-    @patch("spec.cli.run_async")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.run_onboarding")
+    @patch("ingot.cli.print_error")
+    @patch("ingot.cli.run_async")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.run_onboarding")
     def test_specific_error_after_onboarding_uses_same_message(
         self, mock_onboard, mock_first_run, mock_run_async, mock_print_error
     ):
         """TicketNotFoundError after onboarding produces the same message as before onboarding."""
         import typer
 
-        from spec.cli import _fetch_ticket_with_onboarding
-        from spec.integrations.backends.errors import BackendNotConfiguredError
-        from spec.integrations.providers.exceptions import TicketNotFoundError
+        from ingot.cli import _fetch_ticket_with_onboarding
+        from ingot.integrations.backends.errors import BackendNotConfiguredError
+        from ingot.integrations.providers.exceptions import TicketNotFoundError
 
         mock_run_async.side_effect = [
             BackendNotConfiguredError("No backend"),
@@ -607,14 +607,14 @@ class TestFetchTicketWithOnboarding:
         assert "Ticket not found" in error_msg
         assert "TICKET-999" in error_msg
 
-    @patch("spec.cli.print_error")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli.print_error")
+    @patch("ingot.cli.run_async")
     def test_ticket_not_found_before_onboarding_message(self, mock_run_async, mock_print_error):
         """TicketNotFoundError on initial fetch shows the same message format."""
         import typer
 
-        from spec.cli import _fetch_ticket_with_onboarding
-        from spec.integrations.providers.exceptions import TicketNotFoundError
+        from ingot.cli import _fetch_ticket_with_onboarding
+        from ingot.integrations.providers.exceptions import TicketNotFoundError
 
         mock_run_async.side_effect = TicketNotFoundError(ticket_id="TICKET-999")
         config = _make_config("auggie")

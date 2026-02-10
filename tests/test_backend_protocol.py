@@ -1,10 +1,10 @@
-"""Tests for spec.integrations.backends.base module."""
+"""Tests for ingot.integrations.backends.base module."""
 
 from collections.abc import Callable
 from typing import Protocol
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
 
 
 class TestAIBackendProtocol:
@@ -70,7 +70,7 @@ class TestAIBackendProtocol:
         """Protocol does NOT define run_print (interactive mode).
 
         Per Final Decision #4, AIBackend does not include run_print().
-        SPEC owns interactive UX; backends operate in non-interactive mode.
+        INGOT owns interactive UX; backends operate in non-interactive mode.
         """
         # Verify run_print is not defined as a method in the protocol.
         # Check __protocol_attrs__ which contains the protocol's defined members.
@@ -183,13 +183,13 @@ class TestAIBackendImports:
 
     def test_aibackend_importable_from_package(self):
         """AIBackend can be imported from backends package."""
-        from spec.integrations.backends import AIBackend
+        from ingot.integrations.backends import AIBackend
 
         assert AIBackend is not None
 
     def test_all_exports_available(self):
         """All expected exports are available from backends package."""
-        from spec.integrations.backends import (
+        from ingot.integrations.backends import (
             AIBackend,
             BackendRateLimitError,
         )

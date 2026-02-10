@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-38 - Update User Documentation for Multi-Platform Support
 
-**Ticket:** [AMI-38](https://linear.app/amiadspec/issue/AMI-38/update-user-documentation-for-multi-platform-support)
+**Ticket:** [AMI-38](https://linear.app/amiadingot/issue/AMI-38/update-user-documentation-for-multi-platform-support)
 **Status:** Draft
 **Date:** 2026-01-28
 
@@ -28,9 +28,9 @@ After AMI-25 (CLI migration to platform-agnostic providers), SPEC now supports *
 - CLI help text examples in documentation (actual CLI help text was updated in AMI-25)
 
 **Out of Scope (handled by separate tickets):**
-- Platform Configuration Guide → [AMI-39](https://linear.app/amiadspec/issue/AMI-39)
-- `spec --config` output updates → [AMI-42](https://linear.app/amiadspec/issue/AMI-42)
-- User-facing string audit → [AMI-43](https://linear.app/amiadspec/issue/AMI-43)
+- Platform Configuration Guide → [AMI-39](https://linear.app/amiadingot/issue/AMI-39)
+- `spec --config` output updates → [AMI-42](https://linear.app/amiadingot/issue/AMI-42)
+- User-facing string audit → [AMI-43](https://linear.app/amiadingot/issue/AMI-43)
 
 ---
 
@@ -354,12 +354,12 @@ On first run, SPEC will:
 
 **Current:**
 ```markdown
-| `.augment/agents/spec-planner.md` | Creates implementation plans from Jira tickets |
+| `.augment/agents/ingot-planner.md` | Creates implementation plans from Jira tickets |
 ```
 
 **New:**
 ```markdown
-| `.augment/agents/spec-planner.md` | Creates implementation plans from tickets |
+| `.augment/agents/ingot-planner.md` | Creates implementation plans from tickets |
 ```
 
 ### Phase 10: Update Troubleshooting Section
@@ -378,7 +378,7 @@ If SPEC detects the wrong platform:
 spec PROJ-123 --platform jira
 
 # Or set a default in configuration
-# Add to ~/.spec-config:
+# Add to ~/.ingot-config:
 DEFAULT_PLATFORM="jira"
 ```
 
@@ -479,9 +479,9 @@ spec --config
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-39](https://linear.app/amiadspec/issue/AMI-39) | Create Platform Configuration Guide | Detailed credential setup docs |
-| [AMI-42](https://linear.app/amiadspec/issue/AMI-42) | Update spec --config Output | Config display updates |
-| [AMI-43](https://linear.app/amiadspec/issue/AMI-43) | Audit User-Facing Strings | Code-level string updates |
+| [AMI-39](https://linear.app/amiadingot/issue/AMI-39) | Create Platform Configuration Guide | Detailed credential setup docs |
+| [AMI-42](https://linear.app/amiadingot/issue/AMI-42) | Update spec --config Output | Config display updates |
+| [AMI-43](https://linear.app/amiadingot/issue/AMI-43) | Audit User-Facing Strings | Code-level string updates |
 
 ---
 

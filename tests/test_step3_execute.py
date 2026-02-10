@@ -1,13 +1,13 @@
-"""Tests for spec.workflow.step3_execute module."""
+"""Tests for ingot.workflow.step3_execute module."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.providers import GenericTicket, Platform
-from spec.workflow.state import WorkflowState
-from spec.workflow.step3_execute import (
+from ingot.integrations.providers import GenericTicket, Platform
+from ingot.workflow.state import WorkflowState
+from ingot.workflow.step3_execute import (
     _build_task_prompt,
     _cleanup_old_runs,
     _create_run_log_dir,
@@ -21,7 +21,7 @@ from spec.workflow.step3_execute import (
     _show_summary,
     step_3_execute,
 )
-from spec.workflow.tasks import Task, TaskCategory, TaskStatus
+from ingot.workflow.tasks import Task, TaskCategory, TaskStatus
 
 
 @pytest.fixture
@@ -86,14 +86,14 @@ class TestGetLogBaseDir:
     """Tests for _get_log_base_dir function."""
 
     def test_default_returns_spec_runs(self, monkeypatch):
-        """Default returns Path('.spec/runs')."""
-        monkeypatch.delenv("SPECFLOW_LOG_DIR", raising=False)
+        """Default returns Path('.ingot/runs')."""
+        monkeypatch.delenv("INGOT_LOG_DIR", raising=False)
         result = _get_log_base_dir()
-        assert result == Path(".spec/runs")
+        assert result == Path(".ingot/runs")
 
     def test_respects_environment_variable(self, monkeypatch):
-        """Respects SPECFLOW_LOG_DIR environment variable."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", "/custom/log/dir")
+        """Respects INGOT_LOG_DIR environment variable."""
+        monkeypatch.setenv("INGOT_LOG_DIR", "/custom/log/dir")
         result = _get_log_base_dir()
         assert result == Path("/custom/log/dir")
 
@@ -108,7 +108,7 @@ class TestCreateRunLogDir:
 
     def test_creates_timestamped_directory(self, tmp_path, monkeypatch):
         """Creates timestamped directory."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         result = _create_run_log_dir("TEST-123")
 
@@ -119,7 +119,7 @@ class TestCreateRunLogDir:
     def test_creates_parent_directories(self, tmp_path, monkeypatch):
         """Creates parent directories."""
         log_dir = tmp_path / "deep" / "nested" / "path"
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(log_dir))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(log_dir))
 
         result = _create_run_log_dir("TEST-456")
 
@@ -128,7 +128,7 @@ class TestCreateRunLogDir:
 
     def test_returns_correct_path(self, tmp_path, monkeypatch):
         """Returns correct Path object."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         result = _create_run_log_dir("PROJ-789")
 
@@ -146,7 +146,7 @@ class TestCleanupOldRuns:
 
     def test_removes_directories_beyond_keep_count(self, tmp_path, monkeypatch):
         """Removes directories beyond keep_count."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
         ticket_dir = tmp_path / "TEST-123"
         ticket_dir.mkdir()
 
@@ -162,7 +162,7 @@ class TestCleanupOldRuns:
 
     def test_keeps_newest_directories(self, tmp_path, monkeypatch):
         """Keeps newest directories."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
         ticket_dir = tmp_path / "TEST-123"
         ticket_dir.mkdir()
 
@@ -179,14 +179,14 @@ class TestCleanupOldRuns:
 
     def test_handles_nonexistent_ticket_directory(self, tmp_path, monkeypatch):
         """Handles non-existent ticket directory gracefully."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         # Should not raise any exception
         _cleanup_old_runs("NONEXISTENT-123", keep_count=2)
 
     def test_ignores_cleanup_errors(self, tmp_path, monkeypatch):
         """Ignores cleanup errors gracefully."""
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
         ticket_dir = tmp_path / "TEST-123"
         ticket_dir.mkdir()
 
@@ -434,8 +434,8 @@ class TestExecuteTaskWithCallback:
 class TestShowSummary:
     """Tests for _show_summary function."""
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.get_current_branch")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.get_current_branch")
     def test_displays_ticket_id(self, mock_branch, mock_console, workflow_state):
         """Displays ticket ID."""
         mock_branch.return_value = "main"
@@ -446,8 +446,8 @@ class TestShowSummary:
         calls = [str(c) for c in mock_console.print.call_args_list]
         assert any("TEST-123" in c for c in calls)
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.get_current_branch")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.get_current_branch")
     def test_displays_branch_name(self, mock_branch, mock_console, workflow_state):
         """Displays branch name."""
         workflow_state.branch_name = "feature/test-branch"
@@ -458,8 +458,8 @@ class TestShowSummary:
         calls = [str(c) for c in mock_console.print.call_args_list]
         assert any("feature/test-branch" in c for c in calls)
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.get_current_branch")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.get_current_branch")
     def test_displays_completed_task_count(self, mock_branch, mock_console, workflow_state):
         """Displays completed task count."""
         mock_branch.return_value = "main"
@@ -470,8 +470,8 @@ class TestShowSummary:
         calls = [str(c) for c in mock_console.print.call_args_list]
         assert any("2" in c for c in calls)
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.get_current_branch")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.get_current_branch")
     def test_displays_checkpoint_count(self, mock_branch, mock_console, workflow_state):
         """Displays checkpoint count."""
         mock_branch.return_value = "main"
@@ -482,8 +482,8 @@ class TestShowSummary:
         calls = [str(c) for c in mock_console.print.call_args_list]
         assert any("Checkpoints" in c for c in calls)
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.get_current_branch")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.get_current_branch")
     def test_displays_failed_tasks_when_present(self, mock_branch, mock_console, workflow_state):
         """Displays failed task names when present."""
         mock_branch.return_value = "main"
@@ -503,7 +503,7 @@ class TestShowSummary:
 class TestRunPostImplementationTests:
     """Tests for _run_post_implementation_tests function."""
 
-    @patch("spec.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_prompts_user_to_run_tests(self, mock_confirm, mock_backend, workflow_state):
         """Prompts user to run tests."""
         mock_confirm.return_value = True
@@ -514,7 +514,7 @@ class TestRunPostImplementationTests:
         mock_confirm.assert_called_once()
         assert "test" in mock_confirm.call_args[0][0].lower()
 
-    @patch("spec.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_skips_when_user_declines(self, mock_confirm, mock_backend, workflow_state):
         """Skips when user declines."""
         mock_confirm.return_value = False
@@ -523,8 +523,8 @@ class TestRunPostImplementationTests:
 
         mock_backend.run_with_callback.assert_not_called()
 
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.ui.plan_tui.StreamingOperationUI")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_runs_auggie_with_test_prompt(
         self, mock_confirm, mock_ui_class, mock_backend, workflow_state
     ):
@@ -545,8 +545,8 @@ class TestRunPostImplementationTests:
         prompt = mock_backend.run_with_callback.call_args[0][0]
         assert "test" in prompt.lower()
 
-    @patch("spec.ui.plan_tui.StreamingOperationUI")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.ui.plan_tui.StreamingOperationUI")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_handles_auggie_exceptions(
         self, mock_confirm, mock_ui_class, mock_backend, workflow_state
     ):
@@ -573,8 +573,8 @@ class TestRunPostImplementationTests:
 class TestOfferCommitInstructions:
     """Tests for _offer_commit_instructions function."""
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.is_dirty")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.is_dirty")
     def test_does_nothing_when_no_dirty_files(self, mock_is_dirty, mock_console, workflow_state):
         """Does nothing when no dirty files."""
         mock_is_dirty.return_value = False
@@ -585,9 +585,9 @@ class TestOfferCommitInstructions:
         calls = [str(c) for c in mock_console.print.call_args_list]
         assert not any("git commit" in c for c in calls)
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
-    @patch("spec.workflow.step3_execute.is_dirty")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute.is_dirty")
     def test_prompts_user_for_instructions(
         self, mock_is_dirty, mock_confirm, mock_console, workflow_state
     ):
@@ -599,9 +599,9 @@ class TestOfferCommitInstructions:
 
         mock_confirm.assert_called_once()
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
-    @patch("spec.workflow.step3_execute.is_dirty")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute.is_dirty")
     def test_does_nothing_when_user_declines(
         self, mock_is_dirty, mock_confirm, mock_console, workflow_state
     ):
@@ -614,9 +614,9 @@ class TestOfferCommitInstructions:
         calls = [str(c) for c in mock_console.print.call_args_list]
         assert not any("git commit" in c for c in calls)
 
-    @patch("spec.workflow.step3_execute.console")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
-    @patch("spec.workflow.step3_execute.is_dirty")
+    @patch("ingot.workflow.step3_execute.console")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute.is_dirty")
     def test_prints_commit_commands_when_accepted(
         self, mock_is_dirty, mock_confirm, mock_console, workflow_state
     ):
@@ -639,9 +639,9 @@ class TestOfferCommitInstructions:
 class TestExecuteFallback:
     """Tests for _execute_fallback function."""
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_executes_tasks_sequentially(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -666,9 +666,9 @@ class TestExecuteFallback:
 
         assert mock_execute.call_count == 2
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_marks_tasks_complete_on_success(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -691,9 +691,9 @@ class TestExecuteFallback:
         mock_mark.assert_called_once()
         assert "Task 1" in workflow_state.completed_tasks
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_tracks_failed_tasks(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -719,9 +719,9 @@ class TestExecuteFallback:
 
         assert failed == ["Task 2"]
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_calls_capture_task_memory_on_success(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -743,9 +743,9 @@ class TestExecuteFallback:
 
         mock_capture.assert_called_once()
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_handles_capture_task_memory_exceptions(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -769,9 +769,9 @@ class TestExecuteFallback:
 
         assert failed == []  # Task still counts as success
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_respects_fail_fast_option(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -800,9 +800,9 @@ class TestExecuteFallback:
         assert mock_execute.call_count == 2
         assert failed == ["Task 2"]
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_returns_list_of_failed_task_names(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -837,10 +837,10 @@ class TestExecuteFallback:
 class TestExecuteWithTui:
     """Tests for _execute_with_tui function."""
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_initializes_tui_correctly(
         self,
         mock_tui_class,
@@ -874,10 +874,10 @@ class TestExecuteWithTui:
         mock_tui_class.assert_called_once_with(ticket_id="TEST-123", verbose_mode=False)
         mock_tui.initialize_records.assert_called_once_with(["Task 1"])
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_marks_tasks_complete_on_success(
         self,
         mock_tui_class,
@@ -911,10 +911,10 @@ class TestExecuteWithTui:
         mock_mark.assert_called_once()
         assert "Task 1" in workflow_state.completed_tasks
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_tracks_failed_tasks(
         self,
         mock_tui_class,
@@ -950,10 +950,10 @@ class TestExecuteWithTui:
 
         assert failed == ["Task 2"]
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_respects_fail_fast_option(
         self,
         mock_tui_class,
@@ -993,10 +993,10 @@ class TestExecuteWithTui:
         assert mock_execute.call_count == 2
         mock_tui.mark_remaining_skipped.assert_called()
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_handles_capture_task_memory_exceptions(
         self,
         mock_tui_class,
@@ -1052,10 +1052,10 @@ class TestStep3Execute:
 
         assert result is False
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_true_when_all_tasks_already_complete(
         self,
         mock_baseline,
@@ -1082,14 +1082,14 @@ class TestStep3Execute:
 
         assert result is True
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_with_tui")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_with_tui")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_execute_with_tui_when_tui_mode(
         self,
         mock_baseline,
@@ -1114,14 +1114,14 @@ class TestStep3Execute:
 
         mock_execute_tui.assert_called_once()
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_execute_fallback_when_non_tui_mode(
         self,
         mock_baseline,
@@ -1146,15 +1146,15 @@ class TestStep3Execute:
 
         mock_execute_fallback.assert_called_once()
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_prompts_user_on_task_failures(
         self,
         mock_baseline,
@@ -1181,14 +1181,14 @@ class TestStep3Execute:
 
         mock_confirm.assert_called()
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_true_when_all_tasks_succeed(
         self,
         mock_baseline,
@@ -1213,15 +1213,15 @@ class TestStep3Execute:
 
         assert result is True
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute.prompt_confirm")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_false_when_user_declines_after_failures(
         self,
         mock_baseline,
@@ -1248,14 +1248,14 @@ class TestStep3Execute:
 
         assert result is False
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_show_summary(
         self,
         mock_baseline,
@@ -1280,14 +1280,14 @@ class TestStep3Execute:
 
         mock_summary.assert_called_once()
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_run_post_implementation_tests(
         self,
         mock_baseline,
@@ -1312,14 +1312,14 @@ class TestStep3Execute:
 
         mock_tests.assert_called_once()
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_offer_commit_instructions(
         self,
         mock_baseline,
@@ -1344,11 +1344,11 @@ class TestStep3Execute:
 
         mock_commit.assert_called_once()
 
-    @patch("spec.workflow.step3_execute.prompt_confirm")
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.workflow.step3_execute.prompt_confirm")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_stops_execution_when_quit_requested(
         self,
         mock_tui_class,
@@ -1405,15 +1405,15 @@ class TestStep3Execute:
 class TestTwoPhaseExecution:
     """Tests for two-phase execution model."""
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_parallel_fallback")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_executes_fundamental_tasks_first(
         self,
         mock_baseline,
@@ -1459,14 +1459,14 @@ class TestTwoPhaseExecution:
         assert mock_execute_fallback.call_count >= 1
         assert mock_execute_parallel.call_count == 1
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_fundamental_tasks_run_sequentially(
         self,
         mock_baseline,
@@ -1509,15 +1509,15 @@ class TestTwoPhaseExecution:
         tasks = call_args[0][1]  # Second positional arg is tasks
         assert len(tasks) == 2
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_parallel_fallback")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_independent_tasks_run_in_parallel(
         self,
         mock_baseline,
@@ -1561,15 +1561,15 @@ class TestTwoPhaseExecution:
         # Should use _execute_parallel_fallback for independent tasks
         assert mock_execute_parallel.called
 
-    @patch("spec.workflow.step3_execute._offer_commit_instructions")
-    @patch("spec.workflow.step3_execute._run_post_implementation_tests")
-    @patch("spec.workflow.step3_execute._show_summary")
-    @patch("spec.workflow.step3_execute._execute_parallel_fallback")
-    @patch("spec.workflow.step3_execute._execute_fallback")
-    @patch("spec.ui.tui._should_use_tui")
-    @patch("spec.workflow.step3_execute._cleanup_old_runs")
-    @patch("spec.workflow.step3_execute._create_run_log_dir")
-    @patch("spec.workflow.step3_execute._capture_baseline_for_diffs")
+    @patch("ingot.workflow.step3_execute._offer_commit_instructions")
+    @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
+    @patch("ingot.workflow.step3_execute._show_summary")
+    @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
+    @patch("ingot.workflow.step3_execute._execute_fallback")
+    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_skips_parallel_phase_when_disabled(
         self,
         mock_baseline,
@@ -1623,14 +1623,14 @@ class TestTwoPhaseExecution:
 class TestParallelExecution:
     """Tests for parallel task execution."""
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_uses_thread_pool_executor(
         self, mock_execute_retry, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Uses ThreadPoolExecutor for concurrent execution."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         mock_execute_retry.return_value = True
 
@@ -1655,14 +1655,14 @@ class TestParallelExecution:
         # Both tasks should be executed
         assert mock_execute_retry.call_count == 2
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_respects_max_parallel_tasks(
         self, mock_execute_retry, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Limits concurrent workers to max_parallel_tasks."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         mock_execute_retry.return_value = True
         workflow_state.max_parallel_tasks = 2
@@ -1684,14 +1684,14 @@ class TestParallelExecution:
         assert failed == []
         assert mock_execute_retry.call_count == 5
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_collects_failed_tasks(
         self, mock_execute_retry, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Collects names of failed tasks."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         # First task succeeds, second fails
         mock_execute_retry.side_effect = [True, False]
@@ -1716,14 +1716,14 @@ class TestParallelExecution:
         assert len(failed) == 1
         assert "Failed Task" in failed
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_marks_successful_tasks_complete(
         self, mock_execute_retry, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Marks completed tasks in tasklist."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         mock_execute_retry.return_value = True
 
@@ -1754,11 +1754,11 @@ class TestParallelExecution:
 class TestTaskRetry:
     """Tests for task retry with rate limit handling."""
 
-    @patch("spec.workflow.step3_execute._execute_task")
+    @patch("ingot.workflow.step3_execute._execute_task")
     def test_skips_retry_when_disabled(self, mock_execute, mock_backend, workflow_state, tmp_path):
         """Skips retry wrapper when max_retries=0."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute.return_value = True
         workflow_state.rate_limit_config = RateLimitConfig(max_retries=0)
@@ -1771,13 +1771,13 @@ class TestTaskRetry:
         assert result is True
         mock_execute.assert_called_once()
 
-    @patch("spec.workflow.step3_execute._execute_task_with_callback")
+    @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     def test_uses_callback_when_provided(
         self, mock_execute_callback, mock_backend, workflow_state, tmp_path
     ):
         """Uses callback version when callback provided."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute_callback.return_value = True
         workflow_state.rate_limit_config = RateLimitConfig(max_retries=0)
@@ -1795,11 +1795,11 @@ class TestTaskRetry:
         assert result is True
         mock_execute_callback.assert_called_once()
 
-    @patch("spec.workflow.step3_execute._execute_task")
+    @patch("ingot.workflow.step3_execute._execute_task")
     def test_returns_false_on_failure(self, mock_execute, mock_backend, workflow_state, tmp_path):
         """Returns False when task execution fails."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute.return_value = False
         workflow_state.rate_limit_config = RateLimitConfig(max_retries=0)
@@ -1811,13 +1811,13 @@ class TestTaskRetry:
 
         assert result is False
 
-    @patch("spec.workflow.step3_execute._execute_task")
+    @patch("ingot.workflow.step3_execute._execute_task")
     def test_retries_on_rate_limit_error(
         self, mock_execute, mock_backend, workflow_state, tmp_path
     ):
         """Retries execution on rate limit errors."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
 
         # First call raises rate limit error (HTTP 429), second succeeds
         mock_execute.side_effect = [Exception("HTTP Error 429: Too Many Requests"), True]
@@ -1833,14 +1833,14 @@ class TestTaskRetry:
         assert result is True
         assert mock_execute.call_count == 2
 
-    @patch("spec.workflow.step3_execute._execute_task")
+    @patch("ingot.workflow.step3_execute._execute_task")
     def test_rate_limit_error_returns_false_when_retries_disabled(
         self, mock_execute, mock_backend, workflow_state, tmp_path
     ):
         """BackendRateLimitError returns False (not raises) when max_retries=0."""
-        from spec.integrations.backends.errors import BackendRateLimitError
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.integrations.backends.errors import BackendRateLimitError
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
 
         mock_execute.side_effect = BackendRateLimitError(
             "Rate limit detected", output="429 error", backend_name="Test"
@@ -1863,14 +1863,14 @@ class TestTaskRetry:
 class TestParallelTaskMemorySkipped:
     """Tests for memory capture being skipped in parallel mode."""
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_parallel_fallback_skips_memory_capture(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Parallel fallback does not call capture_task_memory."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         mock_execute.return_value = True
 
@@ -1890,9 +1890,9 @@ class TestParallelTaskMemorySkipped:
         # Memory capture should NOT be called for parallel tasks
         mock_capture.assert_not_called()
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_sequential_fallback_calls_memory_capture(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -1919,14 +1919,14 @@ class TestParallelTaskMemorySkipped:
 class TestParallelFailFast:
     """Tests for fail_fast semantics in parallel execution."""
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_fail_fast_stops_pending_tasks(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Fail-fast stops pending tasks when one fails."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         # First task fails, second should be skipped
         mock_execute.side_effect = [False, True, True]
@@ -1953,14 +1953,14 @@ class TestParallelFailFast:
         # Task 1 should fail, others should be skipped
         assert "Task 1" in failed
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_no_fail_fast_continues_after_failure(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
         """Without fail-fast, execution continues after failure."""
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         mock_execute.side_effect = [False, True, True]
         workflow_state.fail_fast = False
@@ -1987,9 +1987,9 @@ class TestParallelFailFast:
         assert mock_execute.call_count == 3
         assert failed == ["Task 1"]
 
-    @patch("spec.workflow.step3_execute.capture_task_memory")
-    @patch("spec.workflow.step3_execute.mark_task_complete")
-    @patch("spec.workflow.step3_execute._execute_task_with_retry")
+    @patch("ingot.workflow.step3_execute.capture_task_memory")
+    @patch("ingot.workflow.step3_execute.mark_task_complete")
+    @patch("ingot.workflow.step3_execute._execute_task_with_retry")
     def test_stop_flag_prevents_new_task_execution(
         self, mock_execute, mock_mark, mock_capture, mock_backend, workflow_state, tmp_path
     ):
@@ -2001,7 +2001,7 @@ class TestParallelFailFast:
         """
         import threading
 
-        from spec.workflow.step3_execute import _execute_parallel_fallback
+        from ingot.workflow.step3_execute import _execute_parallel_fallback
 
         # Shared event to simulate stop_flag behavior
         stop_event = threading.Event()
@@ -2060,7 +2060,7 @@ class TestExecuteTaskWithCallbackRateLimit:
         self, mock_backend, workflow_state, sample_task
     ):
         """Raises BackendRateLimitError when output indicates rate limit."""
-        from spec.integrations.backends.errors import BackendRateLimitError
+        from ingot.integrations.backends.errors import BackendRateLimitError
 
         # Simulate rate limit in output
         mock_backend.run_with_callback.return_value = (False, "Error: HTTP 429 Too Many Requests")
@@ -2101,8 +2101,8 @@ class TestRateLimitFlowWithFakeBackend:
 
     def test_full_rate_limit_retry_flow(self, workflow_state):
         """Rate-limited backend retries and eventually succeeds."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
         from tests.fakes.fake_backend import make_rate_limited_backend
 
         backend = make_rate_limited_backend(fail_count=2)
@@ -2128,8 +2128,8 @@ class TestRateLimitFlowWithFakeBackend:
 
     def test_rate_limit_exhaustion_with_fake_backend(self, workflow_state):
         """More failures than retries exhausts retries and returns False."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
         from tests.fakes.fake_backend import FakeBackend
 
         # 5 rate-limit failures, only 2 retries allowed
@@ -2156,8 +2156,8 @@ class TestRateLimitFlowWithFakeBackend:
 
     def test_non_callback_path_retries_on_rate_limit(self, workflow_state):
         """Non-callback path (_execute_task) also triggers retry on rate limit."""
-        from spec.workflow.state import RateLimitConfig
-        from spec.workflow.step3_execute import _execute_task_with_retry
+        from ingot.workflow.state import RateLimitConfig
+        from ingot.workflow.step3_execute import _execute_task_with_retry
         from tests.fakes.fake_backend import make_rate_limited_backend
 
         backend = make_rate_limited_backend(fail_count=1)
@@ -2203,7 +2203,7 @@ class TestFakeBackendConfiguration:
 
     def test_custom_platform(self):
         """FakeBackend can use a custom platform."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
         from tests.fakes.fake_backend import FakeBackend
 
         backend = FakeBackend([(True, "ok")], platform=AgentPlatform.CLAUDE)
@@ -2213,14 +2213,14 @@ class TestFakeBackendConfiguration:
 class TestCaptureBaselineForDiffs:
     """Tests for _capture_baseline_for_diffs function."""
 
-    @patch("spec.workflow.step3_execute.capture_baseline")
-    @patch("spec.workflow.step3_execute.check_dirty_working_tree")
-    @patch("spec.workflow.step3_execute.print_info")
+    @patch("ingot.workflow.step3_execute.capture_baseline")
+    @patch("ingot.workflow.step3_execute.check_dirty_working_tree")
+    @patch("ingot.workflow.step3_execute.print_info")
     def test_captures_baseline_successfully(
         self, mock_print, mock_check_dirty, mock_capture, workflow_state
     ):
         """Captures baseline and returns True on success."""
-        from spec.workflow.step3_execute import _capture_baseline_for_diffs
+        from ingot.workflow.step3_execute import _capture_baseline_for_diffs
 
         mock_check_dirty.return_value = True
         mock_capture.return_value = "abc123def456"
@@ -2230,15 +2230,15 @@ class TestCaptureBaselineForDiffs:
         assert result is True
         assert workflow_state.diff_baseline_ref == "abc123def456"
 
-    @patch("spec.workflow.step3_execute.capture_baseline")
-    @patch("spec.workflow.step3_execute.check_dirty_working_tree")
-    @patch("spec.workflow.step3_execute.print_warning")
-    @patch("spec.workflow.step3_execute.print_info")
+    @patch("ingot.workflow.step3_execute.capture_baseline")
+    @patch("ingot.workflow.step3_execute.check_dirty_working_tree")
+    @patch("ingot.workflow.step3_execute.print_warning")
+    @patch("ingot.workflow.step3_execute.print_info")
     def test_continues_with_dirty_tree_on_warn_policy(
         self, mock_info, mock_warning, mock_check_dirty, mock_capture, workflow_state
     ):
         """Continues with dirty tree when policy allows."""
-        from spec.workflow.step3_execute import _capture_baseline_for_diffs
+        from ingot.workflow.step3_execute import _capture_baseline_for_diffs
 
         mock_check_dirty.return_value = False  # Dirty but not raising
         mock_capture.return_value = "abc123"
@@ -2248,14 +2248,14 @@ class TestCaptureBaselineForDiffs:
         assert result is True
         mock_warning.assert_called_once()
 
-    @patch("spec.workflow.step3_execute.check_dirty_working_tree")
-    @patch("spec.workflow.step3_execute.print_error")
+    @patch("ingot.workflow.step3_execute.check_dirty_working_tree")
+    @patch("ingot.workflow.step3_execute.print_error")
     def test_returns_false_on_dirty_tree_fail_fast(
         self, mock_error, mock_check_dirty, workflow_state
     ):
         """Returns False when dirty tree check raises DirtyWorkingTreeError."""
-        from spec.workflow.git_utils import DirtyWorkingTreeError
-        from spec.workflow.step3_execute import _capture_baseline_for_diffs
+        from ingot.workflow.git_utils import DirtyWorkingTreeError
+        from ingot.workflow.step3_execute import _capture_baseline_for_diffs
 
         mock_check_dirty.side_effect = DirtyWorkingTreeError("Dirty tree")
 
@@ -2264,14 +2264,14 @@ class TestCaptureBaselineForDiffs:
         assert result is False
         mock_error.assert_called_once()
 
-    @patch("spec.workflow.step3_execute.capture_baseline")
-    @patch("spec.workflow.step3_execute.check_dirty_working_tree")
-    @patch("spec.workflow.step3_execute.print_error")
+    @patch("ingot.workflow.step3_execute.capture_baseline")
+    @patch("ingot.workflow.step3_execute.check_dirty_working_tree")
+    @patch("ingot.workflow.step3_execute.print_error")
     def test_returns_false_on_capture_failure(
         self, mock_error, mock_check_dirty, mock_capture, workflow_state
     ):
         """Returns False when baseline capture fails."""
-        from spec.workflow.step3_execute import _capture_baseline_for_diffs
+        from ingot.workflow.step3_execute import _capture_baseline_for_diffs
 
         mock_check_dirty.return_value = True
         mock_capture.side_effect = Exception("Git error")

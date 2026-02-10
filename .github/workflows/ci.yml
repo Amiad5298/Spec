@@ -34,7 +34,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=spec --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+          pytest --cov=ingot --cov-report=term-missing --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -64,11 +64,11 @@ jobs:
 
       - name: Run Ruff linter
         run: |
-          ruff check spec tests
+          ruff check ingot tests
 
       - name: Run MyPy type checker
         run: |
-          mypy spec --ignore-missing-imports
+          mypy ingot --ignore-missing-imports
 
       - name: Check for legacy AGENT_PLATFORM naming
         if: always()

@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-30 - Implement AuggieMediatedFetcher with Structured JSON Prompts
 
-**Ticket:** [AMI-30](https://linear.app/amiadspec/issue/AMI-30/implement-auggiemediatedfetcher-with-structured-json-prompts)
+**Ticket:** [AMI-30](https://linear.app/amiadingot/issue/AMI-30/implement-auggiemediatedfetcher-with-structured-json-prompts)
 **Status:** ✅ Implemented (PR #22)
 **Date:** 2026-01-24
 **Last Updated:** 2026-01-24
@@ -29,7 +29,7 @@ The fetcher extends `AgentMediatedFetcher` (implemented in AMI-29) and implement
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           TicketFetcher (ABC)                                │
-│                      (spec/integrations/fetchers/base.py)                    │
+│                      (ingot/integrations/fetchers/base.py)                    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                      ▲
                                      │ extends
@@ -71,7 +71,7 @@ The fetcher uses `AuggieClient.run_print_quiet()` to invoke Auggie with structur
 
 ## Components to Create
 
-### New File: `spec/integrations/fetchers/auggie_fetcher.py`
+### New File: `ingot/integrations/fetchers/auggie_fetcher.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -85,26 +85,26 @@ The fetcher uses `AuggieClient.run_print_quiet()` to invoke Auggie with structur
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/fetchers/__init__.py` | Export `AuggieMediatedFetcher`, `AgentFetchError`, `AgentResponseParseError` |
-| `spec/integrations/fetchers/exceptions.py` | Added `AgentFetchError`, `AgentResponseParseError` exception classes |
-| `spec/integrations/fetchers/base.py` | Updated to handle new exception types |
+| `ingot/integrations/fetchers/__init__.py` | Export `AuggieMediatedFetcher`, `AgentFetchError`, `AgentResponseParseError` |
+| `ingot/integrations/fetchers/exceptions.py` | Added `AgentFetchError`, `AgentResponseParseError` exception classes |
+| `ingot/integrations/fetchers/base.py` | Updated to handle new exception types |
 
 ---
 
 ## Implementation Steps
 
 ### Step 1: Create Auggie Fetcher Module
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 Implement `AuggieMediatedFetcher` class extending `AgentMediatedFetcher`:
 
 ```python
 from typing import Any
-from spec.config import ConfigManager
-from spec.config.fetch_config import AgentConfig
-from spec.integrations.auggie import AuggieClient
-from spec.integrations.fetchers.base import AgentMediatedFetcher
-from spec.integrations.providers.base import Platform
+from ingot.config import ConfigManager
+from ingot.config.fetch_config import AgentConfig
+from ingot.integrations.auggie import AuggieClient
+from ingot.integrations.fetchers.base import AgentMediatedFetcher
+from ingot.integrations.providers.base import Platform
 
 # Platforms that Auggie can access via MCP tools
 SUPPORTED_PLATFORMS = {Platform.JIRA, Platform.LINEAR, Platform.GITHUB}
@@ -144,7 +144,7 @@ class AuggieMediatedFetcher(AgentMediatedFetcher):
 ```
 
 ### Step 2: Define Platform-Specific Prompt Templates
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 Design structured prompts that:
 1. Tell Auggie to use the appropriate MCP tool
@@ -221,12 +221,12 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
 
 
 ### Step 3: Update Package Exports
-**File:** `spec/integrations/fetchers/__init__.py`
+**File:** `ingot/integrations/fetchers/__init__.py`
 
 Add export for `AuggieMediatedFetcher`:
 
 ```python
-from spec.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
+from ingot.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
 
 __all__ = [
     # ... existing exports ...
@@ -333,7 +333,7 @@ class AuggieMediatedFetcher:
 
 Added `AgentFetchError` and `AgentResponseParseError` for granular error handling:
 
-**File:** `spec/integrations/fetchers/exceptions.py`
+**File:** `ingot/integrations/fetchers/exceptions.py`
 
 ```python
 class AgentFetchError(TicketFetchError):
@@ -380,7 +380,7 @@ result = await loop.run_in_executor(
 
 ## File Changes Detail
 
-### New: `spec/integrations/fetchers/auggie_fetcher.py`
+### New: `ingot/integrations/fetchers/auggie_fetcher.py`
 
 Complete module structure:
 
@@ -398,11 +398,11 @@ import asyncio
 import logging
 from typing import Any
 
-from spec.config import ConfigManager
-from spec.integrations.auggie import AuggieClient
-from spec.integrations.fetchers.base import AgentMediatedFetcher
-from spec.integrations.fetchers.exceptions import AgentIntegrationError
-from spec.integrations.providers.base import Platform
+from ingot.config import ConfigManager
+from ingot.integrations.auggie import AuggieClient
+from ingot.integrations.fetchers.base import AgentMediatedFetcher
+from ingot.integrations.fetchers.exceptions import AgentIntegrationError
+from ingot.integrations.providers.base import Platform
 
 logger = logging.getLogger(__name__)
 
@@ -532,17 +532,17 @@ class AuggieMediatedFetcher(AgentMediatedFetcher):
         return template
 ```
 
-### Modified: `spec/integrations/fetchers/__init__.py`
+### Modified: `ingot/integrations/fetchers/__init__.py`
 
 ```python
 """Ticket fetchers package."""
 
-from spec.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
-from spec.integrations.fetchers.base import (
+from ingot.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
+from ingot.integrations.fetchers.base import (
     AgentMediatedFetcher,
     TicketFetcher,
 )
-from spec.integrations.fetchers.exceptions import (
+from ingot.integrations.fetchers.exceptions import (
     AgentIntegrationError,
     PlatformNotSupportedError,
     TicketFetchError,
@@ -636,9 +636,9 @@ A manual integration test should verify end-to-end functionality:
 # Test with real Auggie (requires Jira MCP integration configured)
 python -c "
 import asyncio
-from spec.integrations.auggie import AuggieClient
-from spec.integrations.fetchers import AuggieMediatedFetcher
-from spec.integrations.providers.base import Platform
+from ingot.integrations.auggie import AuggieClient
+from ingot.integrations.fetchers import AuggieMediatedFetcher
+from ingot.integrations.providers.base import Platform
 
 async def test():
     client = AuggieClient()
@@ -656,12 +656,12 @@ asyncio.run(test())
 
 | Dependency | Status | Notes |
 |------------|--------|-------|
-| `TicketFetcher` ABC | ✅ Implemented (AMI-29) | `spec/integrations/fetchers/base.py` |
-| `AgentMediatedFetcher` | ✅ Implemented (AMI-29) | `spec/integrations/fetchers/base.py` |
-| `AuggieClient` | ✅ Implemented | `spec/integrations/auggie.py` |
-| `ConfigManager.get_agent_config()` | ✅ Implemented (AMI-33) | `spec/config/manager.py` |
-| `AgentConfig.supports_platform()` | ✅ Implemented (AMI-33) | `spec/config/fetch_config.py` |
-| `Platform` enum | ✅ Implemented | `spec/integrations/providers/base.py` |
+| `TicketFetcher` ABC | ✅ Implemented (AMI-29) | `ingot/integrations/fetchers/base.py` |
+| `AgentMediatedFetcher` | ✅ Implemented (AMI-29) | `ingot/integrations/fetchers/base.py` |
+| `AuggieClient` | ✅ Implemented | `ingot/integrations/auggie.py` |
+| `ConfigManager.get_agent_config()` | ✅ Implemented (AMI-33) | `ingot/config/manager.py` |
+| `AgentConfig.supports_platform()` | ✅ Implemented (AMI-33) | `ingot/config/fetch_config.py` |
+| `Platform` enum | ✅ Implemented | `ingot/integrations/providers/base.py` |
 
 ## Relationship with ProviderRegistry
 
@@ -711,9 +711,9 @@ From the ticket (all items verified in PR #22):
 ### Basic Usage with String-Based Interface (Recommended)
 
 ```python
-from spec.config import ConfigManager
-from spec.integrations.auggie import AuggieClient
-from spec.integrations.fetchers import (
+from ingot.config import ConfigManager
+from ingot.integrations.auggie import AuggieClient
+from ingot.integrations.fetchers import (
     AuggieMediatedFetcher,
     AgentIntegrationError,
     AgentFetchError,
@@ -748,7 +748,7 @@ except AgentResponseParseError:
 ### Using Platform Enum Interface
 
 ```python
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 # Check platform support before fetching
 if fetcher.supports_platform(Platform.JIRA):
@@ -759,7 +759,7 @@ if fetcher.supports_platform(Platform.JIRA):
 ### With TicketService (AMI-32) - Updated for New Interface
 
 ```python
-from spec.integrations.fetchers import (
+from ingot.integrations.fetchers import (
     AgentIntegrationError,
     AgentFetchError,
     AgentResponseParseError,

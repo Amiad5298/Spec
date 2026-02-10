@@ -1,18 +1,18 @@
-"""Tests for spec.utils.retry module."""
+"""Tests for ingot.utils.retry module."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.auggie import AuggieRateLimitError
-from spec.integrations.backends.errors import BackendRateLimitError
-from spec.utils.retry import (
+from ingot.integrations.auggie import AuggieRateLimitError
+from ingot.integrations.backends.errors import BackendRateLimitError
+from ingot.utils.retry import (
     RateLimitExceededError,
     _is_retryable_error,
     calculate_backoff_delay,
     with_rate_limit_retry,
 )
-from spec.workflow.state import RateLimitConfig
+from ingot.workflow.state import RateLimitConfig
 
 # =============================================================================
 # Fixtures
@@ -226,7 +226,7 @@ class TestWithRateLimitRetry:
         result = successful_func()
         assert result == "success"
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_retries_on_retryable_error(self, mock_sleep, rate_limit_config):
         """Retries when retryable error occurs."""
         call_count = 0
@@ -244,7 +244,7 @@ class TestWithRateLimitRetry:
         assert call_count == 3
         assert mock_sleep.call_count == 2  # 2 retries before success
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_raises_after_max_retries(self, mock_sleep, rate_limit_config):
         """Raises RateLimitExceededError after max retries."""
 
@@ -258,7 +258,7 @@ class TestWithRateLimitRetry:
         assert exc_info.value.attempts == rate_limit_config.max_retries
         assert "Rate limit exceeded" in str(exc_info.value)
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_calls_on_retry_callback(self, mock_sleep, rate_limit_config):
         """Calls on_retry callback with attempt info."""
         callback = MagicMock()
@@ -282,7 +282,7 @@ class TestWithRateLimitRetry:
         assert isinstance(args[1], float)  # delay
         assert isinstance(args[2], Exception)  # exception
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_respects_calculated_delay(self, mock_sleep, rate_limit_config):
         """Uses calculated delay between retries."""
         call_count = 0
@@ -323,8 +323,8 @@ class TestWithRateLimitRetry:
 class TestAuggieRateLimitErrorRetry:
     """Tests for retry behavior with AuggieRateLimitError."""
 
-    @patch("spec.utils.retry.random.uniform", return_value=0.5)
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.random.uniform", return_value=0.5)
+    @patch("ingot.utils.retry.time.sleep")
     def test_retry_triggers_on_auggie_rate_limit_error(self, mock_sleep, mock_random):
         """AuggieRateLimitError triggers retry with deterministic behavior.
 
@@ -362,8 +362,8 @@ class TestAuggieRateLimitErrorRetry:
         # Verify jitter was calculated (random.uniform was called)
         assert mock_random.call_count >= 2
 
-    @patch("spec.utils.retry.random.uniform", return_value=0.0)
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.random.uniform", return_value=0.0)
+    @patch("ingot.utils.retry.time.sleep")
     def test_retry_exhaustion_on_persistent_rate_limit(self, mock_sleep, mock_random):
         """Persistent rate limit errors exhaust retries and raise RateLimitExceededError."""
         config = RateLimitConfig(
@@ -385,8 +385,8 @@ class TestAuggieRateLimitErrorRetry:
         # 2 retries means 2 sleep calls
         assert mock_sleep.call_count == 2
 
-    @patch("spec.utils.retry.random.uniform", return_value=0.5)
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.random.uniform", return_value=0.5)
+    @patch("ingot.utils.retry.time.sleep")
     def test_backoff_delay_calculation_deterministic(self, mock_sleep, mock_random):
         """Verify backoff delay calculation is deterministic with mocked random.
 
@@ -424,7 +424,7 @@ class TestAuggieRateLimitErrorRetry:
 class TestBackendRateLimitErrorRetry:
     """Tests for retry behavior with BackendRateLimitError."""
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_retry_triggers_on_backend_rate_limit_error(self, mock_sleep):
         """BackendRateLimitError triggers retry and succeeds after failures."""
         config = RateLimitConfig(
@@ -453,7 +453,7 @@ class TestBackendRateLimitErrorRetry:
         assert call_count == 3
         assert mock_sleep.call_count == 2
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_retry_exhaustion_on_persistent_backend_rate_limit(self, mock_sleep):
         """Persistent BackendRateLimitError exhausts retries."""
         config = RateLimitConfig(
@@ -473,7 +473,7 @@ class TestBackendRateLimitErrorRetry:
         assert exc_info.value.attempts == 2
         assert mock_sleep.call_count == 2
 
-    @patch("spec.utils.retry.time.sleep")
+    @patch("ingot.utils.retry.time.sleep")
     def test_retries_backend_error_without_rate_limit_keywords(self, mock_sleep):
         """BackendRateLimitError is retried even without rate limit keywords."""
         config = RateLimitConfig(

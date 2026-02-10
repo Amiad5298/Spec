@@ -1,8 +1,8 @@
-"""Tests for spec.config.settings module."""
+"""Tests for ingot.config.settings module."""
 
 from pathlib import Path
 
-from spec.config.settings import CONFIG_FILE, Settings
+from ingot.config.settings import CONFIG_FILE, Settings
 
 
 class TestSettings:
@@ -101,29 +101,29 @@ class TestSubagentSettings:
     """Tests for subagent settings."""
 
     def test_subagent_planner_default(self):
-        """subagent_planner defaults to spec-planner."""
+        """subagent_planner defaults to ingot-planner."""
         settings = Settings()
-        assert settings.subagent_planner == "spec-planner"
+        assert settings.subagent_planner == "ingot-planner"
 
     def test_subagent_tasklist_default(self):
-        """subagent_tasklist defaults to spec-tasklist."""
+        """subagent_tasklist defaults to ingot-tasklist."""
         settings = Settings()
-        assert settings.subagent_tasklist == "spec-tasklist"
+        assert settings.subagent_tasklist == "ingot-tasklist"
 
     def test_subagent_implementer_default(self):
-        """subagent_implementer defaults to spec-implementer."""
+        """subagent_implementer defaults to ingot-implementer."""
         settings = Settings()
-        assert settings.subagent_implementer == "spec-implementer"
+        assert settings.subagent_implementer == "ingot-implementer"
 
     def test_subagent_reviewer_default(self):
-        """subagent_reviewer defaults to spec-reviewer."""
+        """subagent_reviewer defaults to ingot-reviewer."""
         settings = Settings()
-        assert settings.subagent_reviewer == "spec-reviewer"
+        assert settings.subagent_reviewer == "ingot-reviewer"
 
     def test_subagent_doc_updater_default(self):
-        """subagent_doc_updater defaults to spec-doc-updater."""
+        """subagent_doc_updater defaults to ingot-doc-updater."""
         settings = Settings()
-        assert settings.subagent_doc_updater == "spec-doc-updater"
+        assert settings.subagent_doc_updater == "ingot-doc-updater"
 
     def test_subagent_custom_values(self):
         """Subagent settings accept custom values."""
@@ -188,21 +188,21 @@ class TestDefaultPlatformSettings:
 
     def test_get_default_platform_returns_jira(self):
         """get_default_platform returns Platform.JIRA for 'jira'."""
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         settings = Settings(default_platform="jira")
         assert settings.get_default_platform() == Platform.JIRA
 
     def test_get_default_platform_returns_linear(self):
         """get_default_platform returns Platform.LINEAR for 'linear'."""
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         settings = Settings(default_platform="linear")
         assert settings.get_default_platform() == Platform.LINEAR
 
     def test_get_default_platform_case_insensitive(self):
         """get_default_platform is case-insensitive."""
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         assert Settings(default_platform="JIRA").get_default_platform() == Platform.JIRA
         assert Settings(default_platform="Jira").get_default_platform() == Platform.JIRA
@@ -215,7 +215,7 @@ class TestDefaultPlatformSettings:
 
     def test_get_default_platform_all_valid_platforms(self):
         """get_default_platform works for all valid platform names."""
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         assert Settings(default_platform="github").get_default_platform() == Platform.GITHUB
         assert (
@@ -235,4 +235,4 @@ class TestConfigFile:
 
     def test_config_file_name(self):
         """CONFIG_FILE has correct name."""
-        assert CONFIG_FILE.name == ".spec-config"
+        assert CONFIG_FILE.name == ".ingot-config"

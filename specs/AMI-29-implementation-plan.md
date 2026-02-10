@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-29 - TicketFetcher Abstraction & AgentMediatedFetcher
 
-**Ticket:** [AMI-29](https://linear.app/amiadspec/issue/AMI-29/implement-ticketfetcher-abstraction-and-agentmediatedfetcher-base)
+**Ticket:** [AMI-29](https://linear.app/amiadingot/issue/AMI-29/implement-ticketfetcher-abstraction-and-agentmediatedfetcher-base)
 **Status:** Draft
 **Date:** 2026-01-23
 
@@ -59,7 +59,7 @@ The new `TicketFetcher` abstraction **complements** the existing `IssueTrackerPr
 
 ## Components to Create
 
-### New Directory: `spec/integrations/fetchers/`
+### New Directory: `ingot/integrations/fetchers/`
 
 | File | Purpose |
 |------|---------|
@@ -72,7 +72,7 @@ The new `TicketFetcher` abstraction **complements** the existing `IssueTrackerPr
 ## Implementation Steps
 
 ### Step 1: Create Exceptions Module
-**File:** `spec/integrations/fetchers/exceptions.py`
+**File:** `ingot/integrations/fetchers/exceptions.py`
 
 Create custom exception hierarchy:
 - `TicketFetchError` - Base exception
@@ -80,7 +80,7 @@ Create custom exception hierarchy:
 - `AgentIntegrationError` - Agent integration failure
 
 ### Step 2: Create Base Module
-**File:** `spec/integrations/fetchers/base.py`
+**File:** `ingot/integrations/fetchers/base.py`
 
 Implement:
 1. `TicketFetcher` ABC with:
@@ -96,7 +96,7 @@ Implement:
    - `_parse_response(response) -> dict` - Robust JSON extraction from agent response
 
 ### Step 3: Create Package Init
-**File:** `spec/integrations/fetchers/__init__.py`
+**File:** `ingot/integrations/fetchers/__init__.py`
 
 Export all public classes and exceptions.
 
@@ -113,7 +113,7 @@ Test coverage for:
 
 ## File Changes Detail
 
-### New: `spec/integrations/fetchers/exceptions.py`
+### New: `ingot/integrations/fetchers/exceptions.py`
 ```python
 class TicketFetchError(Exception):
     """Base exception for ticket fetch failures."""
@@ -128,18 +128,18 @@ class AgentIntegrationError(TicketFetchError):
     pass
 ```
 
-### New: `spec/integrations/fetchers/base.py`
-- Import `Platform` from `spec.integrations.providers.base`
+### New: `ingot/integrations/fetchers/base.py`
+- Import `Platform` from `ingot.integrations.providers.base`
 - Define `TicketFetcher` ABC with async `fetch_raw()` method
 - Define `AgentMediatedFetcher` with prompt building and JSON parsing logic
 
-### New: `spec/integrations/fetchers/__init__.py`
+### New: `ingot/integrations/fetchers/__init__.py`
 ```python
-from spec.integrations.fetchers.base import (
+from ingot.integrations.fetchers.base import (
     TicketFetcher,
     AgentMediatedFetcher,
 )
-from spec.integrations.fetchers.exceptions import (
+from ingot.integrations.fetchers.exceptions import (
     TicketFetchError,
     PlatformNotSupportedError,
     AgentIntegrationError,

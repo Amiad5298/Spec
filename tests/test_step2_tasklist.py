@@ -1,13 +1,13 @@
-"""Tests for spec.workflow.step2_tasklist module."""
+"""Tests for ingot.workflow.step2_tasklist module."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.providers import GenericTicket, Platform
-from spec.ui.menus import TaskReviewChoice
-from spec.workflow.state import WorkflowState
-from spec.workflow.step2_tasklist import (
+from ingot.integrations.providers import GenericTicket, Platform
+from ingot.ui.menus import TaskReviewChoice
+from ingot.workflow.state import WorkflowState
+from ingot.workflow.step2_tasklist import (
     _create_default_tasklist,
     _display_tasklist,
     _edit_tasklist,
@@ -17,7 +17,7 @@ from spec.workflow.step2_tasklist import (
     _parse_add_tasks_line,
     step_2_create_tasklist,
 )
-from spec.workflow.tasks import parse_task_list
+from ingot.workflow.tasks import parse_task_list
 
 # Note: This file has multiple tests that create GenericTicket with specific IDs
 # because plan/tasklist filenames are derived from ticket.safe_filename_stem.
@@ -295,7 +295,7 @@ Task list updated successfully. Created: 13, Updated: 1, Deleted: 0.
         assert len(tasks) == 13, f"Expected 13 tasks, got {len(tasks)}"
 
         # Count tasks by category
-        from spec.workflow.tasks import TaskCategory
+        from ingot.workflow.tasks import TaskCategory
 
         fundamental_tasks = [t for t in tasks if t.category == TaskCategory.FUNDAMENTAL]
         independent_tasks = [t for t in tasks if t.category == TaskCategory.INDEPENDENT]
@@ -338,7 +338,7 @@ Task list updated successfully. Created: 13, Updated: 1, Deleted: 0.
 
         assert len(tasks) == 4
 
-        from spec.workflow.tasks import TaskCategory
+        from ingot.workflow.tasks import TaskCategory
 
         # First two should be FUNDAMENTAL
         assert tasks[0].category == TaskCategory.FUNDAMENTAL
@@ -440,7 +440,7 @@ class TestStrictParser:
         assert tasks[2].name == "Regular task"
 
         # Verify categories
-        from spec.workflow.tasks import TaskCategory
+        from ingot.workflow.tasks import TaskCategory
 
         assert tasks[0].category == TaskCategory.INDEPENDENT
         assert tasks[1].category == TaskCategory.FUNDAMENTAL
@@ -561,9 +561,9 @@ class TestGenerateTasklist:
 class TestStep2CreateTasklist:
     """Tests for step_2_create_tasklist function."""
 
-    @patch("spec.workflow.step2_tasklist.show_task_review_menu")
-    @patch("spec.workflow.step2_tasklist._edit_tasklist")
-    @patch("spec.workflow.step2_tasklist._generate_tasklist")
+    @patch("ingot.workflow.step2_tasklist.show_task_review_menu")
+    @patch("ingot.workflow.step2_tasklist._edit_tasklist")
+    @patch("ingot.workflow.step2_tasklist._generate_tasklist")
     def test_edit_does_not_regenerate(
         self,
         mock_generate,
@@ -656,8 +656,8 @@ class TestStep2CreateTasklist:
         assert state.current_step == 3
         assert state.tasklist_file == tasklist_path
 
-    @patch("spec.workflow.step2_tasklist.show_task_review_menu")
-    @patch("spec.workflow.step2_tasklist._generate_tasklist")
+    @patch("ingot.workflow.step2_tasklist.show_task_review_menu")
+    @patch("ingot.workflow.step2_tasklist._generate_tasklist")
     def test_regenerate_calls_generate_again(
         self,
         mock_generate,
@@ -702,8 +702,8 @@ class TestStep2CreateTasklist:
         # Should be called twice: initial + after REGENERATE
         assert mock_generate.call_count == 2
 
-    @patch("spec.workflow.step2_tasklist.show_task_review_menu")
-    @patch("spec.workflow.step2_tasklist._generate_tasklist")
+    @patch("ingot.workflow.step2_tasklist.show_task_review_menu")
+    @patch("ingot.workflow.step2_tasklist._generate_tasklist")
     def test_abort_returns_false(
         self,
         mock_generate,
@@ -737,7 +737,7 @@ class TestStep2CreateTasklist:
 
         assert result is False
 
-    @patch("spec.workflow.step2_tasklist._generate_tasklist")
+    @patch("ingot.workflow.step2_tasklist._generate_tasklist")
     def test_returns_false_when_plan_not_found(
         self,
         mock_generate,
@@ -784,7 +784,7 @@ class TestDisplayTasklist:
 """
         )
 
-        with patch("spec.workflow.step2_tasklist.console") as mock_console:
+        with patch("ingot.workflow.step2_tasklist.console") as mock_console:
             _display_tasklist(tasklist_path)
 
             # Verify console.print was called multiple times
@@ -798,7 +798,7 @@ class TestDisplayTasklist:
         tasklist_path = tmp_path / "tasklist.md"
         tasklist_path.write_text("# Task List: TEST-123\n\nNo tasks yet.\n")
 
-        with patch("spec.workflow.step2_tasklist.console") as mock_console:
+        with patch("ingot.workflow.step2_tasklist.console") as mock_console:
             _display_tasklist(tasklist_path)
 
             calls = [str(c) for c in mock_console.print.call_args_list]
@@ -830,7 +830,7 @@ class TestEditTasklist:
 
         mock_run.assert_called_once_with(["vim", str(tasklist_path)], check=True)
 
-    @patch("spec.workflow.step2_tasklist.prompt_enter")
+    @patch("ingot.workflow.step2_tasklist.prompt_enter")
     @patch("subprocess.run")
     @patch.dict("os.environ", {"EDITOR": "nonexistent_editor"}, clear=False)
     def test_handles_editor_not_found(self, mock_run, mock_prompt, tmp_path):

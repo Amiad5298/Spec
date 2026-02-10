@@ -1,12 +1,12 @@
-"""Tests for spec.config.backend_resolver module."""
+"""Tests for ingot.config.backend_resolver module."""
 
 from unittest.mock import MagicMock
 
 import pytest
 
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform, ConfigValidationError
-from spec.integrations.backends.errors import BackendNotConfiguredError
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform, ConfigValidationError
+from ingot.integrations.backends.errors import BackendNotConfiguredError
 
 
 class TestResolveBackendPlatformPrecedence:
@@ -73,7 +73,7 @@ class TestResolveBackendPlatformNoBackend:
             resolve_backend_platform(config, cli_backend_override=None)
 
         assert "No AI backend configured" in str(exc_info.value)
-        assert "spec init" in str(exc_info.value)
+        assert "ingot init" in str(exc_info.value)
 
     def test_raises_when_config_is_whitespace_only(self) -> None:
         """Whitespace-only config is treated as empty."""
@@ -182,8 +182,8 @@ class TestResolveBackendPlatformEnvironmentVariable:
         This test verifies that AI_BACKEND is in the Settings key mapping,
         so environment variable overrides work correctly.
         """
-        from spec.config.manager import ConfigManager
-        from spec.config.settings import Settings
+        from ingot.config.manager import ConfigManager
+        from ingot.config.settings import Settings
 
         # Verify AI_BACKEND is in the key mapping
         settings = Settings()
@@ -205,7 +205,7 @@ class TestResolveBackendPlatformEnvironmentVariable:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
     ) -> None:
         """AI_BACKEND environment variable works end-to-end with resolver."""
-        from spec.config.manager import ConfigManager
+        from ingot.config.manager import ConfigManager
 
         # Set environment variable
         monkeypatch.setenv("AI_BACKEND", "auggie")
@@ -223,7 +223,7 @@ class TestResolveBackendPlatformEnvironmentVariable:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
     ) -> None:
         """CLI --backend flag takes precedence over AI_BACKEND env var."""
-        from spec.config.manager import ConfigManager
+        from ingot.config.manager import ConfigManager
 
         # Set environment variable to auggie
         monkeypatch.setenv("AI_BACKEND", "auggie")

@@ -1,10 +1,10 @@
-"""Tests for spec.ui.prompts module."""
+"""Tests for ingot.ui.prompts module."""
 
 from unittest.mock import patch
 
 import pytest
 
-from spec.ui.prompts import (
+from ingot.ui.prompts import (
     custom_style,
     prompt_checkbox,
     prompt_confirm,
@@ -12,7 +12,7 @@ from spec.ui.prompts import (
     prompt_input,
     prompt_select,
 )
-from spec.utils.errors import UserCancelledError
+from ingot.utils.errors import UserCancelledError
 
 
 class TestCustomStyle:
@@ -144,4 +144,3 @@ class TestPromptCheckbox:
 
         with pytest.raises(UserCancelledError):
             prompt_checkbox("Select", ["option1", "option2"])
-

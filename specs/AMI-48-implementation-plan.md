@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-48 - Phase 1.2: Create AIBackend Protocol
 
-**Ticket:** [AMI-48](https://linear.app/amiadspec/issue/AMI-48/phase-12-create-aibackend-protocol)
+**Ticket:** [AMI-48](https://linear.app/amiadingot/issue/AMI-48/phase-12-create-aibackend-protocol)
 **Status:** Draft
 **Date:** 2026-02-01
 **Labels:** MultiAgent
@@ -12,17 +12,17 @@
 This ticket defines the `AIBackend` Protocol that all backend implementations must satisfy. The protocol serves as the foundational contract for the multi-backend abstraction layer, enabling workflow code to interact with any AI backend (Auggie, Claude, Cursor) through a unified interface.
 
 **Why This Matters:**
-- The current codebase has an `AuggieClientProtocol` in `spec/workflow/step4_update_docs.py` (lines 517-539) that is Auggie-specific
+- The current codebase has an `AuggieClientProtocol` in `ingot/workflow/step4_update_docs.py` (lines 517-539) that is Auggie-specific
 - The new `AIBackend` protocol provides a generalized abstraction for all backends
 - This enables dependency injection of backends into workflow steps
 - Protocol-based design allows for static type checking and runtime validation via `@runtime_checkable`
 
 **Scope:**
-- Create `spec/integrations/backends/base.py` with:
+- Create `ingot/integrations/backends/base.py` with:
   - `AIBackend` Protocol (defines contract for all backends)
   - All required properties: `name`, `platform`, `supports_parallel`
   - All required methods: execution methods, `check_installed()`, `detect_rate_limit()`, `close()`
-- Update `spec/integrations/backends/__init__.py` to export the new protocol
+- Update `ingot/integrations/backends/__init__.py` to export the new protocol
 
 **Reference:** `specs/Pluggable Multi-Agent Support.md` - Phase 1.2 (lines 1297-1432)
 
@@ -46,7 +46,7 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     spec/integrations/backends/base.py                       │
+│                     ingot/integrations/backends/base.py                       │
 │                                                                              │
 │   AIBackend (Protocol)                                                       │
 │       ├── name: str (property)                                              │
@@ -98,7 +98,7 @@ The new `AIBackend` protocol:
 
 | Current (`AuggieClientProtocol`) | New (`AIBackend`) |
 |----------------------------------|-------------------|
-| In `step4_update_docs.py` | In `spec/integrations/backends/base.py` |
+| In `step4_update_docs.py` | In `ingot/integrations/backends/base.py` |
 | 2 methods only | 8 methods + 3 properties |
 | Auggie-specific naming | Backend-agnostic |
 | No capability flags | `supports_parallel` property |
@@ -124,8 +124,8 @@ The new `AIBackend` protocol:
 6. **Timeout Parameter**: All execution methods accept `timeout_seconds: float | None` for streaming-safe timeout enforcement.
 
 7. **Import Dependencies**: The protocol imports from existing modules:
-   - `AgentPlatform` from `spec.config.fetch_config`
-   - Error types from `spec.integrations.backends.errors` (AMI-47 dependency)
+   - `AgentPlatform` from `ingot.config.fetch_config`
+   - Error types from `ingot.integrations.backends.errors` (AMI-47 dependency)
 
 ---
 
@@ -133,8 +133,8 @@ The new `AIBackend` protocol:
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `spec/integrations/backends/base.py` | **CREATE** | AIBackend Protocol definition |
-| `spec/integrations/backends/__init__.py` | **MODIFY** | Export AIBackend |
+| `ingot/integrations/backends/base.py` | **CREATE** | AIBackend Protocol definition |
+| `ingot/integrations/backends/__init__.py` | **MODIFY** | Export AIBackend |
 
 ---
 
@@ -144,7 +144,7 @@ The new `AIBackend` protocol:
 
 #### Step 1.1: Create base.py with AIBackend Protocol
 
-**File:** `spec/integrations/backends/base.py`
+**File:** `ingot/integrations/backends/base.py`
 
 ```python
 """AI Backend protocol and base types.
@@ -159,7 +159,7 @@ User input is collected via the TUI, then included in prompts.
 
 from typing import Callable, Protocol, runtime_checkable
 
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.fetch_config import AgentPlatform
 
 
 @runtime_checkable
@@ -180,7 +180,7 @@ class AIBackend(Protocol):
         ...     success, output = backend.run_with_callback(
         ...         "Generate a plan",
         ...         output_callback=print,
-        ...         subagent="spec-planner",
+        ...         subagent="ingot-planner",
         ...     )
         ...     if not success:
         ...         if backend.detect_rate_limit(output):
@@ -399,7 +399,7 @@ class AIBackend(Protocol):
 
 #### Step 2.1: Update __init__.py to Export AIBackend
 
-**File:** `spec/integrations/backends/__init__.py`
+**File:** `ingot/integrations/backends/__init__.py`
 
 Add the AIBackend import and export:
 
@@ -418,8 +418,8 @@ Modules:
 - factory: Backend factory for instantiation (Phase 1.6+)
 """
 
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.errors import (
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
@@ -447,8 +447,8 @@ __all__ = [
 
 | Ticket | Component | Status | Description |
 |--------|-----------|--------|-------------|
-| [AMI-44](https://linear.app/amiadspec/issue/AMI-44) | Phase 0: Baseline Tests | ✅ Done | Baseline tests capture current behavior |
-| [AMI-47](https://linear.app/amiadspec/issue/AMI-47) | Phase 1.1: Backend Error Types | ⏳ Backlog | Error types must exist before protocol references them |
+| [AMI-44](https://linear.app/amiadingot/issue/AMI-44) | Phase 0: Baseline Tests | ✅ Done | Baseline tests capture current behavior |
+| [AMI-47](https://linear.app/amiadingot/issue/AMI-47) | Phase 1.1: Backend Error Types | ⏳ Backlog | Error types must exist before protocol references them |
 
 ### Downstream Dependents (Blocked by This Ticket)
 
@@ -463,8 +463,8 @@ __all__ = [
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-45](https://linear.app/amiadspec/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
-| [AMI-46](https://linear.app/amiadspec/issue/AMI-46) | Phase 1.0: Rename Claude Platform Enum | Sibling - parallel work |
+| [AMI-45](https://linear.app/amiadingot/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
+| [AMI-46](https://linear.app/amiadingot/issue/AMI-46) | Phase 1.0: Rename Claude Platform Enum | Sibling - parallel work |
 | [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) | Specification | Parent specification |
 
 ---
@@ -476,13 +476,13 @@ __all__ = [
 Create test file: `tests/test_backend_protocol.py`
 
 ```python
-"""Tests for spec.integrations.backends.base module."""
+"""Tests for ingot.integrations.backends.base module."""
 
 import pytest
 from typing import Protocol
 
-from spec.integrations.backends.base import AIBackend
-from spec.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
 
 
 class TestAIBackendProtocol:
@@ -659,13 +659,13 @@ class TestAIBackendImports:
 
     def test_aibackend_importable_from_package(self):
         """AIBackend can be imported from backends package."""
-        from spec.integrations.backends import AIBackend
+        from ingot.integrations.backends import AIBackend
 
         assert AIBackend is not None
 
     def test_all_exports_available(self):
         """All expected exports are available from backends package."""
-        from spec.integrations.backends import (
+        from ingot.integrations.backends import (
             AIBackend,
             BackendNotConfiguredError,
             BackendNotInstalledError,
@@ -685,10 +685,10 @@ class TestAIBackendImports:
 pytest tests/test_backend_protocol.py -v
 
 # Run with coverage
-pytest tests/test_backend_protocol.py --cov=spec.integrations.backends.base -v
+pytest tests/test_backend_protocol.py --cov=ingot.integrations.backends.base -v
 
 # Run type checking
-mypy spec/integrations/backends/base.py
+mypy ingot/integrations/backends/base.py
 
 # Verify no regressions
 pytest tests/ -v
@@ -702,7 +702,7 @@ pytest tests/ -v
 
 | AC | Description | Verification Method | Status |
 |----|-------------|---------------------|--------|
-| **AC1** | `AIBackend` Protocol defined in `spec/integrations/backends/base.py` | File exists | [ ] |
+| **AC1** | `AIBackend` Protocol defined in `ingot/integrations/backends/base.py` | File exists | [ ] |
 | **AC2** | All method signatures match spec exactly | Code review + type checking | [ ] |
 | **AC3** | Protocol uses `typing.Protocol` for static type checking | Code inspection | [ ] |
 | **AC4** | Protocol methods have complete docstrings | Code inspection | [ ] |
@@ -740,18 +740,18 @@ After implementation, run these commands to verify:
 
 ```bash
 # 1. Verify file created
-ls -la spec/integrations/backends/base.py
+ls -la ingot/integrations/backends/base.py
 # Expected: base.py exists
 
 # 2. Verify AIBackend is importable
 python -c "
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 print('✅ AIBackend importable from base.py')
 "
 
 # 3. Verify AIBackend is runtime checkable
 python -c "
-from spec.integrations.backends import AIBackend
+from ingot.integrations.backends import AIBackend
 from typing import runtime_checkable, Protocol
 
 # Check it's a Protocol
@@ -761,7 +761,7 @@ print('✅ AIBackend is a Protocol')
 
 # 4. Verify package export
 python -c "
-from spec.integrations.backends import AIBackend
+from ingot.integrations.backends import AIBackend
 assert AIBackend.__name__ == 'AIBackend'
 print('✅ AIBackend exported from package')
 "
@@ -770,19 +770,19 @@ print('✅ AIBackend exported from package')
 pytest tests/test_backend_protocol.py -v
 
 # 6. Run type checking
-mypy spec/integrations/backends/base.py
+mypy ingot/integrations/backends/base.py
 ```
 
 ---
 
 ## Definition of Done
 
-- [ ] `spec/integrations/backends/base.py` created with `AIBackend` Protocol
+- [ ] `ingot/integrations/backends/base.py` created with `AIBackend` Protocol
 - [ ] Protocol includes all 3 properties (`name`, `platform`, `supports_parallel`)
 - [ ] Protocol includes all 8 methods (execution methods + utility methods)
 - [ ] `@runtime_checkable` decorator applied
 - [ ] All methods and properties have complete docstrings
-- [ ] `spec/integrations/backends/__init__.py` exports `AIBackend`
+- [ ] `ingot/integrations/backends/__init__.py` exports `AIBackend`
 - [ ] Unit tests created in `tests/test_backend_protocol.py`
 - [ ] All tests pass
 - [ ] mypy reports no type errors
@@ -809,10 +809,10 @@ mypy spec/integrations/backends/base.py
 
 | File | Relevant Code |
 |------|--------------|
-| `spec/workflow/step4_update_docs.py:517-539` | Current `AuggieClientProtocol` (to be replaced) |
-| `spec/integrations/backends/errors.py` | Error types used by protocol methods |
-| `spec/config/fetch_config.py:49-64` | `AgentPlatform` enum |
-| `spec/integrations/auggie.py` | `AuggieClient` implementation (reference for signatures) |
+| `ingot/workflow/step4_update_docs.py:517-539` | Current `AuggieClientProtocol` (to be replaced) |
+| `ingot/integrations/backends/errors.py` | Error types used by protocol methods |
+| `ingot/config/fetch_config.py:49-64` | `AgentPlatform` enum |
+| `ingot/integrations/auggie.py` | `AuggieClient` implementation (reference for signatures) |
 
 ### Specification References
 

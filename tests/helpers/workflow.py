@@ -4,7 +4,7 @@ This module contains helper functions for extracting and inspecting
 workflow-related data in tests.
 """
 
-from spec.integrations.providers import GenericTicket
+from ingot.integrations.providers import GenericTicket
 
 
 def get_ticket_from_workflow_call(mock_workflow_runner) -> GenericTicket | None:
@@ -13,7 +13,7 @@ def get_ticket_from_workflow_call(mock_workflow_runner) -> GenericTicket | None:
     This helper is resilient to changes in how the ticket is passed to the workflow runner.
 
     Args:
-        mock_workflow_runner: The mocked run_spec_driven_workflow function
+        mock_workflow_runner: The mocked run_ingot_workflow function
 
     Returns:
         The GenericTicket passed to the workflow, or None if not found

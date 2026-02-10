@@ -1,12 +1,12 @@
-"""Tests for spec.utils.errors module."""
+"""Tests for ingot.utils.errors module."""
 
 
-from spec.utils.errors import (
+from ingot.utils.errors import (
     AuggieNotInstalledError,
     ExitCode,
     GitOperationError,
+    IngotError,
     PlatformNotConfiguredError,
-    SpecError,
     UserCancelledError,
 )
 
@@ -33,22 +33,22 @@ class TestExitCode:
         assert int(ExitCode.GENERAL_ERROR) == 1
 
 
-class TestSpecError:
-    """Tests for base SpecError exception."""
+class TestIngotError:
+    """Tests for base IngotError exception."""
 
     def test_default_exit_code(self):
         """Base exception has GENERAL_ERROR exit code."""
-        error = SpecError("Test error")
+        error = IngotError("Test error")
         assert error.exit_code == ExitCode.GENERAL_ERROR
 
     def test_custom_exit_code(self):
         """Can override exit code in constructor."""
-        error = SpecError("Test error", exit_code=ExitCode.GIT_ERROR)
+        error = IngotError("Test error", exit_code=ExitCode.GIT_ERROR)
         assert error.exit_code == ExitCode.GIT_ERROR
 
     def test_message(self):
         """Exception message is accessible."""
-        error = SpecError("Test error message")
+        error = IngotError("Test error message")
         assert str(error) == "Test error message"
 
 
@@ -61,9 +61,9 @@ class TestAuggieNotInstalledError:
         assert error.exit_code == ExitCode.AUGGIE_NOT_INSTALLED
 
     def test_inheritance(self):
-        """Inherits from SpecError."""
+        """Inherits from IngotError."""
         error = AuggieNotInstalledError("Test")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
 
 class TestPlatformNotConfiguredError:
@@ -97,9 +97,9 @@ class TestPlatformNotConfiguredError:
         assert error.platform is None
 
     def test_inheritance(self):
-        """Inherits from SpecError."""
+        """Inherits from IngotError."""
         error = PlatformNotConfiguredError("Test")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_custom_exit_code_override(self):
         """Can override exit code in constructor."""
@@ -118,9 +118,9 @@ class TestUserCancelledError:
         assert error.exit_code == ExitCode.USER_CANCELLED
 
     def test_inheritance(self):
-        """Inherits from SpecError."""
+        """Inherits from IngotError."""
         error = UserCancelledError("Test")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
 
 class TestGitOperationError:
@@ -132,6 +132,6 @@ class TestGitOperationError:
         assert error.exit_code == ExitCode.GIT_ERROR
 
     def test_inheritance(self):
-        """Inherits from SpecError."""
+        """Inherits from IngotError."""
         error = GitOperationError("Test")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)

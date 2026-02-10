@@ -2,8 +2,8 @@
 
 import pytest
 
-from spec.utils.error_analysis import ErrorAnalysis, analyze_error_output
-from spec.workflow.tasks import Task, TaskStatus
+from ingot.utils.error_analysis import ErrorAnalysis, analyze_error_output
+from ingot.workflow.tasks import Task, TaskStatus
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ class TestErrorAnalysis:
             error_message="SyntaxError: invalid syntax",
             stack_trace=["line 1", "line 2"],
             root_cause="Missing colon",
-            suggested_fix="Add colon at end of line"
+            suggested_fix="Add colon at end of line",
         )
 
         markdown = error.to_markdown()
@@ -184,4 +184,3 @@ class TestGenericError:
         assert result.file_path is None
         assert result.line_number is None
         assert len(result.error_message) > 0
-

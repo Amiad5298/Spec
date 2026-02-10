@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.auth module.
+"""Tests for ingot.integrations.auth module.
 
 Tests cover:
 - AuthenticationManager initialization
@@ -12,9 +12,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from spec.config.manager import ConfigManager
-from spec.integrations.auth import AuthenticationManager, PlatformCredentials
-from spec.integrations.providers.base import Platform
+from ingot.config.manager import ConfigManager
+from ingot.integrations.auth import AuthenticationManager, PlatformCredentials
+from ingot.integrations.providers.base import Platform
 
 # =============================================================================
 # Fixtures
@@ -141,7 +141,7 @@ class TestGetCredentials:
 
     def test_get_credentials_missing_env_var(self, mock_config_manager):
         """Returns error for unexpanded environment variable."""
-        from spec.utils.env_utils import EnvVarExpansionError
+        from ingot.utils.env_utils import EnvVarExpansionError
 
         mock_config_manager.get_fallback_credentials.side_effect = EnvVarExpansionError(
             "GITHUB_TOKEN", "Environment variable not set"
@@ -156,7 +156,7 @@ class TestGetCredentials:
 
     def test_get_credentials_missing_required_fields(self, mock_config_manager):
         """Returns error for incomplete config."""
-        from spec.config import ConfigValidationError
+        from ingot.config import ConfigValidationError
 
         mock_config_manager.get_fallback_credentials.side_effect = ConfigValidationError(
             "Missing required field: token"
@@ -441,7 +441,7 @@ class TestValidateCredentials:
 
     def test_validate_credentials_failure_missing_env_var(self, mock_config_manager):
         """Returns (False, error) for missing environment variable."""
-        from spec.utils.env_utils import EnvVarExpansionError
+        from ingot.utils.env_utils import EnvVarExpansionError
 
         mock_config_manager.get_fallback_credentials.side_effect = EnvVarExpansionError(
             "LINEAR_API_KEY", "Not set"

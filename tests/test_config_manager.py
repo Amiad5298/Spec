@@ -1,4 +1,4 @@
-"""Tests for spec.config.manager module.
+"""Tests for ingot.config.manager module.
 
 Tests cover:
 - ConfigManager.load method with legacy and cascading hierarchy
@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from spec.config.manager import ConfigManager
+from ingot.config.manager import ConfigManager
 
 
 class TestConfigManagerLoad:
@@ -260,9 +260,9 @@ class TestConfigManagerGet:
 class TestConfigManagerShow:
     """Tests for ConfigManager.show method."""
 
-    @patch("spec.config.manager.print_header")
-    @patch("spec.config.manager.print_info")
-    @patch("spec.config.manager.console")
+    @patch("ingot.config.manager.print_header")
+    @patch("ingot.config.manager.print_info")
+    @patch("ingot.config.manager.console")
     def test_show_missing_file(self, mock_console, mock_info, mock_header, tmp_path):
         """Shows message when config file doesn't exist."""
         config_path = tmp_path / "missing"
@@ -273,9 +273,9 @@ class TestConfigManagerShow:
         mock_header.assert_called_once()
         assert mock_info.call_count >= 1
 
-    @patch("spec.config.manager.print_header")
-    @patch("spec.config.manager.print_info")
-    @patch("spec.config.manager.console")
+    @patch("ingot.config.manager.print_header")
+    @patch("ingot.config.manager.print_info")
+    @patch("ingot.config.manager.console")
     def test_show_displays_settings(self, mock_console, mock_info, mock_header, temp_config_file):
         """Shows all settings including platform status from config file."""
         manager = ConfigManager(temp_config_file)
@@ -292,9 +292,9 @@ class TestConfigManagerShow:
         assert any("Platform Settings" in str(call) for call in print_calls)
         assert any("Default Platform" in str(call) for call in print_calls)
 
-    @patch("spec.config.manager.print_header")
-    @patch("spec.config.manager.print_info")
-    @patch("spec.config.manager.console")
+    @patch("ingot.config.manager.print_header")
+    @patch("ingot.config.manager.print_info")
+    @patch("ingot.config.manager.console")
     def test_show_displays_platform_status_table(
         self, mock_console, mock_info, mock_header, temp_config_file
     ):
@@ -327,7 +327,7 @@ class TestPlatformStatusHelpers:
         integrations = manager._get_agent_integrations()
 
         # Should return dict with all known platforms
-        from spec.config.fetch_config import KNOWN_PLATFORMS
+        from ingot.config.fetch_config import KNOWN_PLATFORMS
 
         assert set(integrations.keys()) == KNOWN_PLATFORMS
 
@@ -339,7 +339,7 @@ class TestPlatformStatusHelpers:
 
     def test_get_agent_integrations_respects_explicit_config(self, tmp_path):
         """Respects explicit AGENT_INTEGRATION_* config keys."""
-        config_file = tmp_path / ".spec-config"
+        config_file = tmp_path / ".ingot-config"
         config_file.write_text(
             'AGENT_INTEGRATION_JIRA="false"\n' 'AGENT_INTEGRATION_MONDAY="true"\n'
         )
@@ -359,7 +359,7 @@ class TestPlatformStatusHelpers:
         set to manual, cursor, or other non-Auggie platforms without explicit
         AGENT_INTEGRATION_* keys.
         """
-        config_file = tmp_path / ".spec-config"
+        config_file = tmp_path / ".ingot-config"
         config_file.write_text('AI_BACKEND="manual"\n')
         manager = ConfigManager(config_file)
         manager.load()
@@ -367,14 +367,14 @@ class TestPlatformStatusHelpers:
         integrations = manager._get_agent_integrations()
 
         # All platforms should be False for non-Auggie without explicit config
-        from spec.config.fetch_config import KNOWN_PLATFORMS
+        from ingot.config.fetch_config import KNOWN_PLATFORMS
 
         assert set(integrations.keys()) == KNOWN_PLATFORMS
         assert all(v is False for v in integrations.values())
 
     def test_get_agent_integrations_non_auggie_with_explicit_config(self, tmp_path):
         """Non-Auggie platform respects explicit integration config."""
-        config_file = tmp_path / ".spec-config"
+        config_file = tmp_path / ".ingot-config"
         config_file.write_text('AI_BACKEND="cursor"\n' 'AGENT_INTEGRATION_JIRA="true"\n')
         manager = ConfigManager(config_file)
         manager.load()
@@ -386,7 +386,7 @@ class TestPlatformStatusHelpers:
         assert integrations["linear"] is False
         assert integrations["github"] is False
 
-    @patch("spec.integrations.auth.AuthenticationManager")
+    @patch("ingot.integrations.auth.AuthenticationManager")
     def test_get_fallback_status_checks_all_platforms(self, mock_auth_class, temp_config_file):
         """Checks fallback status for all known platforms."""
         # Configure mock to return False for all platforms
@@ -399,7 +399,7 @@ class TestPlatformStatusHelpers:
         status = manager._get_fallback_status()
 
         # Should check all platforms
-        from spec.config.fetch_config import KNOWN_PLATFORMS
+        from ingot.config.fetch_config import KNOWN_PLATFORMS
 
         assert set(status.keys()) == KNOWN_PLATFORMS
         # All should be False since mock returns False
@@ -407,12 +407,12 @@ class TestPlatformStatusHelpers:
         # Verify has_fallback_configured was called for each platform
         assert mock_auth.has_fallback_configured.call_count == len(KNOWN_PLATFORMS)
 
-    @patch("spec.integrations.auth.AuthenticationManager")
+    @patch("ingot.integrations.auth.AuthenticationManager")
     def test_get_fallback_status_with_configured_credentials(
         self, mock_auth_class, temp_config_file
     ):
         """Returns True for platforms with configured fallback credentials."""
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         # Configure mock to return True only for Jira
         mock_auth = mock_auth_class.return_value
@@ -445,9 +445,9 @@ class TestPlatformStatusHelpers:
         assert ready["linear"] is True  # fallback=True
         assert ready["github"] is False  # neither
 
-    @patch("spec.config.manager.print_header")
-    @patch("spec.config.manager.print_info")
-    @patch("spec.config.manager.console")
+    @patch("ingot.config.manager.print_header")
+    @patch("ingot.config.manager.print_info")
+    @patch("ingot.config.manager.console")
     def test_show_platform_status_error_handling(
         self, mock_console, mock_info, mock_header, temp_config_file
     ):
@@ -474,7 +474,7 @@ class TestPlatformStatusHelpers:
         manager.load()
 
         # Get platforms multiple times and verify order is consistent
-        from spec.config.manager import _get_known_platforms
+        from ingot.config.manager import _get_known_platforms
 
         platforms1 = sorted(_get_known_platforms())
         platforms2 = sorted(_get_known_platforms())
@@ -488,9 +488,9 @@ class TestPlatformStatusHelpers:
         essential_platforms = {"jira", "linear", "github"}
         assert essential_platforms.issubset(set(platforms1))
 
-    @patch("spec.config.manager.print_header")
-    @patch("spec.config.manager.print_info")
-    @patch("spec.config.manager.console")
+    @patch("ingot.config.manager.print_header")
+    @patch("ingot.config.manager.print_info")
+    @patch("ingot.config.manager.console")
     def test_show_platform_status_plain_text_fallback(
         self, mock_console, mock_info, mock_header, temp_config_file, capsys
     ):
@@ -510,8 +510,8 @@ class TestPlatformStatusHelpers:
         # Should show status columns
         assert "Agent" in captured.out or "Yes" in captured.out or "No" in captured.out
 
-    @patch("spec.config.manager.print_header")
-    @patch("spec.config.manager.print_info")
+    @patch("ingot.config.manager.print_header")
+    @patch("ingot.config.manager.print_info")
     def test_show_platform_status_fallback_when_rich_import_fails(
         self, mock_info, mock_header, temp_config_file, capsys
     ):
@@ -549,7 +549,7 @@ class TestCascadingConfigHierarchy:
     def test_global_config_loaded(self, tmp_path):
         """Global config values are loaded."""
         # Create global config
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         global_config.write_text('DEFAULT_MODEL="global-model"\n')
 
         manager = ConfigManager(global_config)
@@ -560,13 +560,13 @@ class TestCascadingConfigHierarchy:
     def test_local_overrides_global(self, tmp_path, monkeypatch):
         """Local config overrides global config."""
         # Create global config
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         global_config.write_text('DEFAULT_MODEL="global-model"\n')
 
         # Create local config in a subdirectory
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        local_config = project_dir / ".spec"
+        local_config = project_dir / ".ingot"
         local_config.write_text('DEFAULT_MODEL="local-model"\n')
 
         # Create fake .git to mark repo root
@@ -584,13 +584,13 @@ class TestCascadingConfigHierarchy:
     def test_environment_overrides_all(self, tmp_path, monkeypatch):
         """Environment variables override local and global config."""
         # Create global config
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         global_config.write_text('DEFAULT_MODEL="global-model"\n')
 
         # Create local config
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        local_config = project_dir / ".spec"
+        local_config = project_dir / ".ingot"
         local_config.write_text('DEFAULT_MODEL="local-model"\n')
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(project_dir)
@@ -606,7 +606,7 @@ class TestCascadingConfigHierarchy:
     def test_multiple_keys_from_different_sources(self, tmp_path, monkeypatch):
         """Different keys can come from different sources."""
         # Global has multiple keys
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         global_config.write_text(
             """DEFAULT_MODEL="global-model"
 PLANNING_MODEL="global-planning"
@@ -617,7 +617,7 @@ DEFAULT_PLATFORM="jira"
         # Local overrides one key
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        local_config = project_dir / ".spec"
+        local_config = project_dir / ".ingot"
         local_config.write_text('DEFAULT_PLATFORM="linear"\n')
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(project_dir)
@@ -637,10 +637,10 @@ class TestFindLocalConfig:
     """Tests for _find_local_config method."""
 
     def test_finds_config_in_cwd(self, tmp_path, monkeypatch):
-        """Finds .spec in current directory."""
+        """Finds .ingot in current directory."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        local_config = project_dir / ".spec"
+        local_config = project_dir / ".ingot"
         local_config.write_text("TEST_KEY=value\n")
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(project_dir)
@@ -651,12 +651,12 @@ class TestFindLocalConfig:
         assert found == local_config
 
     def test_finds_config_in_parent(self, tmp_path, monkeypatch):
-        """Finds .spec in parent directory."""
+        """Finds .ingot in parent directory."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
         sub_dir = project_dir / "src" / "module"
         sub_dir.mkdir(parents=True)
-        local_config = project_dir / ".spec"
+        local_config = project_dir / ".ingot"
         local_config.write_text("TEST_KEY=value\n")
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(sub_dir)
@@ -675,7 +675,7 @@ class TestFindLocalConfig:
         (project / ".git").mkdir()
 
         # Config above .git should not be found
-        (workspace / ".spec").write_text("TEST_KEY=value\n")
+        (workspace / ".ingot").write_text("TEST_KEY=value\n")
         monkeypatch.chdir(project)
 
         manager = ConfigManager()
@@ -684,7 +684,7 @@ class TestFindLocalConfig:
         assert found is None
 
     def test_returns_none_if_not_found(self, tmp_path, monkeypatch):
-        """Returns None when no .spec exists."""
+        """Returns None when no .ingot exists."""
         project = tmp_path / "empty-project"
         project.mkdir()
         (project / ".git").mkdir()
@@ -696,11 +696,11 @@ class TestFindLocalConfig:
         assert found is None
 
     def test_ignores_spec_directory(self, tmp_path, monkeypatch):
-        """Ignores .spec if it is a directory, not a file."""
+        """Ignores .ingot if it is a directory, not a file."""
         project = tmp_path / "project"
         project.mkdir()
-        # Create .spec as a directory instead of a file
-        spec_dir = project / ".spec"
+        # Create .ingot as a directory instead of a file
+        spec_dir = project / ".ingot"
         spec_dir.mkdir()
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
@@ -760,7 +760,7 @@ class TestConfigManagerPathAccessors:
         """local_config_path is set after load finds local config."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        local_config = project_dir / ".spec"
+        local_config = project_dir / ".ingot"
         local_config.write_text("TEST=value\n")
         (project_dir / ".git").mkdir()
         monkeypatch.chdir(project_dir)
@@ -795,7 +795,7 @@ class TestConfigManagerIdempotency:
         # First load with local config
         project1 = tmp_path / "project1"
         project1.mkdir()
-        local1 = project1 / ".spec"
+        local1 = project1 / ".ingot"
         local1.write_text("TEST=value1\n")
         (project1 / ".git").mkdir()
         monkeypatch.chdir(project1)
@@ -855,7 +855,7 @@ class TestConfigManagerSaveScope:
 
         manager.save("LOCAL_KEY", "local_value", scope="local")
 
-        local_config = project / ".spec"
+        local_config = project / ".ingot"
         assert local_config.exists()
         assert 'LOCAL_KEY="local_value"' in local_config.read_text()
 
@@ -870,7 +870,7 @@ class TestConfigManagerSaveScope:
         """save() returns warning when local config overrides saved value."""
         project = tmp_path / "project"
         project.mkdir()
-        local_config = project / ".spec"
+        local_config = project / ".ingot"
         local_config.write_text('OVERRIDE_KEY="local-value"\n')
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
@@ -910,7 +910,7 @@ class TestConfigManagerSaveScope:
         assert warning is None
 
     def test_save_to_local_creates_file(self, tmp_path, monkeypatch):
-        """save() with scope='local' creates .spec if it doesn't exist."""
+        """save() with scope='local' creates .ingot if it doesn't exist."""
         project = tmp_path / "project"
         project.mkdir()
         (project / ".git").mkdir()
@@ -922,7 +922,7 @@ class TestConfigManagerSaveScope:
 
         manager.save("NEW_KEY", "new_value", scope="local")
 
-        local_config = project / ".spec"
+        local_config = project / ".ingot"
         assert local_config.exists()
         assert 'NEW_KEY="new_value"' in local_config.read_text()
 
@@ -942,12 +942,12 @@ class TestConfigManagerSavePrecedence:
         the local (higher priority) value.
         """
         # Setup: global has one value, local has a different value
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         global_config.write_text('DEFAULT_MODEL="global-model"\n')
 
         project = tmp_path / "project"
         project.mkdir()
-        local_config = project / ".spec"
+        local_config = project / ".ingot"
         local_config.write_text('DEFAULT_MODEL="local-model"\n')
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
@@ -983,7 +983,7 @@ class TestConfigManagerSavePrecedence:
         # Setup: set environment variable
         monkeypatch.setenv("DEFAULT_MODEL", "env-model")
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
         manager.load()
 
@@ -1020,7 +1020,7 @@ class TestConfigManagerSavePrecedence:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
         manager.load()
 
@@ -1036,7 +1036,7 @@ class TestConfigManagerSavePrecedence:
         assert "environment" in warning.lower()
 
         # Assert: local file was created with new value
-        local_config = project / ".spec"
+        local_config = project / ".ingot"
         assert local_config.exists()
         assert 'DEFAULT_MODEL="new-local"' in local_config.read_text()
 
@@ -1050,7 +1050,7 @@ class TestConfigManagerSavePrecedence:
         Verifies that when saving to global config without any local
         or env overrides, the in-memory settings are updated.
         """
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
         manager.load()
 
@@ -1081,7 +1081,7 @@ class TestConfigManagerSavePrecedence:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         global_config.write_text('DEFAULT_MODEL="global-model"\n')
 
         manager = ConfigManager(global_config)
@@ -1097,7 +1097,7 @@ class TestConfigManagerSavePrecedence:
         assert warning is None
 
         # Assert: local file was created with new value
-        local_config = project / ".spec"
+        local_config = project / ".ingot"
         assert local_config.exists()
         assert 'DEFAULT_MODEL="new-local"' in local_config.read_text()
 
@@ -1112,7 +1112,7 @@ class TestConfigManagerSavePrecedence:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
         # Don't call load() first to test save creating local config
 
@@ -1120,7 +1120,7 @@ class TestConfigManagerSavePrecedence:
         manager.save("TEST_KEY", "test_value", scope="local")
 
         # Assert: local_config_path is set correctly
-        expected_path = project / ".spec"
+        expected_path = project / ".ingot"
         assert manager.local_config_path == expected_path
         assert manager.local_config_path.exists()
 
@@ -1130,7 +1130,7 @@ class TestConfigManagerSensitiveValueMasking:
 
     def test_is_sensitive_key_detects_token(self):
         """Keys containing TOKEN are detected as sensitive."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("JIRA_TOKEN") is True
         assert is_sensitive_key("jira_token") is True
@@ -1138,7 +1138,7 @@ class TestConfigManagerSensitiveValueMasking:
 
     def test_is_sensitive_key_detects_key(self):
         """Keys containing KEY are detected as sensitive."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("API_KEY") is True
         assert is_sensitive_key("api_key") is True
@@ -1146,28 +1146,28 @@ class TestConfigManagerSensitiveValueMasking:
 
     def test_is_sensitive_key_detects_secret(self):
         """Keys containing SECRET are detected as sensitive."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("CLIENT_SECRET") is True
         assert is_sensitive_key("secret_value") is True
 
     def test_is_sensitive_key_detects_password(self):
         """Keys containing PASSWORD are detected as sensitive."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("DB_PASSWORD") is True
         assert is_sensitive_key("password") is True
 
     def test_is_sensitive_key_detects_pat(self):
         """Keys containing PAT are detected as sensitive."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("GITHUB_PAT") is True
         assert is_sensitive_key("pat_token") is True
 
     def test_is_sensitive_key_non_sensitive(self):
         """Non-sensitive keys are not flagged."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("DEFAULT_MODEL") is False
         assert is_sensitive_key("AUTO_OPEN_FILES") is False
@@ -1183,9 +1183,9 @@ class TestConfigManagerSensitiveValueMasking:
         monkeypatch.chdir(project)
 
         # Enable logging
-        monkeypatch.setenv("SPEC_LOG", "true")
+        monkeypatch.setenv("INGOT_LOG", "true")
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
 
         # Capture logs
@@ -1233,7 +1233,7 @@ class TestConfigManagerQuoteEscaping:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
 
         # Save value with quotes
@@ -1254,7 +1254,7 @@ class TestConfigManagerQuoteEscaping:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
 
         # Save value with backslashes
@@ -1275,7 +1275,7 @@ class TestConfigManagerQuoteEscaping:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
 
         # Save value with multiple special characters
@@ -1296,7 +1296,7 @@ class TestConfigManagerQuoteEscaping:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
 
         # Manually write a config file with single-quoted value containing backslashes
         # In bash single quotes, \\ is literal (not an escape sequence)
@@ -1316,7 +1316,7 @@ class TestConfigManagerQuoteEscaping:
         (project / ".git").mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
 
         # Manually write a config file with double-quoted escaped value
         # This represents a value that was escaped on save
@@ -1345,16 +1345,16 @@ class TestConfigManagerRepoRootDetection:
         # Change to nested directory
         monkeypatch.chdir(nested_dir)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
 
         # Act: save to local scope
         manager.save("PROJECT_SETTING", "value", scope="local")
 
         # Assert: config created at repo root, not in nested dir
-        expected_path = repo_root / ".spec"
+        expected_path = repo_root / ".ingot"
         assert expected_path.exists()
-        assert not (nested_dir / ".spec").exists()
+        assert not (nested_dir / ".ingot").exists()
         assert manager.local_config_path == expected_path
 
     def test_save_local_falls_back_to_cwd_without_git(self, tmp_path, monkeypatch):
@@ -1364,14 +1364,14 @@ class TestConfigManagerRepoRootDetection:
         project.mkdir()
         monkeypatch.chdir(project)
 
-        global_config = tmp_path / ".spec-config"
+        global_config = tmp_path / ".ingot-config"
         manager = ConfigManager(global_config)
 
         # Act: save to local scope
         manager.save("SETTING", "value", scope="local")
 
         # Assert: config created in cwd
-        expected_path = project / ".spec"
+        expected_path = project / ".ingot"
         assert expected_path.exists()
         assert manager.local_config_path == expected_path
 
@@ -1381,7 +1381,7 @@ class TestFetchConfigEnums:
 
     def test_fetch_strategy_values(self):
         """FetchStrategy enum has correct values."""
-        from spec.config.fetch_config import FetchStrategy
+        from ingot.config.fetch_config import FetchStrategy
 
         assert FetchStrategy.AGENT.value == "agent"
         assert FetchStrategy.DIRECT.value == "direct"
@@ -1389,7 +1389,7 @@ class TestFetchConfigEnums:
 
     def test_fetch_strategy_from_string(self):
         """FetchStrategy can be created from string value."""
-        from spec.config.fetch_config import FetchStrategy
+        from ingot.config.fetch_config import FetchStrategy
 
         assert FetchStrategy("agent") == FetchStrategy.AGENT
         assert FetchStrategy("direct") == FetchStrategy.DIRECT
@@ -1397,14 +1397,14 @@ class TestFetchConfigEnums:
 
     def test_fetch_strategy_invalid_value(self):
         """FetchStrategy raises ValueError for invalid value."""
-        from spec.config.fetch_config import FetchStrategy
+        from ingot.config.fetch_config import FetchStrategy
 
         with pytest.raises(ValueError):
             FetchStrategy("invalid")
 
     def test_ai_backend_values(self):
         """AI backend enum has correct values."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         assert AgentPlatform.AUGGIE.value == "auggie"
         assert AgentPlatform.CLAUDE.value == "claude"
@@ -1414,7 +1414,7 @@ class TestFetchConfigEnums:
 
     def test_ai_backend_from_string(self):
         """AI backend enum can be created from string value."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         assert AgentPlatform("auggie") == AgentPlatform.AUGGIE
         assert AgentPlatform("claude") == AgentPlatform.CLAUDE
@@ -1422,7 +1422,7 @@ class TestFetchConfigEnums:
 
     def test_ai_backend_invalid_value(self):
         """AI backend enum raises ValueError for invalid value."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         with pytest.raises(ValueError):
             AgentPlatform("unknown")
@@ -1433,7 +1433,7 @@ class TestFetchConfigDataclasses:
 
     def test_agent_config_defaults(self):
         """AgentConfig has correct defaults."""
-        from spec.config.fetch_config import AgentConfig, AgentPlatform
+        from ingot.config.fetch_config import AgentConfig, AgentPlatform
 
         config = AgentConfig()
         assert config.platform == AgentPlatform.AUGGIE
@@ -1441,7 +1441,7 @@ class TestFetchConfigDataclasses:
 
     def test_agent_config_supports_platform(self):
         """AgentConfig.supports_platform() works correctly."""
-        from spec.config.fetch_config import AgentConfig
+        from ingot.config.fetch_config import AgentConfig
 
         config = AgentConfig(integrations={"jira": True, "linear": True, "github": False})
         assert config.supports_platform("jira") is True
@@ -1452,7 +1452,7 @@ class TestFetchConfigDataclasses:
 
     def test_fetch_strategy_config_defaults(self):
         """FetchStrategyConfig has correct defaults."""
-        from spec.config.fetch_config import FetchStrategy, FetchStrategyConfig
+        from ingot.config.fetch_config import FetchStrategy, FetchStrategyConfig
 
         config = FetchStrategyConfig()
         assert config.default == FetchStrategy.AUTO
@@ -1460,7 +1460,7 @@ class TestFetchConfigDataclasses:
 
     def test_fetch_strategy_config_get_strategy_default(self):
         """FetchStrategyConfig.get_strategy() returns default for unknown platforms."""
-        from spec.config.fetch_config import FetchStrategy, FetchStrategyConfig
+        from ingot.config.fetch_config import FetchStrategy, FetchStrategyConfig
 
         config = FetchStrategyConfig(default=FetchStrategy.AGENT)
         assert config.get_strategy("jira") == FetchStrategy.AGENT
@@ -1468,7 +1468,7 @@ class TestFetchConfigDataclasses:
 
     def test_fetch_strategy_config_get_strategy_override(self):
         """FetchStrategyConfig.get_strategy() returns per-platform override."""
-        from spec.config.fetch_config import FetchStrategy, FetchStrategyConfig
+        from ingot.config.fetch_config import FetchStrategy, FetchStrategyConfig
 
         config = FetchStrategyConfig(
             default=FetchStrategy.AUTO,
@@ -1483,7 +1483,7 @@ class TestFetchConfigDataclasses:
 
     def test_fetch_performance_config_defaults(self):
         """FetchPerformanceConfig has correct defaults."""
-        from spec.config.fetch_config import FetchPerformanceConfig
+        from ingot.config.fetch_config import FetchPerformanceConfig
 
         config = FetchPerformanceConfig()
         assert config.cache_duration_hours == 24
@@ -1493,7 +1493,7 @@ class TestFetchConfigDataclasses:
 
     def test_fetch_performance_config_custom_values(self):
         """FetchPerformanceConfig accepts custom values."""
-        from spec.config.fetch_config import FetchPerformanceConfig
+        from ingot.config.fetch_config import FetchPerformanceConfig
 
         config = FetchPerformanceConfig(
             cache_duration_hours=48,
@@ -1508,11 +1508,11 @@ class TestFetchConfigDataclasses:
 
 
 class TestEnvVarExpansion:
-    """Tests for expand_env_vars function from spec.utils.env_utils."""
+    """Tests for expand_env_vars function from ingot.utils.env_utils."""
 
     def test_expand_env_vars_string(self, monkeypatch):
         """Expands ${VAR} in strings."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         monkeypatch.setenv("TEST_VAR", "expanded_value")
 
@@ -1521,14 +1521,14 @@ class TestEnvVarExpansion:
 
     def test_expand_env_vars_missing_var(self):
         """Preserves ${VAR} when variable not set (strict=False)."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         result = expand_env_vars("${MISSING_VAR}", strict=False)
         assert result == "${MISSING_VAR}"
 
     def test_expand_env_vars_dict(self, monkeypatch):
         """Recursively expands in dicts."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         monkeypatch.setenv("VAR1", "value1")
         monkeypatch.setenv("VAR2", "value2")
@@ -1538,7 +1538,7 @@ class TestEnvVarExpansion:
 
     def test_expand_env_vars_list(self, monkeypatch):
         """Recursively expands in lists."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         monkeypatch.setenv("ITEM", "expanded")
 
@@ -1547,7 +1547,7 @@ class TestEnvVarExpansion:
 
     def test_expand_env_vars_nested(self, monkeypatch):
         """Recursively expands in nested structures."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         monkeypatch.setenv("NESTED", "deep_value")
 
@@ -1556,7 +1556,7 @@ class TestEnvVarExpansion:
 
     def test_expand_env_vars_non_string(self):
         """Returns non-string/dict/list values unchanged."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         assert expand_env_vars(42) == 42
         assert expand_env_vars(True) is True
@@ -1568,7 +1568,7 @@ class TestConfigManagerGetAgentConfig:
 
     def test_get_agent_config_defaults(self, tmp_path):
         """Returns defaults when no config set."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         config_path = tmp_path / "config"
         config_path.write_text("")
@@ -1581,7 +1581,7 @@ class TestConfigManagerGetAgentConfig:
 
     def test_get_agent_config_custom_platform(self, tmp_path):
         """Parses AI_BACKEND from config."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         config_path = tmp_path / "config"
         config_path.write_text('AI_BACKEND="cursor"\n')
@@ -1593,7 +1593,7 @@ class TestConfigManagerGetAgentConfig:
 
     def test_get_agent_config_invalid_platform_raises(self, tmp_path):
         """Raises ConfigValidationError for invalid platform value."""
-        from spec.config.fetch_config import ConfigValidationError
+        from ingot.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
         config_path.write_text('AI_BACKEND="invalid_platform"\n')
@@ -1633,7 +1633,7 @@ class TestConfigManagerGetFetchStrategyConfig:
 
     def test_get_fetch_strategy_config_defaults(self, tmp_path):
         """Returns defaults when no config set."""
-        from spec.config.fetch_config import FetchStrategy
+        from ingot.config.fetch_config import FetchStrategy
 
         config_path = tmp_path / "config"
         config_path.write_text("")
@@ -1646,7 +1646,7 @@ class TestConfigManagerGetFetchStrategyConfig:
 
     def test_get_fetch_strategy_config_custom_default(self, tmp_path):
         """Parses FETCH_STRATEGY_DEFAULT from config."""
-        from spec.config.fetch_config import FetchStrategy
+        from ingot.config.fetch_config import FetchStrategy
 
         config_path = tmp_path / "config"
         config_path.write_text('FETCH_STRATEGY_DEFAULT="agent"\n')
@@ -1658,7 +1658,7 @@ class TestConfigManagerGetFetchStrategyConfig:
 
     def test_get_fetch_strategy_config_per_platform(self, tmp_path):
         """Parses FETCH_STRATEGY_* keys for per-platform overrides."""
-        from spec.config.fetch_config import FetchStrategy
+        from ingot.config.fetch_config import FetchStrategy
 
         config_path = tmp_path / "config"
         config_path.write_text(
@@ -1679,7 +1679,7 @@ FETCH_STRATEGY_JIRA=agent
 
     def test_get_fetch_strategy_config_invalid_override_raises(self, tmp_path):
         """Invalid per-platform override value raises ConfigValidationError."""
-        from spec.config.fetch_config import ConfigValidationError
+        from ingot.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
         config_path.write_text(
@@ -1701,7 +1701,7 @@ FETCH_STRATEGY_INVALID=not_a_strategy
 
     def test_get_fetch_strategy_config_invalid_default_raises(self, tmp_path):
         """Invalid FETCH_STRATEGY_DEFAULT value raises ConfigValidationError."""
-        from spec.config.fetch_config import ConfigValidationError
+        from ingot.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
         config_path.write_text(
@@ -1879,7 +1879,7 @@ class TestFetchConfigEndToEnd:
 
     def test_full_fetch_config_from_file(self, tmp_path, monkeypatch):
         """Loads complete fetch configuration from file."""
-        from spec.config.fetch_config import AgentPlatform, FetchStrategy
+        from ingot.config.fetch_config import AgentPlatform, FetchStrategy
 
         monkeypatch.setenv("MY_PAT", "secret_pat_value")
 
@@ -1937,7 +1937,7 @@ class TestEnvVarExpansionStrict:
 
     def test_expand_env_vars_strict_mode_raises_on_missing(self, monkeypatch):
         """Strict mode raises EnvVarExpansionError for missing env vars."""
-        from spec.utils.env_utils import EnvVarExpansionError, expand_env_vars_strict
+        from ingot.utils.env_utils import EnvVarExpansionError, expand_env_vars_strict
 
         with pytest.raises(EnvVarExpansionError) as exc_info:
             expand_env_vars_strict("${MISSING_VAR}", context="test_field")
@@ -1948,7 +1948,7 @@ class TestEnvVarExpansionStrict:
 
     def test_expand_env_vars_strict_mode_succeeds_when_set(self, monkeypatch):
         """Strict mode expands when env var is set."""
-        from spec.utils.env_utils import expand_env_vars_strict
+        from ingot.utils.env_utils import expand_env_vars_strict
 
         monkeypatch.setenv("MY_SECRET", "secret_value")
 
@@ -1957,7 +1957,7 @@ class TestEnvVarExpansionStrict:
 
     def test_expand_env_vars_nested_dict(self, monkeypatch):
         """Expands env vars in nested dict structures."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         monkeypatch.setenv("NESTED_VAR", "nested_value")
 
@@ -1967,7 +1967,7 @@ class TestEnvVarExpansionStrict:
 
     def test_expand_env_vars_nested_list(self, monkeypatch):
         """Expands env vars in list structures."""
-        from spec.utils.env_utils import expand_env_vars
+        from ingot.utils.env_utils import expand_env_vars
 
         monkeypatch.setenv("LIST_VAR", "list_value")
 
@@ -1981,7 +1981,7 @@ class TestValidationFailures:
 
     def test_validate_strategy_agent_without_integration(self, tmp_path):
         """Agent strategy fails validation when agent lacks integration."""
-        from spec.config.fetch_config import (
+        from ingot.config.fetch_config import (
             AgentConfig,
             AgentPlatform,
             ConfigValidationError,
@@ -2008,7 +2008,7 @@ class TestValidationFailures:
 
     def test_validate_strategy_direct_without_credentials(self, tmp_path):
         """Direct strategy fails validation when no credentials exist."""
-        from spec.config.fetch_config import (
+        from ingot.config.fetch_config import (
             AgentConfig,
             AgentPlatform,
             ConfigValidationError,
@@ -2032,7 +2032,7 @@ class TestValidationFailures:
 
     def test_validate_strategy_auto_without_either(self, tmp_path):
         """Auto strategy fails validation when neither integration nor creds exist."""
-        from spec.config.fetch_config import (
+        from ingot.config.fetch_config import (
             AgentConfig,
             AgentPlatform,
             ConfigValidationError,
@@ -2056,7 +2056,7 @@ class TestValidationFailures:
 
     def test_validate_credentials_missing_required_fields(self):
         """Credential validation fails when required fields are missing."""
-        from spec.config.fetch_config import ConfigValidationError, validate_credentials
+        from ingot.config.fetch_config import ConfigValidationError, validate_credentials
 
         # Jira requires url, email, token
         incomplete_creds = {"url": "https://example.atlassian.net"}
@@ -2068,7 +2068,7 @@ class TestValidationFailures:
 
     def test_validate_credentials_unexpanded_env_var(self):
         """Credential validation warns about unexpanded env vars."""
-        from spec.config.fetch_config import validate_credentials
+        from ingot.config.fetch_config import validate_credentials
 
         creds = {
             "url": "https://example.atlassian.net",
@@ -2085,7 +2085,7 @@ class TestPerformanceGuardrails:
 
     def test_performance_config_clamps_to_max(self):
         """Performance config clamps values to upper bounds."""
-        from spec.config.fetch_config import (
+        from ingot.config.fetch_config import (
             MAX_CACHE_DURATION_HOURS,
             MAX_RETRIES,
             MAX_RETRY_DELAY_SECONDS,
@@ -2107,7 +2107,7 @@ class TestPerformanceGuardrails:
 
     def test_performance_config_accepts_valid_values(self):
         """Performance config accepts values within bounds."""
-        from spec.config.fetch_config import FetchPerformanceConfig
+        from ingot.config.fetch_config import FetchPerformanceConfig
 
         config = FetchPerformanceConfig(
             cache_duration_hours=48,
@@ -2123,7 +2123,7 @@ class TestPerformanceGuardrails:
 
     def test_performance_config_clamps_to_lower_bounds(self):
         """Performance config clamps negative/zero values to lower bounds."""
-        from spec.config.fetch_config import FetchPerformanceConfig
+        from ingot.config.fetch_config import FetchPerformanceConfig
 
         config = FetchPerformanceConfig(
             cache_duration_hours=-10,  # Negative - clamp to 0
@@ -2139,7 +2139,7 @@ class TestPerformanceGuardrails:
 
     def test_performance_config_zero_timeout_clamps_to_one(self):
         """Zero timeout is clamped to 1 (must be positive for HTTP)."""
-        from spec.config.fetch_config import FetchPerformanceConfig
+        from ingot.config.fetch_config import FetchPerformanceConfig
 
         config = FetchPerformanceConfig(timeout_seconds=-100)
         assert config.timeout_seconds == 1
@@ -2150,7 +2150,7 @@ class TestNoSecretLeakage:
 
     def test_sensitive_key_detection(self):
         """Sensitive key patterns are correctly detected."""
-        from spec.utils.env_utils import is_sensitive_key
+        from ingot.utils.env_utils import is_sensitive_key
 
         assert is_sensitive_key("JIRA_TOKEN") is True
         assert is_sensitive_key("AZURE_PAT") is True
@@ -2187,7 +2187,7 @@ class TestPlatformOverrideValidation:
 
     def test_unknown_platform_warning(self):
         """Unknown platforms in per_platform generate warnings."""
-        from spec.config.fetch_config import FetchStrategy, FetchStrategyConfig
+        from ingot.config.fetch_config import FetchStrategy, FetchStrategyConfig
 
         config = FetchStrategyConfig(
             default=FetchStrategy.AUTO,
@@ -2203,7 +2203,7 @@ class TestPlatformOverrideValidation:
 
     def test_unknown_platform_strict_raises(self):
         """Unknown platforms in strict mode raise ConfigValidationError."""
-        from spec.config.fetch_config import (
+        from ingot.config.fetch_config import (
             ConfigValidationError,
             FetchStrategy,
             FetchStrategyConfig,
@@ -2264,7 +2264,7 @@ FETCH_STRATEGY_LINEAR=agent
 
     def test_validate_fetch_config_strict_raises_on_invalid_ai_backend(self, tmp_path):
         """strict=True raises ConfigValidationError for invalid AI backend."""
-        from spec.config.fetch_config import ConfigValidationError
+        from ingot.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
         config_path.write_text("AI_BACKEND=invalid_platform\n")
@@ -2290,7 +2290,7 @@ FETCH_STRATEGY_LINEAR=agent
 
     def test_validate_fetch_config_strict_raises_on_invalid_strategy(self, tmp_path):
         """strict=True raises ConfigValidationError for invalid fetch strategy."""
-        from spec.config.fetch_config import ConfigValidationError
+        from ingot.config.fetch_config import ConfigValidationError
 
         config_path = tmp_path / "config"
         config_path.write_text("FETCH_STRATEGY_DEFAULT=invalid_strategy\n")

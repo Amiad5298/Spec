@@ -1,10 +1,10 @@
-"""Tests for spec.integrations.jira module."""
+"""Tests for ingot.integrations.jira module."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.jira import (
+from ingot.integrations.jira import (
     JiraTicket,
     check_jira_integration,
     fetch_ticket_info,
@@ -89,7 +89,7 @@ class TestCheckJiraIntegration:
 
         mock_auggie = MagicMock()
 
-        with patch("spec.integrations.jira.print_success"):
+        with patch("ingot.integrations.jira.print_success"):
             result = check_jira_integration(mock_config, mock_auggie, force=False)
 
         assert result is True
@@ -108,9 +108,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "YES, Jira is available"
 
-        with patch("spec.integrations.jira.print_info"), patch(
-            "spec.integrations.jira.print_success"
-        ), patch("spec.integrations.jira.print_step"):
+        with patch("ingot.integrations.jira.print_info"), patch(
+            "ingot.integrations.jira.print_success"
+        ), patch("ingot.integrations.jira.print_step"):
             check_jira_integration(mock_config, mock_auggie, force=True)
 
         mock_auggie.run_print_quiet.assert_called_once()
@@ -123,9 +123,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "YES, Jira is available"
 
-        with patch("spec.integrations.jira.print_info"), patch(
-            "spec.integrations.jira.print_success"
-        ), patch("spec.integrations.jira.print_step"):
+        with patch("ingot.integrations.jira.print_info"), patch(
+            "ingot.integrations.jira.print_success"
+        ), patch("ingot.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie)
 
         assert result is True
@@ -139,9 +139,9 @@ class TestCheckJiraIntegration:
         mock_auggie = MagicMock()
         mock_auggie.run_print_quiet.return_value = "Jira is not configured"
 
-        with patch("spec.integrations.jira.print_info"), patch(
-            "spec.integrations.jira.print_warning"
-        ), patch("spec.integrations.jira.print_step"):
+        with patch("ingot.integrations.jira.print_info"), patch(
+            "ingot.integrations.jira.print_warning"
+        ), patch("ingot.integrations.jira.print_step"):
             result = check_jira_integration(mock_config, mock_auggie)
 
         assert result is False
@@ -235,8 +235,8 @@ class TestProviderRegistryConfigWiring:
         Uses clear() once at start to register JiraProvider, then reset_instances()
         between tests to preserve registration but clear instances/config.
         """
-        from spec.integrations.providers.jira import JiraProvider
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.jira import JiraProvider
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         ProviderRegistry.clear()
         # Re-register JiraProvider after clear (decorator ran at import time)
@@ -254,8 +254,8 @@ class TestProviderRegistryConfigWiring:
 
         Tests public behavior: parse_input() and can_handle() for numeric IDs.
         """
-        from spec.integrations.providers.base import Platform
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.base import Platform
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         # Set config BEFORE getting provider (provider is lazy-instantiated)
         ProviderRegistry.set_config({"default_jira_project": "TESTPROJ"})
@@ -276,8 +276,8 @@ class TestProviderRegistryConfigWiring:
         When default_jira_project is configured, JiraProvider should be able
         to handle numeric-only ticket IDs.
         """
-        from spec.integrations.providers.base import Platform
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.base import Platform
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         # Set config before getting provider
         ProviderRegistry.set_config({"default_jira_project": "MYPROJ"})
@@ -301,9 +301,9 @@ class TestProviderRegistryConfigWiring:
         """
         import os
 
-        from spec.integrations.providers.base import Platform
-        from spec.integrations.providers.jira import DEFAULT_PROJECT
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.base import Platform
+        from ingot.integrations.providers.jira import DEFAULT_PROJECT
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         # Clear any env vars that might interfere
         old_env = os.environ.pop("JIRA_DEFAULT_PROJECT", None)
@@ -328,8 +328,8 @@ class TestProviderRegistryConfigWiring:
         After reset_instances(), setting new config should create a new provider
         instance with the new config values, without needing to re-register.
         """
-        from spec.integrations.providers.base import Platform
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.base import Platform
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         # Set initial config
         ProviderRegistry.set_config({"default_jira_project": "FIRST"})

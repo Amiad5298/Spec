@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-47 - Phase 1.1: Create Backend Error Types
 
-**Ticket:** [AMI-47](https://linear.app/amiadspec/issue/AMI-47/phase-11-create-backend-error-types)
+**Ticket:** [AMI-47](https://linear.app/amiadingot/issue/AMI-47/phase-11-create-backend-error-types)
 **Status:** Draft
 **Date:** 2026-01-31
 **Labels:** MultiAgent
@@ -12,14 +12,14 @@
 This ticket creates generic error types that apply to all AI backends as part of the Pluggable Multi-Agent Support refactoring. These error types form the foundation of the backend abstraction layer, enabling backend-agnostic error handling throughout the workflow.
 
 **Why This Matters:**
-- The current `AuggieRateLimitError` is Auggie-specific and lives in `spec/integrations/auggie.py`
+- The current `AuggieRateLimitError` is Auggie-specific and lives in `ingot/integrations/auggie.py`
 - When adding Claude, Cursor, or other backends, each needs consistent error handling
 - These generic error types allow workflow code to catch `BackendRateLimitError` without knowing which backend threw it
 - Proper error types enable better rate limit retry logic, timeout handling, and configuration validation
 
 **Scope:**
-- Create `spec/integrations/backends/__init__.py` (package init)
-- Create `spec/integrations/backends/errors.py` with 4 error types:
+- Create `ingot/integrations/backends/__init__.py` (package init)
+- Create `ingot/integrations/backends/errors.py` with 4 error types:
   - `BackendRateLimitError` - Replaces `AuggieRateLimitError`
   - `BackendNotInstalledError` - Backend CLI not installed
   - `BackendNotConfiguredError` - No AI backend configured
@@ -47,9 +47,9 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          spec/utils/errors.py                                │
+│                          ingot/utils/errors.py                                │
 │                                                                              │
-│   SpecError (base exception with exit_code)                                 │
+│   IngotError (base exception with exit_code)                                 │
 │       ├── AuggieNotInstalledError                                           │
 │       ├── PlatformNotConfiguredError                                        │
 │       ├── UserCancelledError                                                │
@@ -59,7 +59,7 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
                                     │ inherits from
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                   spec/integrations/backends/errors.py                       │
+│                   ingot/integrations/backends/errors.py                       │
 │                                                                              │
 │   BackendRateLimitError (replaces AuggieRateLimitError)                     │
 │       - output: str (captured output for debugging)                         │
@@ -84,14 +84,14 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 | Current (Auggie-Specific) | New (Backend-Agnostic) |
 |---------------------------|------------------------|
-| `AuggieRateLimitError` in `spec/integrations/auggie.py` | `BackendRateLimitError` in `spec/integrations/backends/errors.py` |
+| `AuggieRateLimitError` in `ingot/integrations/auggie.py` | `BackendRateLimitError` in `ingot/integrations/backends/errors.py` |
 | `self.output` attribute only | `self.output` + `self.backend_name` attributes |
-| Not a `SpecError` subclass | Inherits from `SpecError` |
+| Not a `IngotError` subclass | Inherits from `IngotError` |
 | No exit code semantics | Inherits `ExitCode.GENERAL_ERROR` (default) |
 
 ### Key Design Decisions
 
-1. **Extend `SpecError`**: All backend errors inherit from `SpecError` to leverage:
+1. **Extend `IngotError`**: All backend errors inherit from `IngotError` to leverage:
    - Consistent exit code handling
    - Uniform exception hierarchy
    - Existing error handling patterns
@@ -103,14 +103,14 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 3. **Simple Base Errors**: `BackendNotInstalledError` and `BackendNotConfiguredError` are simple because:
    - Message is sufficient context
-   - Exit code inherited from `SpecError`
+   - Exit code inherited from `IngotError`
    - No additional attributes needed
 
 4. **Timeout Context**: `BackendTimeoutError` carries `timeout_seconds` for:
    - User feedback ("Timed out after 120 seconds")
    - Retry logic with adjusted timeouts
 
-5. **Default Exit Codes**: All backend errors inherit `ExitCode.GENERAL_ERROR` from `SpecError`. Custom exit codes (e.g., `BACKEND_NOT_INSTALLED = 6`) can be added in a future ticket if needed for CLI scripting. This keeps the initial implementation simple while preserving flexibility.
+5. **Default Exit Codes**: All backend errors inherit `ExitCode.GENERAL_ERROR` from `IngotError`. Custom exit codes (e.g., `BACKEND_NOT_INSTALLED = 6`) can be added in a future ticket if needed for CLI scripting. This keeps the initial implementation simple while preserving flexibility.
 
 ---
 
@@ -118,8 +118,8 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 | File | Purpose |
 |------|---------|
-| `spec/integrations/backends/__init__.py` | Package initialization, exports error types |
-| `spec/integrations/backends/errors.py` | Error type definitions |
+| `ingot/integrations/backends/__init__.py` | Package initialization, exports error types |
+| `ingot/integrations/backends/errors.py` | Error type definitions |
 
 ---
 
@@ -129,7 +129,7 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 #### Step 1.1: Create Package Init File
 
-**File:** `spec/integrations/backends/__init__.py`
+**File:** `ingot/integrations/backends/__init__.py`
 
 ```python
 """Backend infrastructure for AI agent integrations.
@@ -146,7 +146,7 @@ Modules:
 - factory: Backend factory for instantiation (Phase 1.6+)
 """
 
-from spec.integrations.backends.errors import (
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
@@ -167,7 +167,7 @@ __all__ = [
 
 #### Step 2.1: Create errors.py with All Error Types
 
-**File:** `spec/integrations/backends/errors.py`
+**File:** `ingot/integrations/backends/errors.py`
 
 ```python
 """Backend-related errors.
@@ -176,14 +176,14 @@ Generic error types that apply to all AI backends. These errors provide
 a unified error handling interface across Auggie, Claude, Cursor, and
 other backends.
 
-All errors inherit from SpecError to leverage exit code semantics and
+All errors inherit from IngotError to leverage exit code semantics and
 the existing exception hierarchy.
 """
 
-from spec.utils.errors import SpecError
+from ingot.utils.errors import IngotError
 
 
-class BackendRateLimitError(SpecError):
+class BackendRateLimitError(IngotError):
     """Raised when any backend hits a rate limit.
 
     Replaces AuggieRateLimitError for backend-agnostic handling.
@@ -219,7 +219,7 @@ class BackendRateLimitError(SpecError):
         self.backend_name = backend_name
 
 
-class BackendNotInstalledError(SpecError):
+class BackendNotInstalledError(IngotError):
     """Raised when backend CLI is not installed.
 
     This error is raised when attempting to use a backend whose CLI
@@ -234,23 +234,23 @@ class BackendNotInstalledError(SpecError):
     pass
 
 
-class BackendNotConfiguredError(SpecError):
+class BackendNotConfiguredError(IngotError):
     """Raised when no AI backend is configured.
 
     This error is raised when neither CLI --backend flag nor persisted
-    AI_BACKEND config is set. Users should run 'spec init' to configure
+    AI_BACKEND config is set. Users should run 'ingot init' to configure
     a backend or use --backend flag.
 
     Example:
         >>> raise BackendNotConfiguredError(
-        ...     "No AI backend configured. Run 'spec init' or use --backend flag."
+        ...     "No AI backend configured. Run 'ingot init' or use --backend flag."
         ... )
     """
 
     pass
 
 
-class BackendTimeoutError(SpecError):
+class BackendTimeoutError(IngotError):
     """Raised when backend execution times out.
 
     This error is raised when a backend operation exceeds the configured
@@ -295,10 +295,10 @@ __all__ = [
 
 ### Current Usage Pattern
 
-The current `AuggieRateLimitError` is used in `spec/workflow/step3_execute.py`:
+The current `AuggieRateLimitError` is used in `ingot/workflow/step3_execute.py`:
 
 ```python
-# Current pattern (spec/integrations/auggie.py)
+# Current pattern (ingot/integrations/auggie.py)
 class AuggieRateLimitError(Exception):
     def __init__(self, message: str, output: str):
         super().__init__(message)
@@ -314,8 +314,8 @@ if not success and _looks_like_rate_limit(output):
 After Phase 2 workflow integration:
 
 ```python
-# New pattern (spec/integrations/backends/errors.py)
-from spec.integrations.backends.errors import BackendRateLimitError
+# New pattern (ingot/integrations/backends/errors.py)
+from ingot.integrations.backends.errors import BackendRateLimitError
 
 # Usage will become:
 if backend.detect_rate_limit(output):
@@ -336,13 +336,13 @@ if backend.detect_rate_limit(output):
 
 | Ticket | Component | Status | Description |
 |--------|-----------|--------|-------------|
-| [AMI-44](https://linear.app/amiadspec/issue/AMI-44) | Phase 0: Baseline Tests | ✅ Done | Baseline tests must pass before any refactoring |
+| [AMI-44](https://linear.app/amiadingot/issue/AMI-44) | Phase 0: Baseline Tests | ✅ Done | Baseline tests must pass before any refactoring |
 
 ### Downstream Dependents (Blocked by This Ticket)
 
 | Ticket | Component | Description |
 |--------|-----------|-------------|
-| [AMI-48](https://linear.app/amiadspec/issue/AMI-48) | Phase 1.2: AIBackend Protocol | Protocol methods will throw these error types |
+| [AMI-48](https://linear.app/amiadingot/issue/AMI-48) | Phase 1.2: AIBackend Protocol | Protocol methods will throw these error types |
 | **Phase 1.3+** | BaseBackend, AuggieBackend | Implementations will use these error types |
 | **Phase 2** | Workflow Integration | Will migrate from `AuggieRateLimitError` to `BackendRateLimitError` |
 
@@ -350,8 +350,8 @@ if backend.detect_rate_limit(output):
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-45](https://linear.app/amiadspec/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
-| [AMI-46](https://linear.app/amiadspec/issue/AMI-46) | Phase 1.0: Rename Claude Platform Enum | Sibling - can be done in parallel |
+| [AMI-45](https://linear.app/amiadingot/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
+| [AMI-46](https://linear.app/amiadingot/issue/AMI-46) | Phase 1.0: Rename Claude Platform Enum | Sibling - can be done in parallel |
 | [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) | Specification | Parent specification |
 
 ---
@@ -363,26 +363,26 @@ if backend.detect_rate_limit(output):
 Create new test file: `tests/test_backend_errors.py`
 
 ```python
-"""Tests for spec.integrations.backends.errors module."""
+"""Tests for ingot.integrations.backends.errors module."""
 
 import pytest
 
-from spec.integrations.backends.errors import (
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
     BackendTimeoutError,
 )
-from spec.utils.errors import SpecError
+from ingot.utils.errors import IngotError
 
 
 class TestBackendRateLimitError:
     """Tests for BackendRateLimitError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendRateLimitError("Rate limit hit")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -428,7 +428,7 @@ class TestBackendRateLimitError:
 
     def test_has_default_exit_code(self):
         """Error has GENERAL_ERROR exit code."""
-        from spec.utils.errors import ExitCode
+        from ingot.utils.errors import ExitCode
 
         error = BackendRateLimitError("Rate limit hit")
         assert error.exit_code == ExitCode.GENERAL_ERROR
@@ -449,9 +449,9 @@ class TestBackendNotInstalledError:
     """Tests for BackendNotInstalledError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendNotInstalledError("CLI not found")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -460,7 +460,7 @@ class TestBackendNotInstalledError:
 
     def test_has_default_exit_code(self):
         """Error has GENERAL_ERROR exit code."""
-        from spec.utils.errors import ExitCode
+        from ingot.utils.errors import ExitCode
 
         error = BackendNotInstalledError("CLI not found")
         assert error.exit_code == ExitCode.GENERAL_ERROR
@@ -476,18 +476,18 @@ class TestBackendNotConfiguredError:
     """Tests for BackendNotConfiguredError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendNotConfiguredError("No backend configured")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
-        error = BackendNotConfiguredError("Run 'spec init' to configure")
-        assert str(error) == "Run 'spec init' to configure"
+        error = BackendNotConfiguredError("Run 'ingot init' to configure")
+        assert str(error) == "Run 'ingot init' to configure"
 
     def test_has_default_exit_code(self):
         """Error has GENERAL_ERROR exit code."""
-        from spec.utils.errors import ExitCode
+        from ingot.utils.errors import ExitCode
 
         error = BackendNotConfiguredError("No backend configured")
         assert error.exit_code == ExitCode.GENERAL_ERROR
@@ -503,9 +503,9 @@ class TestBackendTimeoutError:
     """Tests for BackendTimeoutError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendTimeoutError("Execution timed out")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -527,7 +527,7 @@ class TestBackendTimeoutError:
 
     def test_has_default_exit_code(self):
         """Error has GENERAL_ERROR exit code."""
-        from spec.utils.errors import ExitCode
+        from ingot.utils.errors import ExitCode
 
         error = BackendTimeoutError("Execution timed out")
         assert error.exit_code == ExitCode.GENERAL_ERROR
@@ -544,7 +544,7 @@ class TestErrorImports:
 
     def test_all_errors_importable_from_package(self):
         """All errors can be imported from backends package."""
-        from spec.integrations.backends import (
+        from ingot.integrations.backends import (
             BackendNotConfiguredError,
             BackendNotInstalledError,
             BackendRateLimitError,
@@ -565,7 +565,7 @@ class TestErrorImports:
 pytest tests/test_backend_errors.py -v
 
 # Run with coverage
-pytest tests/test_backend_errors.py --cov=spec.integrations.backends -v
+pytest tests/test_backend_errors.py --cov=ingot.integrations.backends -v
 
 # Verify no regressions in existing tests
 pytest tests/ -v
@@ -579,9 +579,9 @@ pytest tests/ -v
 
 | AC | Description | Verification Method | Status |
 |----|-------------|---------------------|--------|
-| **AC1** | `spec/integrations/backends/__init__.py` created (package init) | File exists | [ ] |
-| **AC2** | `spec/integrations/backends/errors.py` created with all 4 error types | File exists with classes | [ ] |
-| **AC3** | All errors extend `SpecError` | `isinstance(error, SpecError)` returns True | [ ] |
+| **AC1** | `ingot/integrations/backends/__init__.py` created (package init) | File exists | [ ] |
+| **AC2** | `ingot/integrations/backends/errors.py` created with all 4 error types | File exists with classes | [ ] |
+| **AC3** | All errors extend `IngotError` | `isinstance(error, IngotError)` returns True | [ ] |
 | **AC4** | `BackendRateLimitError` has `output` and `backend_name` attributes | Unit test verification | [ ] |
 | **AC5** | `BackendTimeoutError` has `timeout_seconds` attribute | Unit test verification | [ ] |
 | **AC6** | Unit tests for error initialization and attribute access | Tests pass | [ ] |
@@ -618,12 +618,12 @@ After implementation, run these commands to verify:
 
 ```bash
 # 1. Verify package structure created
-ls -la spec/integrations/backends/
+ls -la ingot/integrations/backends/
 # Expected: __init__.py, errors.py
 
 # 2. Verify errors are importable
 python -c "
-from spec.integrations.backends import (
+from ingot.integrations.backends import (
     BackendRateLimitError,
     BackendNotInstalledError,
     BackendNotConfiguredError,
@@ -632,17 +632,17 @@ from spec.integrations.backends import (
 print('✅ All errors importable from package')
 "
 
-# 3. Verify SpecError inheritance
+# 3. Verify IngotError inheritance
 python -c "
-from spec.integrations.backends.errors import BackendRateLimitError
-from spec.utils.errors import SpecError
-assert issubclass(BackendRateLimitError, SpecError)
-print('✅ BackendRateLimitError inherits from SpecError')
+from ingot.integrations.backends.errors import BackendRateLimitError
+from ingot.utils.errors import IngotError
+assert issubclass(BackendRateLimitError, IngotError)
+print('✅ BackendRateLimitError inherits from IngotError')
 "
 
 # 4. Verify attributes
 python -c "
-from spec.integrations.backends.errors import BackendRateLimitError, BackendTimeoutError
+from ingot.integrations.backends.errors import BackendRateLimitError, BackendTimeoutError
 
 error1 = BackendRateLimitError('test', output='429', backend_name='Auggie')
 assert error1.output == '429'
@@ -658,16 +658,16 @@ print('✅ BackendTimeoutError has timeout_seconds')
 pytest tests/test_backend_errors.py -v
 
 # 6. Run type checking
-mypy spec/integrations/backends/errors.py
+mypy ingot/integrations/backends/errors.py
 ```
 
 ---
 
 ## Definition of Done
 
-- [ ] `spec/integrations/backends/__init__.py` created with exports
-- [ ] `spec/integrations/backends/errors.py` created with all 4 error types
-- [ ] All error types inherit from `SpecError`
+- [ ] `ingot/integrations/backends/__init__.py` created with exports
+- [ ] `ingot/integrations/backends/errors.py` created with all 4 error types
+- [ ] All error types inherit from `IngotError`
 - [ ] `BackendRateLimitError` has `output` and `backend_name` attributes
 - [ ] `BackendTimeoutError` has `timeout_seconds` attribute
 - [ ] All errors have `GENERAL_ERROR` exit code (verified by tests)
@@ -698,10 +698,10 @@ mypy spec/integrations/backends/errors.py
 
 | File | Relevant Code |
 |------|--------------|
-| `spec/utils/errors.py` | `SpecError` base class, `ExitCode` enum |
-| `spec/integrations/auggie.py:140-146` | Current `AuggieRateLimitError` (to be replaced) |
-| `spec/workflow/step3_execute.py:877-881` | Current rate limit error handling |
-| `spec/utils/retry.py:145-172` | `_is_retryable_error()` function |
+| `ingot/utils/errors.py` | `IngotError` base class, `ExitCode` enum |
+| `ingot/integrations/auggie.py:140-146` | Current `AuggieRateLimitError` (to be replaced) |
+| `ingot/workflow/step3_execute.py:877-881` | Current rate limit error handling |
+| `ingot/utils/retry.py:145-172` | `_is_retryable_error()` function |
 
 ### Specification References
 

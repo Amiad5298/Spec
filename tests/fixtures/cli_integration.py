@@ -13,16 +13,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from spec.integrations.fetchers.exceptions import (
+from ingot.integrations.fetchers.exceptions import (
     PlatformNotSupportedError as FetcherPlatformNotSupportedError,
 )
-from spec.integrations.providers import (
+from ingot.integrations.providers import (
     GenericTicket,
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.exceptions import TicketNotFoundError
+from ingot.integrations.providers.exceptions import TicketNotFoundError
 from tests.helpers.async_cm import make_async_context_manager
 
 # =============================================================================
@@ -281,7 +281,7 @@ def mock_backend_resolution():
     Sets up resolve_backend_platform and BackendFactory.create to return
     an AUGGIE backend, matching the standard test configuration.
     """
-    from spec.config.fetch_config import AgentPlatform
+    from ingot.config.fetch_config import AgentPlatform
 
     mock_backend_instance = MagicMock()
     mock_backend_instance.platform = AgentPlatform.AUGGIE
@@ -301,7 +301,7 @@ def mock_ticket_service_factory():
 
     Usage:
         with patch(
-            "spec.cli.create_ticket_service_from_config",
+            "ingot.cli.create_ticket_service_from_config",
             mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})
         ):
             result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])

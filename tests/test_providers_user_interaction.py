@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.providers.user_interaction module.
+"""Tests for ingot.integrations.providers.user_interaction module.
 
 Tests cover:
 - SelectOption dataclass functionality
@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     NonInteractiveUserInteraction,
     SelectOption,
@@ -74,11 +74,14 @@ class TestUserInteractionInterface:
 
     def test_requires_select_option_method(self):
         """Subclasses must implement select_option."""
+
         class IncompleteImpl(UserInteractionInterface):
             def prompt_text(self, message, default="", required=True):
                 pass
+
             def confirm(self, message, default=False):
                 pass
+
             def display_message(self, message, level="info"):
                 pass
 
@@ -87,13 +90,17 @@ class TestUserInteractionInterface:
 
     def test_requires_all_abstract_methods(self):
         """Subclasses must implement all abstract methods."""
+
         class CompleteImpl(UserInteractionInterface):
             def select_option(self, options, prompt, allow_cancel=True):
                 return None
+
             def prompt_text(self, message, default="", required=True):
                 return None
+
             def confirm(self, message, default=False):
                 return False
+
             def display_message(self, message, level="info"):
                 pass
 
@@ -178,18 +185,14 @@ class TestCLIUserInteractionSelectOption:
 
     @patch("builtins.input", side_effect=KeyboardInterrupt)
     @patch("builtins.print")
-    def test_keyboard_interrupt_returns_none(
-        self, mock_print, mock_input, cli, sample_options
-    ):
+    def test_keyboard_interrupt_returns_none(self, mock_print, mock_input, cli, sample_options):
         """KeyboardInterrupt returns None."""
         result = cli.select_option(sample_options, "Choose:")
         assert result is None
 
     @patch("builtins.input", return_value="1")
     @patch("builtins.print")
-    def test_prints_options_with_descriptions(
-        self, mock_print, mock_input, cli, sample_options
-    ):
+    def test_prints_options_with_descriptions(self, mock_print, mock_input, cli, sample_options):
         """Prints options with descriptions when available."""
         cli.select_option(sample_options, "Choose:")
         print_calls = " ".join(str(c) for c in mock_print.call_args_list)
@@ -378,9 +381,7 @@ class TestNonInteractiveUserInteraction:
         non_int = NonInteractiveUserInteraction()
         assert non_int.fail_on_interaction is True
 
-    def test_select_option_returns_first_when_not_failing(
-        self, non_interactive, sample_options
-    ):
+    def test_select_option_returns_first_when_not_failing(self, non_interactive, sample_options):
         """Returns first option when fail_on_interaction=False."""
         result = non_interactive.select_option(sample_options, "Choose:")
         assert result == "a"
@@ -408,9 +409,7 @@ class TestNonInteractiveUserInteraction:
         with pytest.raises(RuntimeError):
             fail_on_interaction.prompt_text("Name:")
 
-    def test_prompt_text_returns_default_even_with_fail_on_interaction(
-        self, fail_on_interaction
-    ):
+    def test_prompt_text_returns_default_even_with_fail_on_interaction(self, fail_on_interaction):
         """Returns default even with fail_on_interaction if default provided."""
         result = fail_on_interaction.prompt_text("Name:", default="DefaultValue")
         assert result == "DefaultValue"
@@ -425,9 +424,7 @@ class TestNonInteractiveUserInteraction:
         result = non_interactive.confirm("Continue?", default=False)
         assert result is False
 
-    def test_confirm_does_not_raise_even_with_fail_on_interaction(
-        self, fail_on_interaction
-    ):
+    def test_confirm_does_not_raise_even_with_fail_on_interaction(self, fail_on_interaction):
         """confirm() never raises - it just returns the default."""
         # confirm always has a default, so it should never need to fail
         result = fail_on_interaction.confirm("Continue?", default=True)
@@ -477,4 +474,3 @@ class TestUserInteractionIntegration:
         """Both implementations inherit from UserInteractionInterface."""
         assert issubclass(CLIUserInteraction, UserInteractionInterface)
         assert issubclass(NonInteractiveUserInteraction, UserInteractionInterface)
-

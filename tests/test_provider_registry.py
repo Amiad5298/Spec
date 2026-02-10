@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.providers.registry module.
+"""Tests for ingot.integrations.providers.registry module.
 
 Tests cover:
 - Decorator registration
@@ -18,14 +18,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
 )
-from spec.integrations.providers.exceptions import PlatformNotSupportedError
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.exceptions import PlatformNotSupportedError
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     NonInteractiveUserInteraction,
     UserInteractionInterface,
@@ -461,7 +461,7 @@ class TestProviderRegistryGetProviderForInput:
             raise ValueError("Unexpected internal error in detector")
 
         monkeypatch.setattr(
-            "spec.integrations.providers.registry.PlatformDetector.detect",
+            "ingot.integrations.providers.registry.PlatformDetector.detect",
             mock_detect_raises_value_error,
         )
 
@@ -733,13 +733,13 @@ class TestProviderRegistryImport:
 
     def test_import_from_providers_package(self):
         """Can import ProviderRegistry from providers package."""
-        from spec.integrations.providers import ProviderRegistry as PR
+        from ingot.integrations.providers import ProviderRegistry as PR
 
         assert PR is ProviderRegistry
 
     def test_in_all_exports(self):
         """ProviderRegistry is in __all__ exports."""
-        from spec.integrations.providers import __all__
+        from ingot.integrations.providers import __all__
 
         assert "ProviderRegistry" in __all__
 

@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-18 - Implement JiraProvider Concrete Class
 
-**Ticket:** [AMI-18](https://linear.app/amiadspec/issue/AMI-18/implement-jiraprovider-concrete-class)
+**Ticket:** [AMI-18](https://linear.app/amiadingot/issue/AMI-18/implement-jiraprovider-concrete-class)
 **Status:** Implemented (PR #26)
 **Date:** 2026-01-25
 **Last Updated:** 2026-01-25
@@ -61,7 +61,7 @@ The provider is responsible for:
 
 ## Components to Create
 
-### New File: `spec/integrations/providers/jira.py`
+### New File: `ingot/integrations/providers/jira.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -75,7 +75,7 @@ The provider is responsible for:
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/providers/__init__.py` | Export `JiraProvider` |
+| `ingot/integrations/providers/__init__.py` | Export `JiraProvider` |
 
 ### ABC Extension Note
 
@@ -91,7 +91,7 @@ The provider is responsible for:
 
 ### Step 1: Create JiraProvider Module
 
-**File:** `spec/integrations/providers/jira.py`
+**File:** `ingot/integrations/providers/jira.py`
 
 ```python
 """Jira issue tracker provider.
@@ -111,7 +111,7 @@ import re
 from datetime import datetime
 from typing import Any
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
@@ -120,8 +120,8 @@ from spec.integrations.providers.base import (
     TicketType,
     sanitize_title_for_branch,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     UserInteractionInterface,
 )
@@ -548,11 +548,11 @@ class JiraProvider(IssueTrackerProvider):
 
 ### Step 4: Update Package Exports
 
-**File:** `spec/integrations/providers/__init__.py`
+**File:** `ingot/integrations/providers/__init__.py`
 
 ```python
 # Add to existing exports
-from spec.integrations.providers.jira import JiraProvider
+from ingot.integrations.providers.jira import JiraProvider
 
 __all__ = [
     # ... existing exports
@@ -574,19 +574,19 @@ __all__ = [
 import pytest
 from datetime import datetime
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.jira import (
+from ingot.integrations.providers.jira import (
     JiraProvider,
     STATUS_MAPPING,
     TYPE_MAPPING,
     DEFAULT_PROJECT,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 class TestJiraProviderRegistration:
@@ -607,7 +607,7 @@ class TestJiraProviderRegistration:
     def test_provider_registers_successfully(self):
         """JiraProvider can be registered with ProviderRegistry."""
         # Import triggers registration due to decorator
-        from spec.integrations.providers.jira import JiraProvider
+        from ingot.integrations.providers.jira import JiraProvider
 
         provider = ProviderRegistry.get_provider(Platform.JIRA)
         assert provider is not None
@@ -859,9 +859,9 @@ From Linear ticket AMI-18:
 ### Basic Provider Usage
 
 ```python
-from spec.integrations.providers.jira import JiraProvider
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.jira import JiraProvider
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get provider via registry (singleton)
 provider = ProviderRegistry.get_provider(Platform.JIRA)
@@ -875,7 +875,7 @@ if provider.can_handle("https://company.atlassian.net/browse/PROJ-123"):
 ### Integration with TicketService (AMI-32)
 
 ```python
-from spec.integrations.ticket_service import TicketService
+from ingot.integrations.ticket_service import TicketService
 
 # TicketService handles provider lookup and fetching
 service = TicketService()
@@ -891,7 +891,7 @@ print(f"Type: {ticket.type}")
 
 ```python
 import pytest
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 @pytest.fixture(autouse=True)
 def reset_registry():
@@ -904,7 +904,7 @@ def reset_registry():
 def test_isolated_provider():
     """Test runs with clean registry state."""
     # Re-import to trigger registration
-    from spec.integrations.providers.jira import JiraProvider
+    from ingot.integrations.providers.jira import JiraProvider
 
     provider = ProviderRegistry.get_provider(Platform.JIRA)
     assert provider is not None

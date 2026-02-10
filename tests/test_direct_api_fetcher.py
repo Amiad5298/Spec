@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.fetchers.direct_api_fetcher module.
+"""Tests for ingot.integrations.fetchers.direct_api_fetcher module.
 
 Tests cover:
 - DirectAPIFetcher initialization
@@ -18,16 +18,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from spec.config.fetch_config import FetchPerformanceConfig
-from spec.config.manager import ConfigManager
-from spec.integrations.auth import AuthenticationManager, PlatformCredentials
-from spec.integrations.fetchers import (
+from ingot.config.fetch_config import FetchPerformanceConfig
+from ingot.config.manager import ConfigManager
+from ingot.integrations.auth import AuthenticationManager, PlatformCredentials
+from ingot.integrations.fetchers import (
     AgentFetchError,
     AgentIntegrationError,
     DirectAPIFetcher,
 )
-from spec.integrations.fetchers.exceptions import PlatformApiError
-from spec.integrations.providers.base import Platform
+from ingot.integrations.fetchers.exceptions import PlatformApiError
+from ingot.integrations.providers.base import Platform
 
 # =============================================================================
 # Fixtures
@@ -207,42 +207,42 @@ class TestDirectAPIFetcherHandlers:
 
     async def test_get_handler_jira(self, fetcher):
         """Returns JiraHandler for JIRA platform."""
-        from spec.integrations.fetchers.handlers import JiraHandler
+        from ingot.integrations.fetchers.handlers import JiraHandler
 
         handler = await fetcher._get_platform_handler(Platform.JIRA)
         assert isinstance(handler, JiraHandler)
 
     async def test_get_handler_linear(self, fetcher):
         """Returns LinearHandler for LINEAR platform."""
-        from spec.integrations.fetchers.handlers import LinearHandler
+        from ingot.integrations.fetchers.handlers import LinearHandler
 
         handler = await fetcher._get_platform_handler(Platform.LINEAR)
         assert isinstance(handler, LinearHandler)
 
     async def test_get_handler_github(self, fetcher):
         """Returns GitHubHandler for GITHUB platform."""
-        from spec.integrations.fetchers.handlers import GitHubHandler
+        from ingot.integrations.fetchers.handlers import GitHubHandler
 
         handler = await fetcher._get_platform_handler(Platform.GITHUB)
         assert isinstance(handler, GitHubHandler)
 
     async def test_get_handler_azure_devops(self, fetcher):
         """Returns AzureDevOpsHandler for AZURE_DEVOPS platform."""
-        from spec.integrations.fetchers.handlers import AzureDevOpsHandler
+        from ingot.integrations.fetchers.handlers import AzureDevOpsHandler
 
         handler = await fetcher._get_platform_handler(Platform.AZURE_DEVOPS)
         assert isinstance(handler, AzureDevOpsHandler)
 
     async def test_get_handler_trello(self, fetcher):
         """Returns TrelloHandler for TRELLO platform."""
-        from spec.integrations.fetchers.handlers import TrelloHandler
+        from ingot.integrations.fetchers.handlers import TrelloHandler
 
         handler = await fetcher._get_platform_handler(Platform.TRELLO)
         assert isinstance(handler, TrelloHandler)
 
     async def test_get_handler_monday(self, fetcher):
         """Returns MondayHandler for MONDAY platform."""
-        from spec.integrations.fetchers.handlers import MondayHandler
+        from ingot.integrations.fetchers.handlers import MondayHandler
 
         handler = await fetcher._get_platform_handler(Platform.MONDAY)
         assert isinstance(handler, MondayHandler)

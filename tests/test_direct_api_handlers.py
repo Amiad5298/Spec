@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.fetchers.handlers module.
+"""Tests for ingot.integrations.fetchers.handlers module.
 
 Tests cover:
 - PlatformHandler ABC contract
@@ -17,13 +17,13 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from spec.integrations.fetchers.exceptions import (
+from ingot.integrations.fetchers.exceptions import (
     CredentialValidationError,
     PlatformApiError,
     PlatformNotFoundError,
     TicketIdFormatError,
 )
-from spec.integrations.fetchers.handlers import (
+from ingot.integrations.fetchers.handlers import (
     AzureDevOpsHandler,
     GitHubHandler,
     GraphQLPlatformHandler,

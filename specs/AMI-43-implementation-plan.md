@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-43 - Audit and Update All User-Facing Strings for Platform-Agnostic Language
 
-**Ticket:** [AMI-43](https://linear.app/amiadspec/issue/AMI-43/audit-and-update-all-user-facing-strings-for-platform-agnostic)
+**Ticket:** [AMI-43](https://linear.app/amiadingot/issue/AMI-43/audit-and-update-all-user-facing-strings-for-platform-agnostic)
 **Status:** Draft
 **Date:** 2026-01-29
 
@@ -25,10 +25,10 @@ After the CLI migration (AMI-25) and related updates, there may still be Jira-sp
 - Configuration settings (names and descriptions)
 
 **Out of Scope:**
-- README.md updates → [AMI-38](https://linear.app/amiadspec/issue/AMI-38)
-- Platform Configuration Guide → [AMI-39](https://linear.app/amiadspec/issue/AMI-39)
-- `spec --config` output updates → [AMI-42](https://linear.app/amiadspec/issue/AMI-42)
-- Config Guide updates → [AMI-41](https://linear.app/amiadspec/issue/AMI-41)
+- README.md updates → [AMI-38](https://linear.app/amiadingot/issue/AMI-38)
+- Platform Configuration Guide → [AMI-39](https://linear.app/amiadingot/issue/AMI-39)
+- `spec --config` output updates → [AMI-42](https://linear.app/amiadingot/issue/AMI-42)
+- Config Guide updates → [AMI-41](https://linear.app/amiadingot/issue/AMI-41)
 
 ---
 
@@ -97,16 +97,16 @@ The approach systematically identifies and categorizes all user-facing strings:
 
 | Ticket | Component | Status | Description |
 |--------|-----------|--------|-------------|
-| [AMI-25](https://linear.app/amiadspec/issue/AMI-25) | CLI Migration | ✅ Required | CLI must use platform-agnostic providers |
-| [AMI-38](https://linear.app/amiadspec/issue/AMI-38) | README Update | 🔄 Parallel | README language updates (separate ticket) |
-| [AMI-42](https://linear.app/amiadspec/issue/AMI-42) | Config Output | 🔄 Parallel | `spec --config` display updates |
+| [AMI-25](https://linear.app/amiadingot/issue/AMI-25) | CLI Migration | ✅ Required | CLI must use platform-agnostic providers |
+| [AMI-38](https://linear.app/amiadingot/issue/AMI-38) | README Update | 🔄 Parallel | README language updates (separate ticket) |
+| [AMI-42](https://linear.app/amiadingot/issue/AMI-42) | Config Output | 🔄 Parallel | `spec --config` display updates |
 
 ### Related Tickets (Parallel Work)
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-39](https://linear.app/amiadspec/issue/AMI-39) | Platform Configuration Guide | Detailed platform setup docs |
-| [AMI-41](https://linear.app/amiadspec/issue/AMI-41) | Config Guide Update | Configuration documentation |
+| [AMI-39](https://linear.app/amiadingot/issue/AMI-39) | Platform Configuration Guide | Detailed platform setup docs |
+| [AMI-41](https://linear.app/amiadingot/issue/AMI-41) | Config Guide Update | Configuration documentation |
 
 ---
 
@@ -116,22 +116,22 @@ The approach systematically identifies and categorizes all user-facing strings:
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `spec/utils/errors.py` | **Critical** | `JiraNotConfiguredError` → platform-agnostic error, fix exit code ordering |
-| `spec/cli.py` | **Major** | Jira-specific prompts (lines 684-691), help text examples (lines 339, 370) |
-| `spec/integrations/git.py` | **Major** | Docstrings mentioning "Jira ticket ID" (lines 317, 344) |
-| `spec/integrations/__init__.py` | **Major** | Jira-specific exports and module docstring (lines 5, 50-55, 90-94) |
-| `spec/integrations/fetchers/auggie_fetcher.py` | **Minor** | Module docstring mentions Jira (line 5) |
-| `spec/config/settings.py` | **Minor** | Docstrings mentioning "Jira" (lines 38-40, 61-64) |
-| `spec/integrations/fetchers/exceptions.py` | **Minor** | Docstring example update (line 40) |
-| `spec/config/manager.py` | **Review** | "Default Jira Project" setting display (handled by AMI-42) |
-| `spec/integrations/providers/exceptions.py` | **Review** | Verify provider exception messages |
-| `spec/integrations/providers/jira.py` | **Review** | Jira-specific prompt template (line 109) - correctly Jira-specific |
+| `ingot/utils/errors.py` | **Critical** | `JiraNotConfiguredError` → platform-agnostic error, fix exit code ordering |
+| `ingot/cli.py` | **Major** | Jira-specific prompts (lines 684-691), help text examples (lines 339, 370) |
+| `ingot/integrations/git.py` | **Major** | Docstrings mentioning "Jira ticket ID" (lines 317, 344) |
+| `ingot/integrations/__init__.py` | **Major** | Jira-specific exports and module docstring (lines 5, 50-55, 90-94) |
+| `ingot/integrations/fetchers/auggie_fetcher.py` | **Minor** | Module docstring mentions Jira (line 5) |
+| `ingot/config/settings.py` | **Minor** | Docstrings mentioning "Jira" (lines 38-40, 61-64) |
+| `ingot/integrations/fetchers/exceptions.py` | **Minor** | Docstring example update (line 40) |
+| `ingot/config/manager.py` | **Review** | "Default Jira Project" setting display (handled by AMI-42) |
+| `ingot/integrations/providers/exceptions.py` | **Review** | Verify provider exception messages |
+| `ingot/integrations/providers/jira.py` | **Review** | Jira-specific prompt template (line 109) - correctly Jira-specific |
 
 ### Supporting Files
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `spec/utils/__init__.py` | **Update** | Import and export `PlatformNotConfiguredError` |
+| `ingot/utils/__init__.py` | **Update** | Import and export `PlatformNotConfiguredError` |
 | `tests/test_errors.py` | **Update** | Tests for renamed exception and backward compatibility |
 | `tests/test_cli.py` | **Review** | Tests referencing `default_jira_project` (no changes needed - internal config) |
 
@@ -139,10 +139,10 @@ The approach systematically identifies and categorizes all user-facing strings:
 
 | File | Reason |
 |------|--------|
-| `spec/integrations/providers/jira.py` | Correctly Jira-specific (provider implementation) |
-| `spec/integrations/fetchers/handlers/jira.py` | Correctly Jira-specific (handler implementation) |
-| `spec/config/fetch_config.py` | Platform names in config mappings are correct |
-| `spec/integrations/providers/detector.py` | Platform detection patterns are correct |
+| `ingot/integrations/providers/jira.py` | Correctly Jira-specific (provider implementation) |
+| `ingot/integrations/fetchers/handlers/jira.py` | Correctly Jira-specific (handler implementation) |
+| `ingot/config/fetch_config.py` | Platform names in config mappings are correct |
+| `ingot/integrations/providers/detector.py` | Platform detection patterns are correct |
 
 ---
 
@@ -152,7 +152,7 @@ The approach systematically identifies and categorizes all user-facing strings:
 
 A comprehensive search reveals the following Jira-specific strings:
 
-#### Category 1: Exception Classes (spec/utils/errors.py)
+#### Category 1: Exception Classes (ingot/utils/errors.py)
 
 | Location | Current String | Issue |
 |----------|----------------|-------|
@@ -164,7 +164,7 @@ A comprehensive search reveals the following Jira-specific strings:
 - Rename to `PlatformNotConfiguredError` or deprecate in favor of existing `PlatformNotSupportedError`
 - Keep `ExitCode.JIRA_NOT_CONFIGURED` for backward compatibility (scripts may check exit codes)
 
-#### Category 2: CLI Configuration Prompts and Help Text (spec/cli.py)
+#### Category 2: CLI Configuration Prompts and Help Text (ingot/cli.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -176,7 +176,7 @@ A comprehensive search reveals the following Jira-specific strings:
 
 **Analysis:** The prompts in `_configure_settings()` are Jira-specific. The configuration key `DEFAULT_JIRA_PROJECT` should remain for backward compatibility, but the user-facing prompts should explain this is for Jira specifically. Help text examples should show multiple platforms.
 
-#### Category 3: Git Integration Docstrings (spec/integrations/git.py)
+#### Category 3: Git Integration Docstrings (ingot/integrations/git.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -185,17 +185,17 @@ A comprehensive search reveals the following Jira-specific strings:
 
 **Analysis:** These docstrings are developer-facing but should use platform-agnostic language for consistency.
 
-#### Category 4: Integration Exports (spec/integrations/__init__.py)
+#### Category 4: Integration Exports (ingot/integrations/__init__.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
 | Line 5 | `- jira: Jira ticket parsing and integration checking` | Module docstring | **Update** |
-| Lines 50-55 | `from spec.integrations.jira import (JiraTicket, ...)` | Jira-specific imports | **Clarify** |
+| Lines 50-55 | `from ingot.integrations.jira import (JiraTicket, ...)` | Jira-specific imports | **Clarify** |
 | Lines 90-94 | `"JiraTicket", "parse_jira_ticket", "check_jira_integration"` | Jira-specific exports | **Clarify** |
 
 **Analysis:** These exports are Jira-specific legacy APIs. Per AMI-25, the CLI now uses `TicketService` and `GenericTicket`. These exports should be marked as deprecated or clarified as Jira-specific utilities. **Note:** Full removal is out of scope for this ticket; we add deprecation comments only.
 
-#### Category 5: Auggie Fetcher Module Docstring (spec/integrations/fetchers/auggie_fetcher.py)
+#### Category 5: Auggie Fetcher Module Docstring (ingot/integrations/fetchers/auggie_fetcher.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -204,7 +204,7 @@ A comprehensive search reveals the following Jira-specific strings:
 
 **Analysis:** The module docstring should mention all supported platforms. The prompt template is correctly Jira-specific.
 
-#### Category 6: Settings Docstrings (spec/config/settings.py)
+#### Category 6: Settings Docstrings (ingot/config/settings.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -213,7 +213,7 @@ A comprehensive search reveals the following Jira-specific strings:
 
 **Analysis:** These are correctly Jira-specific since they describe Jira-only settings. No change needed.
 
-#### Category 7: Fetcher Exception Docstrings (spec/integrations/fetchers/exceptions.py)
+#### Category 7: Fetcher Exception Docstrings (ingot/integrations/fetchers/exceptions.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -221,7 +221,7 @@ A comprehensive search reveals the following Jira-specific strings:
 
 **Analysis:** The docstring example should include more platforms for completeness.
 
-#### Category 8: Configuration Display (spec/config/manager.py)
+#### Category 8: Configuration Display (ingot/config/manager.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -229,7 +229,7 @@ A comprehensive search reveals the following Jira-specific strings:
 
 **Analysis:** This is correctly platform-specific since it displays a Jira-only setting. Handled by AMI-42.
 
-#### Category 9: Jira Provider Prompt Template (spec/integrations/providers/jira.py)
+#### Category 9: Jira Provider Prompt Template (ingot/integrations/providers/jira.py)
 
 | Location | Current String | Issue | Action |
 |----------|----------------|-------|--------|
@@ -252,7 +252,7 @@ A comprehensive search reveals the following Jira-specific strings:
 
 #### Step 2.1: Fix Exit Code Ordering (CRITICAL)
 
-**File:** `spec/utils/errors.py`
+**File:** `ingot/utils/errors.py`
 
 **Issue:** In Python's `IntEnum`, when two members have the same value, the first-defined name becomes canonical. We must define `PLATFORM_NOT_CONFIGURED` FIRST so it becomes the canonical name.
 
@@ -289,11 +289,11 @@ A comprehensive search reveals the following Jira-specific strings:
 
 #### Step 2.2: Rename JiraNotConfiguredError to PlatformNotConfiguredError
 
-**File:** `spec/utils/errors.py`
+**File:** `ingot/utils/errors.py`
 
 **Current Code (lines 73-82):**
 ```python
-class JiraNotConfiguredError(SpecError):
+class JiraNotConfiguredError(IngotError):
     """Jira integration is not configured in Auggie.
 
     Raised when:
@@ -307,7 +307,7 @@ class JiraNotConfiguredError(SpecError):
 
 **New Code:**
 ```python
-class PlatformNotConfiguredError(SpecError):
+class PlatformNotConfiguredError(IngotError):
     """Platform integration is not configured.
 
     Raised when:
@@ -349,13 +349,13 @@ JiraNotConfiguredError = PlatformNotConfiguredError
 
 #### Step 2.3: Update __all__ Export
 
-**File:** `spec/utils/errors.py`
+**File:** `ingot/utils/errors.py`
 
 **Current Code (lines 111-118):**
 ```python
 __all__ = [
     "ExitCode",
-    "SpecError",
+    "IngotError",
     "AuggieNotInstalledError",
     "JiraNotConfiguredError",
     "UserCancelledError",
@@ -367,7 +367,7 @@ __all__ = [
 ```python
 __all__ = [
     "ExitCode",
-    "SpecError",
+    "IngotError",
     "AuggieNotInstalledError",
     "JiraNotConfiguredError",  # Deprecated alias for backward compatibility
     "PlatformNotConfiguredError",
@@ -382,7 +382,7 @@ __all__ = [
 
 #### Step 3.1: Update Help Text Examples (MAJOR)
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 **Current Code (line 339 in _show_usage()):**
 ```python
@@ -411,7 +411,7 @@ __all__ = [
 
 #### Step 3.2: Update _configure_settings() Prompts
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 **Current Code (lines 684-691):**
 ```python
@@ -445,42 +445,42 @@ __all__ = [
 
 #### Step 4.1: Update Import Statement (CRITICAL - Previously Missing)
 
-**File:** `spec/utils/__init__.py`
+**File:** `ingot/utils/__init__.py`
 
 **Current Code (lines 30-37):**
 ```python
-from spec.utils.errors import (
+from ingot.utils.errors import (
     AuggieNotInstalledError,
     ExitCode,
     GitOperationError,
     JiraNotConfiguredError,
-    SpecError,
+    IngotError,
     UserCancelledError,
 )
 ```
 
 **New Code:**
 ```python
-from spec.utils.errors import (
+from ingot.utils.errors import (
     AuggieNotInstalledError,
     ExitCode,
     GitOperationError,
     JiraNotConfiguredError,  # Deprecated alias for backward compatibility
     PlatformNotConfiguredError,
-    SpecError,
+    IngotError,
     UserCancelledError,
 )
 ```
 
 #### Step 4.2: Update __all__ Export List
 
-**File:** `spec/utils/__init__.py`
+**File:** `ingot/utils/__init__.py`
 
 **Current Code (lines 62-67):**
 ```python
     # Errors
     "ExitCode",
-    "SpecError",
+    "IngotError",
     "AuggieNotInstalledError",
     "JiraNotConfiguredError",
     "UserCancelledError",
@@ -491,7 +491,7 @@ from spec.utils.errors import (
 ```python
     # Errors
     "ExitCode",
-    "SpecError",
+    "IngotError",
     "AuggieNotInstalledError",
     "JiraNotConfiguredError",  # Deprecated alias
     "PlatformNotConfiguredError",
@@ -510,7 +510,7 @@ from spec.utils.errors import (
 Add tests for the new `PlatformNotConfiguredError` and verify backward compatibility:
 
 ```python
-from spec.utils.errors import (
+from ingot.utils.errors import (
     ExitCode,
     JiraNotConfiguredError,
     PlatformNotConfiguredError,
@@ -565,10 +565,10 @@ class TestPlatformNotConfiguredError:
         assert ExitCode.PLATFORM_NOT_CONFIGURED.name == "PLATFORM_NOT_CONFIGURED"
 
     def test_inheritance(self):
-        """Inherits from SpecError."""
-        from spec.utils.errors import SpecError
+        """Inherits from IngotError."""
+        from ingot.utils.errors import IngotError
         error = PlatformNotConfiguredError("Test")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 ```
 
 ---
@@ -577,7 +577,7 @@ class TestPlatformNotConfiguredError:
 
 #### Step 6.1: Update Git Integration Docstrings
 
-**File:** `spec/integrations/git.py`
+**File:** `ingot/integrations/git.py`
 
 **Current Code (line 317):**
 ```python
@@ -601,7 +601,7 @@ class TestPlatformNotConfiguredError:
 
 #### Step 6.2: Update Integration Module Docstring
 
-**File:** `spec/integrations/__init__.py`
+**File:** `ingot/integrations/__init__.py`
 
 **Current Code (line 5):**
 ```python
@@ -617,7 +617,7 @@ class TestPlatformNotConfiguredError:
 
 #### Step 6.3: Update Auggie Fetcher Module Docstring
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 **Current Code (line 5):**
 ```python
@@ -633,7 +633,7 @@ Jira, Linear, and GitHub (with MCP integrations).
 
 #### Step 6.4: Update Fetcher Exception Docstring Example
 
-**File:** `spec/integrations/fetchers/exceptions.py`
+**File:** `ingot/integrations/fetchers/exceptions.py`
 
 **Current Code (line 40):**
 ```python
@@ -649,7 +649,7 @@ Jira, Linear, and GitHub (with MCP integrations).
 
 ### Phase 7: Verify All Fetcher and Provider Exceptions
 
-#### Step 7.1: Review spec/integrations/fetchers/exceptions.py
+#### Step 7.1: Review ingot/integrations/fetchers/exceptions.py
 
 **Status:** ✅ **No Changes Needed** (except docstring example in Step 6.4)
 
@@ -663,7 +663,7 @@ All exception messages in this file are already platform-agnostic:
 - `AgentFetchError`: Generic agent error, no platform hardcoding
 - `AgentResponseParseError`: Generic agent error, no platform hardcoding
 
-#### Step 7.2: Review spec/integrations/providers/exceptions.py
+#### Step 7.2: Review ingot/integrations/providers/exceptions.py
 
 **Status:** ✅ **No Changes Needed**
 
@@ -682,7 +682,7 @@ All exception messages in this file are already platform-agnostic:
 Run the following command to identify any Jira-specific logging:
 
 ```bash
-grep -rn "logger\." spec/ --include="*.py" | grep -i jira
+grep -rn "logger\." ingot/ --include="*.py" | grep -i jira
 ```
 
 **Expected Result:** No user-facing log messages should contain hardcoded "Jira" references.
@@ -706,7 +706,7 @@ Verify that error messages work correctly for all 6 platforms:
 | Monday | `PlatformNotConfiguredError(msg, platform="Monday")` | ✅ | Verified |
 | Trello | `PlatformNotConfiguredError(msg, platform="Trello")` | ✅ | Verified |
 
-**Verification:** All platform handlers in `spec/integrations/fetchers/handlers/` use dynamic platform names via the `platform_name` property.
+**Verification:** All platform handlers in `ingot/integrations/fetchers/handlers/` use dynamic platform names via the `platform_name` property.
 
 ---
 
@@ -756,7 +756,7 @@ spec
 
 # 3. Test error message with platform context
 python -c "
-from spec.utils.errors import PlatformNotConfiguredError
+from ingot.utils.errors import PlatformNotConfiguredError
 e = PlatformNotConfiguredError('API token missing', platform='Linear')
 print(str(e))
 # Expected: [Linear] API token missing
@@ -764,7 +764,7 @@ print(str(e))
 
 # 4. Test error message without platform context
 python -c "
-from spec.utils.errors import PlatformNotConfiguredError
+from ingot.utils.errors import PlatformNotConfiguredError
 e = PlatformNotConfiguredError('Platform not configured')
 print(str(e))
 # Expected: Platform not configured (no prefix)
@@ -772,14 +772,14 @@ print(str(e))
 
 # 5. Verify backward compatibility
 python -c "
-from spec.utils.errors import JiraNotConfiguredError, PlatformNotConfiguredError
+from ingot.utils.errors import JiraNotConfiguredError, PlatformNotConfiguredError
 assert JiraNotConfiguredError is PlatformNotConfiguredError
 print('Backward compatibility OK')
 "
 
 # 6. Verify exit code canonical name
 python -c "
-from spec.utils.errors import ExitCode
+from ingot.utils.errors import ExitCode
 assert ExitCode.PLATFORM_NOT_CONFIGURED.name == 'PLATFORM_NOT_CONFIGURED'
 print('Exit code canonical name OK')
 "
@@ -809,7 +809,7 @@ pytest tests/ -v -k "jira or Jira or platform"
 
 ```bash
 # Comprehensive search for Jira references in code and tests
-grep -rn --include="*.py" -i "jira" spec/ tests/ \
+grep -rn --include="*.py" -i "jira" ingot/ tests/ \
   | grep -v "__pycache__" \
   | grep -v "jira.py" \
   | grep -v "JiraHandler" \
@@ -828,7 +828,7 @@ grep -rn --include="*.py" -i "jira" spec/ tests/ \
 # - Platform display name mapping {"jira": "Jira"}
 
 # Search specifically for user-facing strings with Jira
-grep -rn --include="*.py" '"[^"]*[Jj]ira[^"]*"' spec/ \
+grep -rn --include="*.py" '"[^"]*[Jj]ira[^"]*"' ingot/ \
   | grep -v "__pycache__" \
   | grep -v "jira.py" \
   | grep -v "handlers/jira" \
@@ -856,16 +856,16 @@ grep -rn --include="*.py" '"[^"]*[Jj]ira[^"]*"' spec/ \
 
 | File | Change | Impact |
 |------|--------|--------|
-| `spec/utils/errors.py` | Rename `JiraNotConfiguredError` → `PlatformNotConfiguredError`, add alias | Breaking change mitigated by alias |
-| `spec/utils/errors.py` | Fix exit code ordering: `PLATFORM_NOT_CONFIGURED` first | Ensures canonical name is correct |
-| `spec/utils/errors.py` | Enhance `PlatformNotConfiguredError` to include platform in message | Better error context (AC2) |
-| `spec/utils/__init__.py` | Add import and export for `PlatformNotConfiguredError` | Non-breaking, additive |
-| `spec/cli.py` | Update help text examples to show multiple platforms | User-facing text improvement |
-| `spec/cli.py` | Update `_configure_settings()` prompts | Clarify Jira-specific context |
-| `spec/integrations/git.py` | Update docstrings from "Jira ticket ID" to "Ticket ID" | Developer-facing consistency |
-| `spec/integrations/__init__.py` | Update module docstring for jira exports | Clarify legacy status |
-| `spec/integrations/fetchers/auggie_fetcher.py` | Update module docstring | Clarify MCP platform support |
-| `spec/integrations/fetchers/exceptions.py` | Update docstring example to include more platforms | Documentation completeness |
+| `ingot/utils/errors.py` | Rename `JiraNotConfiguredError` → `PlatformNotConfiguredError`, add alias | Breaking change mitigated by alias |
+| `ingot/utils/errors.py` | Fix exit code ordering: `PLATFORM_NOT_CONFIGURED` first | Ensures canonical name is correct |
+| `ingot/utils/errors.py` | Enhance `PlatformNotConfiguredError` to include platform in message | Better error context (AC2) |
+| `ingot/utils/__init__.py` | Add import and export for `PlatformNotConfiguredError` | Non-breaking, additive |
+| `ingot/cli.py` | Update help text examples to show multiple platforms | User-facing text improvement |
+| `ingot/cli.py` | Update `_configure_settings()` prompts | Clarify Jira-specific context |
+| `ingot/integrations/git.py` | Update docstrings from "Jira ticket ID" to "Ticket ID" | Developer-facing consistency |
+| `ingot/integrations/__init__.py` | Update module docstring for jira exports | Clarify legacy status |
+| `ingot/integrations/fetchers/auggie_fetcher.py` | Update module docstring | Clarify MCP platform support |
+| `ingot/integrations/fetchers/exceptions.py` | Update docstring example to include more platforms | Documentation completeness |
 | `tests/test_errors.py` | Add comprehensive tests for new exception and aliases | Test coverage |
 
 ---
@@ -902,10 +902,10 @@ grep -rn --include="*.py" '"[^"]*[Jj]ira[^"]*"' spec/ \
 
 | File | Relevant Code |
 |------|--------------|
-| `spec/utils/errors.py:73-82` | Current `JiraNotConfiguredError` |
-| `spec/cli.py:684-691` | Jira project configuration prompts |
-| `spec/integrations/fetchers/exceptions.py` | Platform-agnostic exception patterns |
-| `spec/integrations/providers/exceptions.py` | Platform-agnostic exception patterns |
+| `ingot/utils/errors.py:73-82` | Current `JiraNotConfiguredError` |
+| `ingot/cli.py:684-691` | Jira project configuration prompts |
+| `ingot/integrations/fetchers/exceptions.py` | Platform-agnostic exception patterns |
+| `ingot/integrations/providers/exceptions.py` | Platform-agnostic exception patterns |
 
 ---
 

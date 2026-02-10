@@ -5,7 +5,7 @@ Covers:
 - Runner populates backend metadata from injected backend
 - All workflow modules use run_with_callback (not run_print_with_output)
 - BackendFactory creates fresh instances per call
-- SPECFLOW_AGENT_FIXER constant and subagent naming
+- INGOT_AGENT_FIXER constant and subagent naming
 """
 
 import ast
@@ -13,20 +13,20 @@ from pathlib import Path
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.config.settings import Settings
-from spec.integrations.backends.factory import BackendFactory
-from spec.integrations.providers import GenericTicket, Platform
-from spec.workflow.constants import (
-    SPECFLOW_AGENT_DOC_UPDATER,
-    SPECFLOW_AGENT_FIXER,
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_TASKLIST,
-    SPECFLOW_AGENT_TASKLIST_REFINER,
+from ingot.config.fetch_config import AgentPlatform
+from ingot.config.settings import Settings
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.integrations.providers import GenericTicket, Platform
+from ingot.workflow.constants import (
+    INGOT_AGENT_DOC_UPDATER,
+    INGOT_AGENT_FIXER,
+    INGOT_AGENT_IMPLEMENTER,
+    INGOT_AGENT_PLANNER,
+    INGOT_AGENT_REVIEWER,
+    INGOT_AGENT_TASKLIST,
+    INGOT_AGENT_TASKLIST_REFINER,
 )
-from spec.workflow.state import WorkflowState
+from ingot.workflow.state import WorkflowState
 
 # =============================================================================
 # WorkflowState new fields (AMI-68)
@@ -69,27 +69,27 @@ class TestWorkflowStateBackendFields:
 
 
 # =============================================================================
-# Subagent naming: SPECFLOW_AGENT_FIXER (AMI-75)
+# Subagent naming: INGOT_AGENT_FIXER (AMI-75)
 # =============================================================================
 
 
 class TestSubagentFixer:
-    """Tests for SPECFLOW_AGENT_FIXER constant and subagent naming."""
+    """Tests for INGOT_AGENT_FIXER constant and subagent naming."""
 
     def test_fixer_constant_exists(self):
-        """SPECFLOW_AGENT_FIXER is exported from constants."""
-        assert SPECFLOW_AGENT_FIXER is not None
+        """INGOT_AGENT_FIXER is exported from constants."""
+        assert INGOT_AGENT_FIXER is not None
 
     def test_fixer_reuses_implementer(self):
         """Fixer reuses the implementer agent name."""
-        assert SPECFLOW_AGENT_FIXER == SPECFLOW_AGENT_IMPLEMENTER
+        assert INGOT_AGENT_FIXER == INGOT_AGENT_IMPLEMENTER
 
     def test_fixer_in_workflow_state_defaults(self):
         """WorkflowState subagent_names includes 'fixer' key."""
         ticket = GenericTicket(id="T-1", platform=Platform.JIRA, url="", title="", description="")
         state = WorkflowState(ticket=ticket)
         assert "fixer" in state.subagent_names
-        assert state.subagent_names["fixer"] == SPECFLOW_AGENT_FIXER
+        assert state.subagent_names["fixer"] == INGOT_AGENT_FIXER
 
     def test_all_subagent_keys_present(self):
         """WorkflowState subagent_names contains all expected keys."""
@@ -110,7 +110,7 @@ class TestSubagentFixer:
         """Settings dataclass has subagent_fixer field."""
         settings = Settings()
         assert hasattr(settings, "subagent_fixer")
-        assert settings.subagent_fixer == "spec-implementer"
+        assert settings.subagent_fixer == "ingot-implementer"
 
     def test_settings_key_mapping_includes_fixer(self):
         """Settings key mapping includes SUBAGENT_FIXER."""
@@ -156,14 +156,14 @@ class TestNoRunPrintWithOutputInWorkflow:
     """
 
     WORKFLOW_MODULES = [
-        "spec/workflow/autofix.py",
-        "spec/workflow/review.py",
-        "spec/workflow/step1_plan.py",
-        "spec/workflow/step2_tasklist.py",
-        "spec/workflow/step3_execute.py",
-        "spec/workflow/step4_update_docs.py",
-        "spec/workflow/runner.py",
-        "spec/workflow/conflict_detection.py",
+        "ingot/workflow/autofix.py",
+        "ingot/workflow/review.py",
+        "ingot/workflow/step1_plan.py",
+        "ingot/workflow/step2_tasklist.py",
+        "ingot/workflow/step3_execute.py",
+        "ingot/workflow/step4_update_docs.py",
+        "ingot/workflow/runner.py",
+        "ingot/workflow/conflict_detection.py",
     ]
 
     @pytest.mark.parametrize("module_path", WORKFLOW_MODULES)
@@ -195,19 +195,19 @@ class TestRunnerBackendMetadata:
 
     def test_runner_source_populates_backend_model(self):
         """Runner source code sets backend_model on WorkflowState."""
-        runner_path = Path(__file__).parent.parent / "spec/workflow/runner.py"
+        runner_path = Path(__file__).parent.parent / "ingot/workflow/runner.py"
         source = runner_path.read_text()
         assert "backend_model=" in source, "runner.py should set backend_model on WorkflowState"
 
     def test_runner_source_populates_backend_name(self):
         """Runner source code sets backend_name on WorkflowState."""
-        runner_path = Path(__file__).parent.parent / "spec/workflow/runner.py"
+        runner_path = Path(__file__).parent.parent / "ingot/workflow/runner.py"
         source = runner_path.read_text()
         assert "backend_name=" in source, "runner.py should set backend_name on WorkflowState"
 
     def test_runner_source_populates_fixer_subagent(self):
         """Runner source code includes 'fixer' in subagent_names dict."""
-        runner_path = Path(__file__).parent.parent / "spec/workflow/runner.py"
+        runner_path = Path(__file__).parent.parent / "ingot/workflow/runner.py"
         source = runner_path.read_text()
         assert '"fixer"' in source, "runner.py should include 'fixer' key in subagent_names"
 
@@ -222,13 +222,13 @@ class TestAutofixUsesFixer:
 
     def test_autofix_source_references_fixer(self):
         """autofix.py uses subagent_names['fixer'] or .get('fixer', ...)."""
-        autofix_path = Path(__file__).parent.parent / "spec/workflow/autofix.py"
+        autofix_path = Path(__file__).parent.parent / "ingot/workflow/autofix.py"
         source = autofix_path.read_text()
         assert "fixer" in source, "autofix.py should reference 'fixer' subagent key"
 
     def test_autofix_uses_run_with_callback(self):
         """autofix.py uses run_with_callback, not run_print_with_output."""
-        autofix_path = Path(__file__).parent.parent / "spec/workflow/autofix.py"
+        autofix_path = Path(__file__).parent.parent / "ingot/workflow/autofix.py"
         source = autofix_path.read_text()
         assert "run_with_callback" in source
         assert "run_print_with_output" not in source
@@ -245,22 +245,22 @@ class TestConstantsConsistency:
     def test_constants_match_settings_defaults(self):
         """Settings defaults match workflow constants."""
         settings = Settings()
-        assert settings.subagent_planner == SPECFLOW_AGENT_PLANNER
-        assert settings.subagent_tasklist == SPECFLOW_AGENT_TASKLIST
-        assert settings.subagent_tasklist_refiner == SPECFLOW_AGENT_TASKLIST_REFINER
-        assert settings.subagent_implementer == SPECFLOW_AGENT_IMPLEMENTER
-        assert settings.subagent_reviewer == SPECFLOW_AGENT_REVIEWER
-        assert settings.subagent_fixer == SPECFLOW_AGENT_FIXER
-        assert settings.subagent_doc_updater == SPECFLOW_AGENT_DOC_UPDATER
+        assert settings.subagent_planner == INGOT_AGENT_PLANNER
+        assert settings.subagent_tasklist == INGOT_AGENT_TASKLIST
+        assert settings.subagent_tasklist_refiner == INGOT_AGENT_TASKLIST_REFINER
+        assert settings.subagent_implementer == INGOT_AGENT_IMPLEMENTER
+        assert settings.subagent_reviewer == INGOT_AGENT_REVIEWER
+        assert settings.subagent_fixer == INGOT_AGENT_FIXER
+        assert settings.subagent_doc_updater == INGOT_AGENT_DOC_UPDATER
 
     def test_workflow_state_defaults_match_constants(self):
         """WorkflowState subagent_names defaults match constants."""
         ticket = GenericTicket(id="T-1", platform=Platform.JIRA, url="", title="", description="")
         state = WorkflowState(ticket=ticket)
-        assert state.subagent_names["planner"] == SPECFLOW_AGENT_PLANNER
-        assert state.subagent_names["tasklist"] == SPECFLOW_AGENT_TASKLIST
-        assert state.subagent_names["tasklist_refiner"] == SPECFLOW_AGENT_TASKLIST_REFINER
-        assert state.subagent_names["implementer"] == SPECFLOW_AGENT_IMPLEMENTER
-        assert state.subagent_names["reviewer"] == SPECFLOW_AGENT_REVIEWER
-        assert state.subagent_names["fixer"] == SPECFLOW_AGENT_FIXER
-        assert state.subagent_names["doc_updater"] == SPECFLOW_AGENT_DOC_UPDATER
+        assert state.subagent_names["planner"] == INGOT_AGENT_PLANNER
+        assert state.subagent_names["tasklist"] == INGOT_AGENT_TASKLIST
+        assert state.subagent_names["tasklist_refiner"] == INGOT_AGENT_TASKLIST_REFINER
+        assert state.subagent_names["implementer"] == INGOT_AGENT_IMPLEMENTER
+        assert state.subagent_names["reviewer"] == INGOT_AGENT_REVIEWER
+        assert state.subagent_names["fixer"] == INGOT_AGENT_FIXER
+        assert state.subagent_names["doc_updater"] == INGOT_AGENT_DOC_UPDATER

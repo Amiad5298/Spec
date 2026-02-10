@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-21 - Implement Additional Platform Providers (Azure DevOps, Monday, Trello)
 
-**Ticket:** [AMI-21](https://linear.app/amiadspec/issue/AMI-21/implement-additional-platform-providers-azure-devops-monday-trello)
+**Ticket:** [AMI-21](https://linear.app/amiadingot/issue/AMI-21/implement-additional-platform-providers-azure-devops-monday-trello)
 **Status:** ✅ Implemented
 **Date:** 2026-01-25
 **Implemented:** 2026-01-26
@@ -66,9 +66,9 @@ Each provider is responsible for:
 ### Important Scope Note
 
 Per AMI-21 Linear ticket comments, the API handlers for these platforms are **already implemented in AMI-31**:
-- `spec/integrations/fetchers/handlers/azure_devops.py`
-- `spec/integrations/fetchers/handlers/monday.py`
-- `spec/integrations/fetchers/handlers/trello.py`
+- `ingot/integrations/fetchers/handlers/azure_devops.py`
+- `ingot/integrations/fetchers/handlers/monday.py`
+- `ingot/integrations/fetchers/handlers/trello.py`
 
 This ticket focuses **only** on the `IssueTrackerProvider` implementations (parsing, normalization, registry integration).
 
@@ -78,21 +78,21 @@ This ticket focuses **only** on the `IssueTrackerProvider` implementations (pars
 
 | File | Purpose |
 |------|---------|
-| `spec/integrations/providers/azure_devops.py` | AzureDevOpsProvider implementation |
-| `spec/integrations/providers/monday.py` | MondayProvider implementation |
-| `spec/integrations/providers/trello.py` | TrelloProvider implementation |
+| `ingot/integrations/providers/azure_devops.py` | AzureDevOpsProvider implementation |
+| `ingot/integrations/providers/monday.py` | MondayProvider implementation |
+| `ingot/integrations/providers/trello.py` | TrelloProvider implementation |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/providers/__init__.py` | Export new providers in `__all__` |
+| `ingot/integrations/providers/__init__.py` | Export new providers in `__all__` |
 
 ---
 
 ## Provider 1: AzureDevOpsProvider
 
-### File: `spec/integrations/providers/azure_devops.py`
+### File: `ingot/integrations/providers/azure_devops.py`
 
 #### Input Patterns
 
@@ -188,7 +188,7 @@ def get_prompt_template(self) -> str:
 
 ## Provider 2: MondayProvider
 
-### File: `spec/integrations/providers/monday.py`
+### File: `ingot/integrations/providers/monday.py`
 
 #### Input Patterns
 
@@ -259,7 +259,7 @@ def get_prompt_template(self) -> str:
 
 ## Provider 3: TrelloProvider
 
-### File: `spec/integrations/providers/trello.py`
+### File: `ingot/integrations/providers/trello.py`
 
 #### Input Patterns
 
@@ -352,7 +352,7 @@ def get_prompt_template(self) -> str:
 
 ### Step 1: Create AzureDevOpsProvider
 
-**File:** `spec/integrations/providers/azure_devops.py`
+**File:** `ingot/integrations/providers/azure_devops.py`
 
 ```python
 """Azure DevOps work item provider.
@@ -376,7 +376,7 @@ from io import StringIO
 from types import MappingProxyType
 from typing import Any
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
@@ -385,8 +385,8 @@ from spec.integrations.providers.base import (
     TicketType,
     sanitize_title_for_branch,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     UserInteractionInterface,
 )
@@ -642,7 +642,7 @@ class AzureDevOpsProvider(IssueTrackerProvider):
 
 ### Step 2: Create MondayProvider
 
-**File:** `spec/integrations/providers/monday.py`
+**File:** `ingot/integrations/providers/monday.py`
 
 ```python
 """Monday.com item provider.
@@ -664,7 +664,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
@@ -673,8 +673,8 @@ from spec.integrations.providers.base import (
     TicketType,
     sanitize_title_for_branch,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     UserInteractionInterface,
 )
@@ -837,7 +837,7 @@ class MondayProvider(IssueTrackerProvider):
 
 ### Step 3: Create TrelloProvider
 
-**File:** `spec/integrations/providers/trello.py`
+**File:** `ingot/integrations/providers/trello.py`
 
 ```python
 """Trello card provider.
@@ -859,7 +859,7 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
@@ -868,8 +868,8 @@ from spec.integrations.providers.base import (
     TicketType,
     sanitize_title_for_branch,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     UserInteractionInterface,
 )
@@ -1029,13 +1029,13 @@ class TrelloProvider(IssueTrackerProvider):
 
 ### Step 4: Update Package Exports
 
-**File:** `spec/integrations/providers/__init__.py`
+**File:** `ingot/integrations/providers/__init__.py`
 
 ```python
 # Add to existing imports
-from spec.integrations.providers.azure_devops import AzureDevOpsProvider
-from spec.integrations.providers.monday import MondayProvider
-from spec.integrations.providers.trello import TrelloProvider
+from ingot.integrations.providers.azure_devops import AzureDevOpsProvider
+from ingot.integrations.providers.monday import MondayProvider
+from ingot.integrations.providers.trello import TrelloProvider
 
 # Add to __all__
 __all__ = [
@@ -1070,7 +1070,7 @@ Each provider follows the same test structure as JiraProvider (AMI-18) and Linea
 
 ```python
 import pytest
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 @pytest.fixture(autouse=True)
 def reset_registry():
@@ -1086,8 +1086,8 @@ def reset_registry():
 """Tests for AzureDevOpsProvider."""
 
 import pytest
-from spec.integrations.providers.base import Platform, TicketStatus, TicketType
-from spec.integrations.providers.azure_devops import AzureDevOpsProvider
+from ingot.integrations.providers.base import Platform, TicketStatus, TicketType
+from ingot.integrations.providers.azure_devops import AzureDevOpsProvider
 
 
 class TestAzureDevOpsCanHandle:
@@ -1192,8 +1192,8 @@ class DirectAPIFetcher(TicketFetcher):
 ### ProviderRegistry (AMI-17)
 
 ```python
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get providers via registry
 azure_provider = ProviderRegistry.get_provider(Platform.AZURE_DEVOPS)
@@ -1285,7 +1285,7 @@ From Linear ticket AMI-21:
 - [ ] Unit tests with >90% coverage
 
 ### General
-- [ ] All three providers exported from `spec/integrations/providers/__init__.py`
+- [ ] All three providers exported from `ingot/integrations/providers/__init__.py`
 - [ ] No direct HTTP calls in provider classes
 - [ ] Documentation in docstrings
 - [ ] Defensive field handling with `safe_nested_get()`
@@ -1297,9 +1297,9 @@ From Linear ticket AMI-21:
 ### AzureDevOpsProvider
 
 ```python
-from spec.integrations.providers.azure_devops import AzureDevOpsProvider
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.azure_devops import AzureDevOpsProvider
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get provider via registry
 provider = ProviderRegistry.get_provider(Platform.AZURE_DEVOPS)
@@ -1313,7 +1313,7 @@ if provider.can_handle("https://dev.azure.com/contoso/Backend/_workitems/edit/42
 ### MondayProvider
 
 ```python
-from spec.integrations.providers.monday import MondayProvider
+from ingot.integrations.providers.monday import MondayProvider
 
 provider = MondayProvider()
 
@@ -1327,7 +1327,7 @@ print(f"Parsed: {ticket_id}")  # 123456:789012
 ### TrelloProvider
 
 ```python
-from spec.integrations.providers.trello import TrelloProvider
+from ingot.integrations.providers.trello import TrelloProvider
 
 provider = TrelloProvider()
 
@@ -1409,9 +1409,9 @@ print(f"Type: {ticket.type}")  # TicketType.BUG
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `spec/integrations/providers/azure_devops.py` | 349 | AzureDevOpsProvider implementation |
-| `spec/integrations/providers/monday.py` | 289 | MondayProvider implementation |
-| `spec/integrations/providers/trello.py` | 260 | TrelloProvider implementation |
+| `ingot/integrations/providers/azure_devops.py` | 349 | AzureDevOpsProvider implementation |
+| `ingot/integrations/providers/monday.py` | 289 | MondayProvider implementation |
+| `ingot/integrations/providers/trello.py` | 260 | TrelloProvider implementation |
 | `tests/test_azure_devops_provider.py` | 400 | 50+ tests for AzureDevOpsProvider |
 | `tests/test_monday_provider.py` | 333 | 40+ tests for MondayProvider |
 | `tests/test_trello_provider.py` | 404 | 50+ tests for TrelloProvider |
@@ -1420,11 +1420,11 @@ print(f"Type: {ticket.type}")  # TicketType.BUG
 
 | File | Changes | Purpose |
 |------|---------|---------|
-| `spec/integrations/providers/__init__.py` | +6 | Export new providers |
-| `spec/integrations/providers/base.py` | +83 | Add `normalize()` ABC, `parse_timestamp()`, PlatformMetadata fields |
-| `spec/integrations/providers/github.py` | +2/-1 | Add `ticket_id` param to `normalize()` |
-| `spec/integrations/providers/jira.py` | +2/-1 | Add `ticket_id` param to `normalize()` |
-| `spec/integrations/providers/linear.py` | +2/-1 | Add `ticket_id` param to `normalize()` |
+| `ingot/integrations/providers/__init__.py` | +6 | Export new providers |
+| `ingot/integrations/providers/base.py` | +83 | Add `normalize()` ABC, `parse_timestamp()`, PlatformMetadata fields |
+| `ingot/integrations/providers/github.py` | +2/-1 | Add `ticket_id` param to `normalize()` |
+| `ingot/integrations/providers/jira.py` | +2/-1 | Add `ticket_id` param to `normalize()` |
+| `ingot/integrations/providers/linear.py` | +2/-1 | Add `ticket_id` param to `normalize()` |
 
 ### Key Implementation Details
 

@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-25 - Migrate CLI to Remove Jira-Specific Code and Use Platform-Agnostic Providers
 
-**Ticket:** [AMI-25](https://linear.app/amiadspec/issue/AMI-25/migrate-cli-to-remove-jira-specific-code-and-use-platform-agnostic)
+**Ticket:** [AMI-25](https://linear.app/amiadingot/issue/AMI-25/migrate-cli-to-remove-jira-specific-code-and-use-platform-agnostic)
 **Status:** Draft
 **Date:** 2026-01-27
 
@@ -8,7 +8,7 @@
 
 ## Summary
 
-This ticket migrates the CLI (`spec/cli.py`) from using Jira-specific code (`parse_jira_ticket()`, `JiraTicket`) to the platform-agnostic `TicketService` orchestration layer. After this migration, the CLI will support **all 6 platforms**: Jira, Linear, GitHub, Azure DevOps, Monday, and Trello.
+This ticket migrates the CLI (`ingot/cli.py`) from using Jira-specific code (`parse_jira_ticket()`, `JiraTicket`) to the platform-agnostic `TicketService` orchestration layer. After this migration, the CLI will support **all 6 platforms**: Jira, Linear, GitHub, Azure DevOps, Monday, and Trello.
 
 > **⚠️ Clean-Slate Implementation:** This is a new system rollout with **no backward compatibility requirements**. All Jira-specific code will be completely removed and replaced with the new platform-agnostic implementation. There is no need for deprecation periods, feature flags, or gradual migration paths.
 
@@ -22,18 +22,18 @@ This ticket migrates the CLI (`spec/cli.py`) from using Jira-specific code (`par
 - Remove Jira-specific CLI options (e.g., `--force-jira-check`)
 
 **Scope:**
-- `spec/cli.py` - Main CLI entry point
+- `ingot/cli.py` - Main CLI entry point
 - CLI-related tests in `tests/test_cli.py`
 - Configuration updates for `default_platform` setting
 
 **Out of Scope (handled by follow-up tickets):**
-- README.md and user documentation updates → [AMI-38](https://linear.app/amiadspec/issue/AMI-38)
-- Platform configuration guide → [AMI-39](https://linear.app/amiadspec/issue/AMI-39)
-- End-to-end integration tests → [AMI-40](https://linear.app/amiadspec/issue/AMI-40)
-- `spec --config` output updates → [AMI-42](https://linear.app/amiadspec/issue/AMI-42)
-- Comprehensive user-facing string audit → [AMI-43](https://linear.app/amiadspec/issue/AMI-43)
+- README.md and user documentation updates → [AMI-38](https://linear.app/amiadingot/issue/AMI-38)
+- Platform configuration guide → [AMI-39](https://linear.app/amiadingot/issue/AMI-39)
+- End-to-end integration tests → [AMI-40](https://linear.app/amiadingot/issue/AMI-40)
+- `spec --config` output updates → [AMI-42](https://linear.app/amiadingot/issue/AMI-42)
+- Comprehensive user-facing string audit → [AMI-43](https://linear.app/amiadingot/issue/AMI-43)
 
-> **Note:** Workflow engine migration is handled by [AMI-24](https://linear.app/amiadspec/issue/AMI-24). This ticket focuses exclusively on CLI entry point changes.
+> **Note:** Workflow engine migration is handled by [AMI-24](https://linear.app/amiadingot/issue/AMI-24). This ticket focuses exclusively on CLI entry point changes.
 
 ---
 
@@ -43,7 +43,7 @@ This ticket migrates the CLI (`spec/cli.py`) from using Jira-specific code (`par
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              SPECFLOW CLI (THIS TICKET)                          │
+│                              INGOT CLI (THIS TICKET)                          │
 │  spec <ticket_url_or_id> [--platform jira|linear|github|...]                    │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                      │
@@ -68,7 +68,7 @@ This ticket migrates the CLI (`spec/cli.py`) from using Jira-specific code (`par
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                    Workflow Engine (AMI-24 - Already Migrated)                   │
 │                                                                                  │
-│   run_spec_driven_workflow(ticket: GenericTicket, ...)                          │
+│   run_ingot_workflow(ticket: GenericTicket, ...)                          │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -136,9 +136,9 @@ This ticket migrates the CLI (`spec/cli.py`) from using Jira-specific code (`par
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `spec/cli.py` | **Core Migration** | Replace `parse_jira_ticket()` with async TicketService |
-| `spec/config/settings.py` | **New Setting** | Add `default_platform` configuration |
-| `spec/config/__init__.py` | **Export** | Export new setting if needed |
+| `ingot/cli.py` | **Core Migration** | Replace `parse_jira_ticket()` with async TicketService |
+| `ingot/config/settings.py` | **New Setting** | Add `default_platform` configuration |
+| `ingot/config/__init__.py` | **Export** | Export new setting if needed |
 
 ### Test File Changes
 
@@ -152,12 +152,12 @@ This ticket migrates the CLI (`spec/cli.py`) from using Jira-specific code (`par
 
 ### Current Code (Jira-Specific)
 
-**File:** `spec/cli.py` (lines 459-470)
+**File:** `ingot/cli.py` (lines 459-470)
 
 ```python
-from spec.integrations.jira import parse_jira_ticket
-from spec.integrations.providers import GenericTicket
-from spec.workflow.runner import run_spec_driven_workflow
+from ingot.integrations.jira import parse_jira_ticket
+from ingot.integrations.providers import GenericTicket
+from ingot.workflow.runner import run_ingot_workflow
 
 # Parse ticket and convert to GenericTicket
 # TODO(AMI-25): Replace with TicketService.get_ticket() for full platform support
@@ -170,9 +170,9 @@ jira_ticket = parse_jira_ticket(
 ### New Code (Platform-Agnostic)
 
 ```python
-from spec.integrations import create_ticket_service
-from spec.integrations.providers import GenericTicket, Platform
-from spec.workflow.runner import run_spec_driven_workflow
+from ingot.integrations import create_ticket_service
+from ingot.integrations.providers import GenericTicket, Platform
+from ingot.workflow.runner import run_ingot_workflow
 
 # Fetch ticket using platform-agnostic TicketService
 # Supports: Jira, Linear, GitHub, Azure DevOps, Monday, Trello
@@ -193,7 +193,7 @@ generic_ticket = asyncio.run(
 
 #### Step 1.1: Add default_platform Setting
 
-**File:** `spec/config/settings.py`
+**File:** `ingot/config/settings.py`
 
 Add new setting to `SpecSettings`:
 
@@ -219,7 +219,7 @@ class SpecSettings:
 
 #### Step 2.1: Update CLI Main Function Signature
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 Add new parameter to `main()` function:
 
@@ -272,7 +272,7 @@ def _validate_platform(platform: str | None) -> Platform | None:
 
 #### Step 3.1: Implement _fetch_ticket_async()
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 ```python
 async def _fetch_ticket_async(
@@ -296,13 +296,13 @@ async def _fetch_ticket_async(
         GenericTicket with full ticket data
 
     Raises:
-        SpecError: On fetch failure
+        IngotError: On fetch failure
         UserCancelledError: If user cancels disambiguation prompt
     """
-    from spec.auggie.client import AuggieClient
-    from spec.integrations import create_ticket_service
-    from spec.integrations.auth import AuthenticationManager
-    from spec.integrations.providers import ProviderRegistry, PlatformNotSupportedError
+    from ingot.auggie.client import AuggieClient
+    from ingot.integrations import create_ticket_service
+    from ingot.integrations.auth import AuthenticationManager
+    from ingot.integrations.providers import ProviderRegistry, PlatformNotSupportedError
 
     auggie = AuggieClient()
     auth_manager = AuthenticationManager(config)
@@ -333,7 +333,7 @@ async def _fetch_ticket_async(
                     ticket_input, platform
                 )
                 return await service.get_ticket(effective_input)
-            raise SpecError(
+            raise IngotError(
                 f"Could not detect platform: {e}",
                 exit_code=ExitCode.INVALID_INPUT,
             ) from e
@@ -398,9 +398,9 @@ def _disambiguate_platform(
     Raises:
         UserCancelledError: If user cancels selection
     """
-    from spec.integrations.providers import Platform
-    from spec.ui.prompts import prompt_select
-    from spec.errors import UserCancelledError
+    from ingot.integrations.providers import Platform
+    from ingot.ui.prompts import prompt_select
+    from ingot.errors import UserCancelledError
 
     # Check config default
     default_platform = config.settings.get_default_platform()
@@ -475,7 +475,7 @@ def _resolve_with_platform_hint(
 
 #### Step 5.1: Remove parse_jira_ticket Usage
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 Replace the current Jira-specific code block:
 
@@ -496,9 +496,9 @@ def _run_workflow(
         # ... rest of docstring ...
     """
     import asyncio
-    from spec.integrations.providers import GenericTicket
-    from spec.workflow.runner import run_spec_driven_workflow
-    from spec.workflow.state import DirtyTreePolicy, RateLimitConfig
+    from ingot.integrations.providers import GenericTicket
+    from ingot.workflow.runner import run_ingot_workflow
+    from ingot.workflow.state import DirtyTreePolicy, RateLimitConfig
 
     # Fetch ticket using platform-agnostic TicketService
     try:
@@ -750,7 +750,7 @@ def mock_ticket_service(monkeypatch):
         return MockService()
 
     monkeypatch.setattr(
-        "spec.integrations.create_ticket_service",
+        "ingot.integrations.create_ticket_service",
         mock_create,
     )
 ```
@@ -891,22 +891,22 @@ Warning: Primary fetcher failed, trying direct API...
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-17](https://linear.app/amiadspec/issue/AMI-17) | ProviderRegistry | Platform detection used for routing |
-| [AMI-24](https://linear.app/amiadspec/issue/AMI-24) | WorkflowState Migration | Workflow engine accepts GenericTicket |
-| [AMI-32](https://linear.app/amiadspec/issue/AMI-32) | TicketService | Core orchestration layer this ticket uses |
-| [AMI-31](https://linear.app/amiadspec/issue/AMI-31) | DirectAPIFetcher | Fallback fetcher lifecycle |
-| [AMI-30](https://linear.app/amiadspec/issue/AMI-30) | AuggieMediatedFetcher | Primary fetcher |
-| [AMI-22](https://linear.app/amiadspec/issue/AMI-22) | AuthenticationManager | Credentials for DirectAPIFetcher |
+| [AMI-17](https://linear.app/amiadingot/issue/AMI-17) | ProviderRegistry | Platform detection used for routing |
+| [AMI-24](https://linear.app/amiadingot/issue/AMI-24) | WorkflowState Migration | Workflow engine accepts GenericTicket |
+| [AMI-32](https://linear.app/amiadingot/issue/AMI-32) | TicketService | Core orchestration layer this ticket uses |
+| [AMI-31](https://linear.app/amiadingot/issue/AMI-31) | DirectAPIFetcher | Fallback fetcher lifecycle |
+| [AMI-30](https://linear.app/amiadingot/issue/AMI-30) | AuggieMediatedFetcher | Primary fetcher |
+| [AMI-22](https://linear.app/amiadingot/issue/AMI-22) | AuthenticationManager | Credentials for DirectAPIFetcher |
 
 ### Follow-up Tickets (Blocked by AMI-25)
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-38](https://linear.app/amiadspec/issue/AMI-38) | Update User Documentation for Multi-Platform Support | README and docs updates |
-| [AMI-39](https://linear.app/amiadspec/issue/AMI-39) | Create Platform Configuration Guide | User setup documentation |
-| [AMI-40](https://linear.app/amiadspec/issue/AMI-40) | Add End-to-End Integration Tests for Multi-Platform CLI | Comprehensive integration testing |
-| [AMI-42](https://linear.app/amiadspec/issue/AMI-42) | Update spec --config Output for Multi-Platform Support | Config display updates |
-| [AMI-43](https://linear.app/amiadspec/issue/AMI-43) | Audit and Update All User-Facing Strings | Platform-agnostic language |
+| [AMI-38](https://linear.app/amiadingot/issue/AMI-38) | Update User Documentation for Multi-Platform Support | README and docs updates |
+| [AMI-39](https://linear.app/amiadingot/issue/AMI-39) | Create Platform Configuration Guide | User setup documentation |
+| [AMI-40](https://linear.app/amiadingot/issue/AMI-40) | Add End-to-End Integration Tests for Multi-Platform CLI | Comprehensive integration testing |
+| [AMI-42](https://linear.app/amiadingot/issue/AMI-42) | Update spec --config Output for Multi-Platform Support | Config display updates |
+| [AMI-43](https://linear.app/amiadingot/issue/AMI-43) | Audit and Update All User-Facing Strings | Platform-agnostic language |
 
 ### Architecture Documents
 
@@ -918,11 +918,11 @@ Warning: Primary fetcher failed, trying direct API...
 
 | File | Purpose |
 |------|---------|
-| `spec/cli.py` | Main CLI entry point (this ticket modifies) |
-| `spec/integrations/ticket_service.py` | TicketService implementation |
-| `spec/integrations/providers/registry.py` | ProviderRegistry for platform detection |
-| `spec/integrations/providers/detector.py` | PlatformDetector patterns |
-| `spec/integrations/jira.py` | Contains `parse_jira_ticket()` (to be removed from CLI usage) |
+| `ingot/cli.py` | Main CLI entry point (this ticket modifies) |
+| `ingot/integrations/ticket_service.py` | TicketService implementation |
+| `ingot/integrations/providers/registry.py` | ProviderRegistry for platform detection |
+| `ingot/integrations/providers/detector.py` | PlatformDetector patterns |
+| `ingot/integrations/jira.py` | Contains `parse_jira_ticket()` (to be removed from CLI usage) |
 
 ---
 

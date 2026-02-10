@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-33 - Add Fetch Strategy Configuration to Config Schema
 
-**Ticket:** [AMI-33](https://linear.app/amiadspec/issue/AMI-33/add-fetch-strategy-configuration-to-config-schema)
+**Ticket:** [AMI-33](https://linear.app/amiadingot/issue/AMI-33/add-fetch-strategy-configuration-to-config-schema)
 **Status:** ✅ IMPLEMENTED (PR #20)
 **Date:** 2026-01-23
 **Updated:** 2026-01-24
@@ -9,7 +9,7 @@
 
 ## Summary
 
-This ticket extends the SPECFLOW configuration schema to support the hybrid ticket fetching architecture. The implementation adds:
+This ticket extends the INGOT configuration schema to support the hybrid ticket fetching architecture. The implementation adds:
 
 1. **AgentConfig** - AI backend and integration settings (which platforms the agent has MCP integrations for)
 2. **FetchStrategyConfig** - Default strategy (agent/direct/auto) with per-platform overrides
@@ -25,7 +25,7 @@ This enables the TicketService (AMI-29) to determine the optimal fetching strate
 
 ### Architecture Fit
 
-The configuration extends the existing cascading hierarchy in `spec/config/`:
+The configuration extends the existing cascading hierarchy in `ingot/config/`:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -33,8 +33,8 @@ The configuration extends the existing cascading hierarchy in `spec/config/`:
 │                         (Highest to Lowest)                                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  1. Environment Variables    ─── Highest priority (CI/CD, temporary overrides)│
-│  2. Local Config (.spec)     ─── Project-specific settings                    │
-│  3. Global Config (~/.spec-config) ─── User defaults                          │
+│  2. Local Config (.ingot)     ─── Project-specific settings                    │
+│  3. Global Config (~/.ingot-config) ─── User defaults                          │
 │  4. Built-in Defaults        ─── Fallback values                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -42,16 +42,16 @@ The configuration extends the existing cascading hierarchy in `spec/config/`:
 ### Current Config Architecture
 
 The existing implementation uses:
-- **Settings dataclass** (`spec/config/settings.py`) - Flat key-value pairs with `_key_mapping`
-- **ConfigManager** (`spec/config/manager.py`) - Loads from files/env, applies to Settings
-- **Simple KEY=VALUE format** - Both `.spec` and `~/.spec-config` use shell-like format
+- **Settings dataclass** (`ingot/config/settings.py`) - Flat key-value pairs with `_key_mapping`
+- **ConfigManager** (`ingot/config/manager.py`) - Loads from files/env, applies to Settings
+- **Simple KEY=VALUE format** - Both `.ingot` and `~/.ingot-config` use shell-like format
 
 ### Design Decision: New Fetch Config Module
 
 Rather than overloading the existing `Settings` dataclass with complex nested structures, we create a **separate configuration module** for fetch-related settings:
 
 ```
-spec/config/
+ingot/config/
 ├── __init__.py           # Updated exports
 ├── settings.py           # Existing flat settings (unchanged)
 ├── manager.py            # Updated with new getters
@@ -72,24 +72,24 @@ spec/config/
 
 | File | Purpose |
 |------|---------|
-| `spec/config/fetch_config.py` | Dataclasses: `FetchStrategy`, `AgentPlatform`, `AgentConfig`, `FetchStrategyConfig`, `FetchPerformanceConfig`; Validation: `ConfigValidationError`, `validate_credentials()`, `validate_strategy_for_platform()`, `get_active_platforms()`, `canonicalize_credentials()`; Parser helpers: `parse_fetch_strategy()`, `parse_ai_backend()` |
-| `spec/utils/env_utils.py` | Environment variable utilities: `expand_env_vars()`, `expand_env_vars_strict()`, `is_sensitive_key()`, `EnvVarExpansionError`, `SENSITIVE_KEY_PATTERNS` |
+| `ingot/config/fetch_config.py` | Dataclasses: `FetchStrategy`, `AgentPlatform`, `AgentConfig`, `FetchStrategyConfig`, `FetchPerformanceConfig`; Validation: `ConfigValidationError`, `validate_credentials()`, `validate_strategy_for_platform()`, `get_active_platforms()`, `canonicalize_credentials()`; Parser helpers: `parse_fetch_strategy()`, `parse_ai_backend()` |
+| `ingot/utils/env_utils.py` | Environment variable utilities: `expand_env_vars()`, `expand_env_vars_strict()`, `is_sensitive_key()`, `EnvVarExpansionError`, `SENSITIVE_KEY_PATTERNS` |
 | `tests/test_fetch_config.py` | 39 comprehensive unit tests |
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
-| `spec/config/manager.py` | Add `get_agent_config()`, `get_fetch_strategy_config()`, `get_fetch_performance_config()`, `get_fallback_credentials()`, `validate_fetch_config()`, `_get_active_platforms()` |
-| `spec/config/__init__.py` | Export new config classes and validation utilities |
-| `spec/config/settings.py` | Add new config keys to `_key_mapping` for flat settings |
+| `ingot/config/manager.py` | Add `get_agent_config()`, `get_fetch_strategy_config()`, `get_fetch_performance_config()`, `get_fallback_credentials()`, `validate_fetch_config()`, `_get_active_platforms()` |
+| `ingot/config/__init__.py` | Export new config classes and validation utilities |
+| `ingot/config/settings.py` | Add new config keys to `_key_mapping` for flat settings |
 
 ---
 
 ## Implementation Steps
 
 ### Step 1: Create Fetch Config Module
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 Create dataclasses and enums:
 - `FetchStrategy` enum: `AGENT`, `DIRECT`, `AUTO`
@@ -99,7 +99,7 @@ Create dataclasses and enums:
 - `FetchPerformanceConfig` dataclass with `cache_duration_hours`, `timeout_seconds`, `max_retries`, `retry_delay_seconds`
 
 ### Step 2: Add Environment Variable Expansion
-**File:** `spec/config/manager.py`
+**File:** `ingot/config/manager.py`
 
 Add `_expand_env_vars()` method that:
 - Recursively processes dicts, lists, and strings
@@ -107,7 +107,7 @@ Add `_expand_env_vars()` method that:
 - Preserves unmatched patterns as-is (for debugging)
 
 ### Step 3: Add ConfigManager Getters
-**File:** `spec/config/manager.py`
+**File:** `ingot/config/manager.py`
 
 Add methods:
 - `get_agent_config() -> AgentConfig`
@@ -116,7 +116,7 @@ Add methods:
 - `get_fallback_credentials(platform: str) -> dict[str, str] | None`
 
 ### Step 4: Update Settings Key Mapping
-**File:** `spec/config/settings.py`
+**File:** `ingot/config/settings.py`
 
 Add new flat config keys for simple settings:
 - `AI_BACKEND` → AI backend
@@ -127,7 +127,7 @@ Add new flat config keys for simple settings:
 - `FETCH_RETRY_DELAY_SECONDS` → delay between retries
 
 ### Step 5: Update Package Exports
-**File:** `spec/config/__init__.py`
+**File:** `ingot/config/__init__.py`
 
 Export new classes from `fetch_config.py`.
 
@@ -145,10 +145,10 @@ Test coverage for:
 
 ## File Changes Detail
 
-### New: `spec/config/fetch_config.py`
+### New: `ingot/config/fetch_config.py`
 
 ```python
-"""Fetch strategy configuration for SPECFLOW."""
+"""Fetch strategy configuration for INGOT."""
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -201,7 +201,7 @@ class FetchPerformanceConfig:
     retry_delay_seconds: float = 1.0
 ```
 
-### Modified: `spec/config/manager.py`
+### Modified: `ingot/config/manager.py`
 
 Add these methods to `ConfigManager`:
 
@@ -223,7 +223,7 @@ def _expand_env_vars(self, value: Any) -> Any:
 
 def get_agent_config(self) -> AgentConfig:
     """Get AI agent configuration."""
-    from spec.config.fetch_config import AgentConfig, AgentPlatform
+    from ingot.config.fetch_config import AgentConfig, AgentPlatform
     platform_str = self._raw_values.get("AI_BACKEND", "auggie")
     integrations = {}
     # Parse AGENT_INTEGRATIONS_* keys
@@ -238,7 +238,7 @@ def get_agent_config(self) -> AgentConfig:
 
 def get_fetch_strategy_config(self) -> FetchStrategyConfig:
     """Get fetch strategy configuration."""
-    from spec.config.fetch_config import FetchStrategy, FetchStrategyConfig
+    from ingot.config.fetch_config import FetchStrategy, FetchStrategyConfig
     default_str = self._raw_values.get("FETCH_STRATEGY_DEFAULT", "auto")
     per_platform = {}
     # Parse FETCH_STRATEGY_* keys
@@ -262,7 +262,7 @@ def get_fallback_credentials(self, platform: str) -> dict[str, str] | None:
     return credentials if credentials else None
 ```
 
-### Modified: `spec/config/settings.py`
+### Modified: `ingot/config/settings.py`
 
 Add to `_key_mapping`:
 
@@ -292,7 +292,7 @@ fetch_retry_delay_seconds: float = 1.0
 
 ## Configuration Format
 
-### Flat Config (.spec / ~/.spec-config)
+### Flat Config (.ingot / ~/.ingot-config)
 
 ```bash
 # Agent configuration
@@ -355,7 +355,7 @@ FALLBACK_AZURE_DEVOPS_PAT=${AZURE_DEVOPS_PAT}
 ### Backward Compatibility
 
 - **No breaking changes** - All new settings have sensible defaults
-- Existing `.spec` and `~/.spec-config` files continue to work
+- Existing `.ingot` and `~/.ingot-config` files continue to work
 - New keys are optional and ignored by older versions
 
 ### Default Behavior
@@ -405,7 +405,7 @@ The implementation exceeded the original plan with these additional features:
 
 ### 1. Validation Framework
 
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 - **`ConfigValidationError`** - Exception for fail-fast validation failures
 - **`validate_credentials(platform, credentials, strict)`** - Validates required credential fields per platform
@@ -414,7 +414,7 @@ The implementation exceeded the original plan with these additional features:
 
 ```python
 # Validation example
-from spec.config.fetch_config import validate_credentials, ConfigValidationError
+from ingot.config.fetch_config import validate_credentials, ConfigValidationError
 
 try:
     validate_credentials("jira", {"url": "...", "email": "..."}, strict=True)
@@ -424,7 +424,7 @@ except ConfigValidationError as e:
 
 ### 2. Performance Bounds with Clamping
 
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 Upper bounds prevent system hangs:
 
@@ -439,7 +439,7 @@ Values are clamped in `FetchPerformanceConfig.__post_init__()` with logged warni
 
 ### 3. Credential Aliasing
 
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 Platform-specific key normalization via `CREDENTIAL_ALIASES` and `canonicalize_credentials()`:
 
@@ -455,7 +455,7 @@ This allows users to use common synonyms that get normalized to canonical keys.
 
 ### 4. Scoped Validation
 
-**File:** `spec/config/manager.py`
+**File:** `ingot/config/manager.py`
 
 `ConfigManager.validate_fetch_config()` only validates "active" platforms that are explicitly configured:
 - Platforms in `per_platform` strategy overrides
@@ -466,7 +466,7 @@ This reduces noise by not checking all `KNOWN_PLATFORMS` by default.
 
 ### 5. Extracted Environment Utilities
 
-**File:** `spec/utils/env_utils.py`
+**File:** `ingot/utils/env_utils.py`
 
 Environment variable expansion was extracted to a separate utility module:
 
@@ -485,7 +485,7 @@ if is_sensitive_key("FALLBACK_JIRA_TOKEN"):
 
 ### 6. Safe Enum Parsers
 
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 - **`parse_fetch_strategy(value, default, context)`** - Returns `FetchStrategy` with proper error messages
 - **`parse_ai_backend(value, default, context)`** - Returns `AgentPlatform` with proper error messages

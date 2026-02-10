@@ -13,15 +13,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.cache import InMemoryTicketCache
-from spec.integrations.fetchers import AuggieMediatedFetcher
-from spec.integrations.fetchers.exceptions import AgentResponseParseError
-from spec.integrations.providers.base import IssueTrackerProvider, Platform
-from spec.integrations.providers.github import GitHubProvider
-from spec.integrations.providers.jira import JiraProvider
-from spec.integrations.providers.linear import LinearProvider
-from spec.integrations.ticket_service import TicketService, create_ticket_service
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.cache import InMemoryTicketCache
+from ingot.integrations.fetchers import AuggieMediatedFetcher
+from ingot.integrations.fetchers.exceptions import AgentResponseParseError
+from ingot.integrations.providers.base import IssueTrackerProvider, Platform
+from ingot.integrations.providers.github import GitHubProvider
+from ingot.integrations.providers.jira import JiraProvider
+from ingot.integrations.providers.linear import LinearProvider
+from ingot.integrations.ticket_service import TicketService, create_ticket_service
 from tests.fakes.fake_backend import FakeBackend
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ class TestE2EFullPipeline:
         provider = _make_real_provider(ticket_platform)
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket(PLATFORM_INPUTS[ticket_platform], skip_cache=True)
@@ -202,7 +202,7 @@ class TestE2EFallbackBehavior:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket("PROJ-123", skip_cache=True)
@@ -232,7 +232,7 @@ class TestE2EFallbackBehavior:
 
         provider = LinearProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket("ENG-42", skip_cache=True)
@@ -263,7 +263,7 @@ class TestE2EFallbackBehavior:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket("PROJ-123", skip_cache=True)
@@ -284,7 +284,7 @@ class TestE2EFallbackBehavior:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             with pytest.raises(AgentResponseParseError):
@@ -341,7 +341,7 @@ class TestE2ECacheIntegration:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket1 = await service.get_ticket("PROJ-123")
@@ -363,7 +363,7 @@ class TestE2ECacheIntegration:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             await service.get_ticket("PROJ-123", skip_cache=True)
@@ -384,7 +384,7 @@ class TestE2ECacheIntegration:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             await service.get_ticket("PROJ-123")
@@ -414,7 +414,7 @@ class TestE2ECallVerification:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             await service.get_ticket("PROJ-123", skip_cache=True)
@@ -437,7 +437,7 @@ class TestE2ECallVerification:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             await service.get_ticket("PROJ-123", skip_cache=True)
@@ -460,7 +460,7 @@ class TestE2ECallVerification:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             await service.get_ticket("PROJ-123", skip_cache=True)
@@ -491,7 +491,7 @@ class TestE2EJsonParsingVariants:
 
         provider = JiraProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket("PROJ-123", skip_cache=True)
@@ -511,7 +511,7 @@ class TestE2EJsonParsingVariants:
 
         provider = LinearProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket("ENG-42", skip_cache=True)
@@ -530,7 +530,7 @@ class TestE2EJsonParsingVariants:
 
         provider = GitHubProvider()
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=provider,
         ):
             ticket = await service.get_ticket("acme/repo#99", skip_cache=True)

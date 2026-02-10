@@ -1,10 +1,10 @@
 # AMI-51: Phase 1.5 - Create AuggieBackend
 
-**Ticket:** [AMI-51](https://linear.app/amiadspec/issue/AMI-51/phase-15-create-auggiebackend)
+**Ticket:** [AMI-51](https://linear.app/amiadingot/issue/AMI-51/phase-15-create-auggiebackend)
 **Status:** In Progress
 **Date:** 2026-02-01
 **Labels:** MultiAgent
-**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadspec/issue/AMI-45)
+**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadingot/issue/AMI-45)
 
 ---
 
@@ -19,13 +19,13 @@ Create the `AuggieBackend` class that extends `BaseBackend` and wraps the existi
 - Enables the Backend Factory (AMI-52) to create backend instances by platform
 
 **Scope:**
-- Create `spec/integrations/backends/auggie.py` containing:
+- Create `ingot/integrations/backends/auggie.py` containing:
   - `AuggieBackend` class extending `BaseBackend`
   - Implementation of all `AIBackend` protocol methods
   - Delegation to `AuggieClient` for actual CLI execution
   - Parameter mapping (`subagent` → `agent`)
   - Timeout handling via `_run_streaming_with_timeout()` for `run_with_callback()`
-- Update `spec/integrations/backends/__init__.py` to export `AuggieBackend`
+- Update `ingot/integrations/backends/__init__.py` to export `AuggieBackend`
 
 **Reference:** `specs/Pluggable Multi-Agent Support.md` - Phase 1.5 (lines 1771-1918)
 
@@ -56,10 +56,10 @@ AuggieBackend serves as the reference implementation demonstrating how concrete 
 
 ### Existing Infrastructure (Dependencies)
 
-1. **`spec/integrations/backends/errors.py`** (AMI-47)
+1. **`ingot/integrations/backends/errors.py`** (AMI-47)
    - `BackendError`, `BackendNotInstalledError`, `BackendTimeoutError`, `BackendRateLimitError`
 
-2. **`spec/integrations/backends/base.py`** (AMI-48, AMI-49)
+2. **`ingot/integrations/backends/base.py`** (AMI-48, AMI-49)
    - `AIBackend` Protocol with all required methods and properties
    - `BaseBackend` ABC with helper methods:
      - `_parse_subagent_prompt()` - Parses YAML frontmatter from subagent files
@@ -67,7 +67,7 @@ AuggieBackend serves as the reference implementation demonstrating how concrete 
      - `_run_streaming_with_timeout()` - Watchdog thread pattern for timeouts
    - `SubagentMetadata` dataclass
 
-3. **`spec/integrations/auggie.py`** (Existing)
+3. **`ingot/integrations/auggie.py`** (Existing)
    - `AuggieClient` - Core CLI wrapper with methods:
      - `_build_command()` - Builds CLI command with agent/model/flags
      - `run_with_callback()` - Streaming execution with callback
@@ -81,7 +81,7 @@ AuggieBackend serves as the reference implementation demonstrating how concrete 
 
 ### File Structure
 
-**Create:** `spec/integrations/backends/auggie.py`
+**Create:** `ingot/integrations/backends/auggie.py`
 
 ### Implementation Details
 
@@ -144,9 +144,9 @@ def run_with_callback(
 ### Imports
 
 ```python
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import BaseBackend
-from spec.integrations.auggie import (
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import BaseBackend
+from ingot.integrations.auggie import (
     AuggieClient,
     check_auggie_installed,
     _looks_like_rate_limit,
@@ -157,7 +157,7 @@ from spec.integrations.auggie import (
 
 ### Phase 1: Create File and Class Structure (~0.5 hours)
 
-1. Create `spec/integrations/backends/auggie.py`
+1. Create `ingot/integrations/backends/auggie.py`
 2. Add module docstring and imports
 3. Implement `AuggieBackend` class with `__init__()` and properties
 4. Verify imports work correctly
@@ -177,7 +177,7 @@ from spec.integrations.auggie import (
 
 ### Phase 4: Update Exports (~0.25 hours)
 
-1. Add `AuggieBackend` to `spec/integrations/backends/__init__.py`
+1. Add `AuggieBackend` to `ingot/integrations/backends/__init__.py`
 
 ## Testing Strategy
 
@@ -237,7 +237,7 @@ class TestAuggieBackendProtocolCompliance:
 
     def test_isinstance_aibackend(self):
         """AuggieBackend satisfies AIBackend protocol via isinstance()."""
-        from spec.integrations.backends import AuggieBackend, AIBackend
+        from ingot.integrations.backends import AuggieBackend, AIBackend
         backend = AuggieBackend()
         assert isinstance(backend, AIBackend)
 
@@ -257,7 +257,7 @@ class TestAuggieClientContract:
 
     def test_build_command_basic_structure(self):
         """Verify _build_command() returns expected command structure."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
         client = AuggieClient()
         cmd = client._build_command("test prompt", print_mode=True)
         assert cmd[0] == "auggie"
@@ -270,7 +270,7 @@ class TestAuggieClientContract:
         This documents the known limitation - explicit model override
         does not work when a subagent is specified.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
         from unittest.mock import patch, MagicMock
 
         client = AuggieClient()
@@ -280,7 +280,7 @@ class TestAuggieClientContract:
         mock_agent_def.model = "agent-model"
         mock_agent_def.prompt = "Agent instructions"
 
-        with patch("spec.integrations.auggie._parse_agent_definition", return_value=mock_agent_def):
+        with patch("ingot.integrations.auggie._parse_agent_definition", return_value=mock_agent_def):
             cmd = client._build_command(
                 "test prompt",
                 agent="test-agent",
@@ -295,12 +295,12 @@ class TestAuggieClientContract:
 
 ### Integration Tests (Gated)
 
-Integration tests with real Auggie CLI are gated behind `SPEC_INTEGRATION_TESTS=1`:
+Integration tests with real Auggie CLI are gated behind `INGOT_INTEGRATION_TESTS=1`:
 
 ```python
 @pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 class TestAuggieBackendIntegration:
     """Integration tests with real Auggie CLI."""
@@ -351,10 +351,10 @@ if agent:
 
 The docstring confirms: "*model: Override model for this command (ignored when agent is set)*"
 
-**Consequence:** When `AuggieBackend.run_with_callback(prompt, subagent="spec-planner", model="claude-3-opus")` is called:
+**Consequence:** When `AuggieBackend.run_with_callback(prompt, subagent="ingot-planner", model="claude-3-opus")` is called:
 1. `_resolve_model()` correctly returns `"claude-3-opus"` (explicit override)
 2. `_build_command()` is called with `model="claude-3-opus"`
-3. `_build_command()` **ignores** this and uses the model from `spec-planner.md` frontmatter instead
+3. `_build_command()` **ignores** this and uses the model from `ingot-planner.md` frontmatter instead
 
 **Resolution:** This is an **accepted limitation** for AuggieBackend. The behavior matches the existing `AuggieClient` semantics. Future backends (Claude, Cursor) can implement true model override if their CLIs support it.
 
@@ -411,14 +411,14 @@ This alternative is noted but **not required** for AMI-51 since factory validati
 
 ```bash
 # Verify file exists
-ls -la spec/integrations/backends/auggie.py
+ls -la ingot/integrations/backends/auggie.py
 
 # Verify imports work without cycles
-python -c "from spec.integrations.backends import AuggieBackend; print('Import OK')"
+python -c "from ingot.integrations.backends import AuggieBackend; print('Import OK')"
 
 # Verify protocol compliance
 python -c "
-from spec.integrations.backends import AuggieBackend, AIBackend
+from ingot.integrations.backends import AuggieBackend, AIBackend
 backend = AuggieBackend()
 assert isinstance(backend, AIBackend), 'Protocol compliance failed'
 print('Protocol compliance OK')
@@ -426,8 +426,8 @@ print('Protocol compliance OK')
 
 # Verify properties
 python -c "
-from spec.integrations.backends import AuggieBackend
-from spec.config.fetch_config import AgentPlatform
+from ingot.integrations.backends import AuggieBackend
+from ingot.config.fetch_config import AgentPlatform
 backend = AuggieBackend()
 assert backend.name == 'Auggie', f'Expected Auggie, got {backend.name}'
 assert backend.platform == AgentPlatform.AUGGIE, f'Expected AUGGIE, got {backend.platform}'
@@ -439,14 +439,14 @@ print('Properties OK')
 pytest tests/integrations/backends/test_auggie_backend.py -v
 
 # Run mypy type checking
-mypy spec/integrations/backends/auggie.py --strict
+mypy ingot/integrations/backends/auggie.py --strict
 
 # Verify no import cycles
 python -c "
 import sys
-from spec.integrations.backends.auggie import AuggieBackend
-from spec.integrations.backends.base import AIBackend, BaseBackend
-from spec.integrations.backends.errors import BackendTimeoutError
+from ingot.integrations.backends.auggie import AuggieBackend
+from ingot.integrations.backends.base import AIBackend, BaseBackend
+from ingot.integrations.backends.errors import BackendTimeoutError
 print('No import cycles detected')
 "
 ```
@@ -455,7 +455,7 @@ print('No import cycles detected')
 
 ### Implementation Checklist
 
-- [ ] `spec/integrations/backends/auggie.py` created
+- [ ] `ingot/integrations/backends/auggie.py` created
 - [ ] `AuggieBackend` class extends `BaseBackend`
 - [ ] `AuggieBackend` implements `AIBackend` protocol (verified by `isinstance()`)
 - [ ] All abstract methods from `BaseBackend` implemented:
@@ -484,7 +484,7 @@ print('No import cycles detected')
 
 ### Exports
 
-- [ ] `AuggieBackend` exported from `spec/integrations/backends/__init__.py`
+- [ ] `AuggieBackend` exported from `ingot/integrations/backends/__init__.py`
 
 ### Quality Checklist
 
@@ -525,9 +525,9 @@ print('No import cycles detected')
 ## References
 
 - **Parent Specification:** `specs/Pluggable Multi-Agent Support.md` (lines 1772-1918)
-- **Protocol Definition:** `spec/integrations/backends/base.py` (AIBackend, BaseBackend)
-- **Error Types:** `spec/integrations/backends/errors.py`
-- **Wrapped Client:** `spec/integrations/auggie.py` (AuggieClient)
+- **Protocol Definition:** `ingot/integrations/backends/base.py` (AIBackend, BaseBackend)
+- **Error Types:** `ingot/integrations/backends/errors.py`
+- **Wrapped Client:** `ingot/integrations/auggie.py` (AuggieClient)
 - **Related Plans:**
   - `specs/AMI-47-implementation-plan.md`
   - `specs/AMI-48-implementation-plan.md`
@@ -544,9 +544,9 @@ The complete implementation as specified in the parent spec:
 """Auggie CLI backend implementation."""
 from typing import Callable
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import BaseBackend
-from spec.integrations.auggie import (
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import BaseBackend
+from ingot.integrations.auggie import (
     AuggieClient,
     check_auggie_installed,
     _looks_like_rate_limit,

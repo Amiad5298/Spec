@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-32 - Implement TicketService Orchestration Layer
 
-**Ticket:** [AMI-32](https://linear.app/amiadspec/issue/AMI-32/implement-ticketservice-orchestration-layer)
+**Ticket:** [AMI-32](https://linear.app/amiadingot/issue/AMI-32/implement-ticketservice-orchestration-layer)
 **Status:** Draft
 **Date:** 2026-01-27
 
@@ -33,7 +33,7 @@ The orchestration flow:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              SPECFLOW CLI                                        │
+│                              INGOT CLI                                        │
 │  spec <ticket_url_or_id>                                                        │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                      │
@@ -129,14 +129,14 @@ TicketService triggers fallback on these public exceptions:
 
 ## Components to Create
 
-### New File: `spec/integrations/ticket_service.py`
+### New File: `ingot/integrations/ticket_service.py`
 
 | Component | Purpose |
 |-----------|---------|
 | `TicketService` class | Main orchestration service |
 | `create_ticket_service()` factory | Convenience function for default setup |
 
-### File to Modify: `spec/integrations/__init__.py`
+### File to Modify: `ingot/integrations/__init__.py`
 
 Add export for `TicketService` and `create_ticket_service` in `__all__`.
 
@@ -165,9 +165,9 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from spec.integrations.providers import Platform, ProviderRegistry
-from spec.integrations.providers.base import GenericTicket
-from spec.integrations.fetchers import (
+from ingot.integrations.providers import Platform, ProviderRegistry
+from ingot.integrations.providers.base import GenericTicket
+from ingot.integrations.fetchers import (
     TicketFetcher,
     AuggieMediatedFetcher,
     DirectAPIFetcher,
@@ -175,12 +175,12 @@ from spec.integrations.fetchers import (
     AgentFetchError,
     AgentResponseParseError,
 )
-from spec.integrations.cache import TicketCache, InMemoryTicketCache, CacheKey
+from ingot.integrations.cache import TicketCache, InMemoryTicketCache, CacheKey
 
 if TYPE_CHECKING:
-    from spec.integrations.auth import AuthenticationManager
-    from spec.auggie.client import AuggieClient
-    from spec.config import ConfigManager
+    from ingot.integrations.auth import AuthenticationManager
+    from ingot.auggie.client import AuggieClient
+    from ingot.config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -466,8 +466,8 @@ async def create_ticket_service(
         ValueError: If configuration is invalid (no fetchers configured)
 
     Example:
-        from spec.auggie.client import AuggieClient
-        from spec.integrations.auth import get_auth_manager
+        from ingot.auggie.client import AuggieClient
+        from ingot.integrations.auth import get_auth_manager
 
         auggie = AuggieClient()
         auth_manager = await get_auth_manager()
@@ -520,10 +520,10 @@ async def create_ticket_service(
 
 ### Step 6: Update Package Exports
 
-Update `spec/integrations/__init__.py`:
+Update `ingot/integrations/__init__.py`:
 
 ```python
-from spec.integrations.ticket_service import TicketService, create_ticket_service
+from ingot.integrations.ticket_service import TicketService, create_ticket_service
 
 __all__ = [
     # ... existing exports ...
@@ -596,7 +596,7 @@ async with DirectAPIFetcher(auth_manager) as fetcher:
 Caching layer integration:
 
 ```python
-from spec.integrations.cache import TicketCache, CacheKey, InMemoryTicketCache
+from ingot.integrations.cache import TicketCache, CacheKey, InMemoryTicketCache
 
 # Cache lookup (returns GenericTicket | None)
 cache_key = CacheKey(platform, ticket_id)
@@ -680,9 +680,9 @@ cache.set(ticket, ttl=timedelta(hours=1), etag="W/\"abc123\"")
 ### Basic Usage with Default Setup
 
 ```python
-from spec.auggie.client import AuggieClient
-from spec.integrations.auth import get_auth_manager
-from spec.integrations import create_ticket_service
+from ingot.auggie.client import AuggieClient
+from ingot.integrations.auth import get_auth_manager
+from ingot.integrations import create_ticket_service
 
 async def main():
     auggie = AuggieClient()
@@ -713,10 +713,10 @@ async def main():
 ### DirectAPI-Only Mode (No Agent)
 
 ```python
-from spec.integrations.auth import get_auth_manager
-from spec.integrations.fetchers import DirectAPIFetcher
-from spec.integrations.cache import InMemoryTicketCache
-from spec.integrations import TicketService
+from ingot.integrations.auth import get_auth_manager
+from ingot.integrations.fetchers import DirectAPIFetcher
+from ingot.integrations.cache import InMemoryTicketCache
+from ingot.integrations import TicketService
 
 async def main():
     auth_manager = await get_auth_manager()
@@ -747,7 +747,7 @@ async with await create_ticket_service(...) as service:
 ### Cache Management
 
 ```python
-from spec.integrations.providers import Platform
+from ingot.integrations.providers import Platform
 
 async with await create_ticket_service(...) as service:
     # Fetch and cache
@@ -766,7 +766,7 @@ async with await create_ticket_service(...) as service:
 ### Error Handling
 
 ```python
-from spec.integrations.fetchers import (
+from ingot.integrations.fetchers import (
     TicketFetchError,
     PlatformNotSupportedError,
 )
@@ -833,14 +833,14 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import timedelta
 
-from spec.integrations.ticket_service import TicketService, create_ticket_service
-from spec.integrations.providers.base import GenericTicket, Platform, TicketStatus
-from spec.integrations.fetchers import (
+from ingot.integrations.ticket_service import TicketService, create_ticket_service
+from ingot.integrations.providers.base import GenericTicket, Platform, TicketStatus
+from ingot.integrations.fetchers import (
     AgentIntegrationError,
     AgentFetchError,
     AgentResponseParseError,
 )
-from spec.integrations.cache import CacheKey
+from ingot.integrations.cache import CacheKey
 
 @pytest.fixture
 def mock_primary_fetcher():
@@ -1013,11 +1013,11 @@ The global cache singleton functions are deprecated in favor of dependency injec
 
 ```python
 # OLD (deprecated - emits DeprecationWarning)
-from spec.integrations import get_global_cache
+from ingot.integrations import get_global_cache
 cache = get_global_cache()
 
 # NEW (recommended)
-from spec.integrations import TicketService, InMemoryTicketCache, create_ticket_service
+from ingot.integrations import TicketService, InMemoryTicketCache, create_ticket_service
 
 # Option 1: Use factory function (creates cache automatically)
 async with await create_ticket_service(auggie_client=client) as service:
@@ -1061,16 +1061,16 @@ Added `_normalize_for_json()` helper function to handle non-serializable objects
 
 ### Related Tickets
 
-- [AMI-17](https://linear.app/amiadspec/issue/AMI-17): ProviderRegistry implementation
-- [AMI-18](https://linear.app/amiadspec/issue/AMI-18): JiraProvider implementation
-- [AMI-19](https://linear.app/amiadspec/issue/AMI-19): GitHubProvider implementation
-- [AMI-20](https://linear.app/amiadspec/issue/AMI-20): LinearProvider implementation
-- [AMI-21](https://linear.app/amiadspec/issue/AMI-21): Additional platform providers
-- [AMI-22](https://linear.app/amiadspec/issue/AMI-22): AuthenticationManager (used by DirectAPIFetcher)
-- [AMI-23](https://linear.app/amiadspec/issue/AMI-23): Caching layer implementation
-- [AMI-29](https://linear.app/amiadspec/issue/AMI-29): TicketFetcher abstraction layer
-- [AMI-30](https://linear.app/amiadspec/issue/AMI-30): AuggieMediatedFetcher implementation
-- [AMI-31](https://linear.app/amiadspec/issue/AMI-31): DirectAPIFetcher implementation
+- [AMI-17](https://linear.app/amiadingot/issue/AMI-17): ProviderRegistry implementation
+- [AMI-18](https://linear.app/amiadingot/issue/AMI-18): JiraProvider implementation
+- [AMI-19](https://linear.app/amiadingot/issue/AMI-19): GitHubProvider implementation
+- [AMI-20](https://linear.app/amiadingot/issue/AMI-20): LinearProvider implementation
+- [AMI-21](https://linear.app/amiadingot/issue/AMI-21): Additional platform providers
+- [AMI-22](https://linear.app/amiadingot/issue/AMI-22): AuthenticationManager (used by DirectAPIFetcher)
+- [AMI-23](https://linear.app/amiadingot/issue/AMI-23): Caching layer implementation
+- [AMI-29](https://linear.app/amiadingot/issue/AMI-29): TicketFetcher abstraction layer
+- [AMI-30](https://linear.app/amiadingot/issue/AMI-30): AuggieMediatedFetcher implementation
+- [AMI-31](https://linear.app/amiadingot/issue/AMI-31): DirectAPIFetcher implementation
 
 ### Architecture Documents
 
@@ -1080,10 +1080,10 @@ Added `_normalize_for_json()` helper function to handle non-serializable objects
 
 ### Codebase References
 
-- `spec/integrations/providers/registry.py` - ProviderRegistry
-- `spec/integrations/providers/base.py` - GenericTicket, Platform, IssueTrackerProvider
-- `spec/integrations/fetchers/base.py` - TicketFetcher
-- `spec/integrations/fetchers/auggie_fetcher.py` - AuggieMediatedFetcher
-- `spec/integrations/fetchers/direct_api_fetcher.py` - DirectAPIFetcher
-- `spec/integrations/fetchers/exceptions.py` - Exception hierarchy
-- `spec/integrations/cache/` - Cache implementations
+- `ingot/integrations/providers/registry.py` - ProviderRegistry
+- `ingot/integrations/providers/base.py` - GenericTicket, Platform, IssueTrackerProvider
+- `ingot/integrations/fetchers/base.py` - TicketFetcher
+- `ingot/integrations/fetchers/auggie_fetcher.py` - AuggieMediatedFetcher
+- `ingot/integrations/fetchers/direct_api_fetcher.py` - DirectAPIFetcher
+- `ingot/integrations/fetchers/exceptions.py` - Exception hierarchy
+- `ingot/integrations/cache/` - Cache implementations

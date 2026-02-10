@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-24 - Migrate WorkflowState from JiraTicket to GenericTicket
 
-**Ticket:** [AMI-24](https://linear.app/amiadspec/issue/AMI-24/migrate-workflowstate-from-jiraticket-to-genericticket)
+**Ticket:** [AMI-24](https://linear.app/amiadingot/issue/AMI-24/migrate-workflowstate-from-jiraticket-to-genericticket)
 **Status:** Draft
 **Date:** 2026-01-27
 
@@ -11,18 +11,18 @@
 This ticket migrates the `WorkflowState` class and related workflow modules from using the platform-specific `JiraTicket` dataclass to the platform-agnostic `GenericTicket` abstraction. This is a critical architectural migration that enables the workflow engine to work with **any supported issue tracking platform** (Jira, GitHub, Linear, Azure DevOps, Monday, Trello).
 
 **Migration Scope (AMI-24):**
-- Core workflow state (`spec/workflow/state.py`)
-- Workflow runner (`spec/workflow/runner.py`)
+- Core workflow state (`ingot/workflow/state.py`)
+- Workflow runner (`ingot/workflow/runner.py`)
 - Workflow steps (`step1_plan.py`, `step2_tasklist.py`, `step3_execute.py`)
-- Conflict detection module (`spec/workflow/conflict_detection.py`)
+- Conflict detection module (`ingot/workflow/conflict_detection.py`)
 - All related test files (10+ test files)
 
-> **Note:** CLI migration (`spec/cli.py`) is handled separately by [AMI-25](https://linear.app/amiadspec/issue/AMI-25).
+> **Note:** CLI migration (`ingot/cli.py`) is handled separately by [AMI-25](https://linear.app/amiadingot/issue/AMI-25).
 
 **Key Transformation:**
 ```python
 # Before (JiraTicket - platform-specific)
-from spec.integrations.jira import JiraTicket
+from ingot.integrations.jira import JiraTicket
 ticket: JiraTicket
 ticket.ticket_id      # "PROJECT-123"
 ticket.ticket_url     # URL or ID string
@@ -31,7 +31,7 @@ ticket.title          # Full title
 ticket.description    # Description
 
 # After (GenericTicket - platform-agnostic)
-from spec.integrations.providers import GenericTicket
+from ingot.integrations.providers import GenericTicket
 ticket: GenericTicket
 ticket.id             # Platform-specific ID (e.g., "PROJECT-123", "owner/repo#42")
 ticket.url            # Full URL to ticket
@@ -49,7 +49,7 @@ ticket.safe_branch_name  # Property: generates git-safe branch name
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              SPECFLOW CLI                                        │
+│                              INGOT CLI                                        │
 │  spec <ticket_url_or_id>                                                        │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                      │
@@ -83,11 +83,11 @@ ticket.safe_branch_name  # Property: generates git-safe branch name
 
 ### Key Design Decisions
 
-1. **GenericTicket is Already Production-Ready** - The `GenericTicket` dataclass in `spec/integrations/providers/base.py` is fully implemented with all required fields and properties (`id`, `url`, `title`, `description`, `branch_summary`, `safe_branch_name`).
+1. **GenericTicket is Already Production-Ready** - The `GenericTicket` dataclass in `ingot/integrations/providers/base.py` is fully implemented with all required fields and properties (`id`, `url`, `title`, `description`, `branch_summary`, `safe_branch_name`).
 
-2. **CLI Integration Path** - The CLI (`spec/cli.py`) currently uses `parse_jira_ticket()` to create `JiraTicket`. This will be replaced with `TicketService.get_ticket()` which returns `GenericTicket`.
+2. **CLI Integration Path** - The CLI (`ingot/cli.py`) currently uses `parse_jira_ticket()` to create `JiraTicket`. This will be replaced with `TicketService.get_ticket()` which returns `GenericTicket`.
 
-3. **fetch_ticket_info Replacement** - The `fetch_ticket_info()` function in `spec/integrations/jira.py` that populates `JiraTicket` fields will be replaced by the `TicketService` orchestration layer.
+3. **fetch_ticket_info Replacement** - The `fetch_ticket_info()` function in `ingot/integrations/jira.py` that populates `JiraTicket` fields will be replaced by the `TicketService` orchestration layer.
 
 4. **Backward Compatibility Strategy** - During migration, the legacy `JiraTicket` and `parse_jira_ticket()` functions remain available but are no longer used by the workflow. This allows gradual deprecation.
 
@@ -119,14 +119,14 @@ ticket.safe_branch_name  # Property: generates git-safe branch name
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `spec/workflow/state.py` | **Core Migration** | Change `ticket: JiraTicket` → `ticket: GenericTicket`, update import |
-| `spec/workflow/runner.py` | **Core Migration** | Update function signature, remove `fetch_ticket_info()` call |
-| `spec/workflow/conflict_detection.py` | **Type Update** | Change type hint from `JiraTicket` to `GenericTicket` |
-| `spec/workflow/step1_plan.py` | **Field Rename** | `ticket.ticket_id` → `ticket.id` |
-| `spec/workflow/step2_tasklist.py` | **Field Rename** | `ticket.ticket_id` → `ticket.id` |
-| `spec/workflow/step3_execute.py` | **Field Rename** | `ticket.ticket_id` → `ticket.id` |
+| `ingot/workflow/state.py` | **Core Migration** | Change `ticket: JiraTicket` → `ticket: GenericTicket`, update import |
+| `ingot/workflow/runner.py` | **Core Migration** | Update function signature, remove `fetch_ticket_info()` call |
+| `ingot/workflow/conflict_detection.py` | **Type Update** | Change type hint from `JiraTicket` to `GenericTicket` |
+| `ingot/workflow/step1_plan.py` | **Field Rename** | `ticket.ticket_id` → `ticket.id` |
+| `ingot/workflow/step2_tasklist.py` | **Field Rename** | `ticket.ticket_id` → `ticket.id` |
+| `ingot/workflow/step3_execute.py` | **Field Rename** | `ticket.ticket_id` → `ticket.id` |
 
-> **Note:** `spec/cli.py` changes are handled by AMI-25, not this ticket.
+> **Note:** `ingot/cli.py` changes are handled by AMI-25, not this ticket.
 
 ### Test File Changes
 
@@ -151,11 +151,11 @@ ticket.safe_branch_name  # Property: generates git-safe branch name
 
 #### Step 1.1: Update WorkflowState
 
-**File:** `spec/workflow/state.py`
+**File:** `ingot/workflow/state.py`
 
 ```python
 # Before
-from spec.integrations.jira import JiraTicket
+from ingot.integrations.jira import JiraTicket
 
 @dataclass
 class WorkflowState:
@@ -163,7 +163,7 @@ class WorkflowState:
     ...
 
 # After
-from spec.integrations.providers import GenericTicket
+from ingot.integrations.providers import GenericTicket
 
 @dataclass
 class WorkflowState:
@@ -172,17 +172,17 @@ class WorkflowState:
 ```
 
 **Specific Changes:**
-1. Change import from `from spec.integrations.jira import JiraTicket` to `from spec.integrations.providers import GenericTicket`
+1. Change import from `from ingot.integrations.jira import JiraTicket` to `from ingot.integrations.providers import GenericTicket`
 2. Change field type annotation `ticket: JiraTicket` to `ticket: GenericTicket`
 3. Update docstring from "Jira ticket information" to "Ticket information (platform-agnostic)"
 
 #### Step 1.2: Update Conflict Detection
 
-**File:** `spec/workflow/conflict_detection.py`
+**File:** `ingot/workflow/conflict_detection.py`
 
 ```python
 # Before
-from spec.integrations.jira import JiraTicket
+from ingot.integrations.jira import JiraTicket
 
 def detect_context_conflict(
     ticket: JiraTicket,
@@ -190,7 +190,7 @@ def detect_context_conflict(
 ) -> tuple[bool, str]:
 
 # After
-from spec.integrations.providers import GenericTicket
+from ingot.integrations.providers import GenericTicket
 
 def detect_context_conflict(
     ticket: GenericTicket,
@@ -199,21 +199,21 @@ def detect_context_conflict(
 ```
 
 **Specific Changes:**
-1. Change import from `from spec.integrations.jira import JiraTicket` to `from spec.integrations.providers import GenericTicket`
+1. Change import from `from ingot.integrations.jira import JiraTicket` to `from ingot.integrations.providers import GenericTicket`
 2. Update function signature type hint
 3. Update docstring references from "JiraTicket" to "GenericTicket"
 
 ### Phase 2: Workflow Runner Migration
 
-#### Step 2.1: Update run_spec_driven_workflow
+#### Step 2.1: Update run_ingot_workflow
 
-**File:** `spec/workflow/runner.py`
+**File:** `ingot/workflow/runner.py`
 
 ```python
 # Before
-from spec.integrations.jira import JiraTicket, fetch_ticket_info
+from ingot.integrations.jira import JiraTicket, fetch_ticket_info
 
-def run_spec_driven_workflow(
+def run_ingot_workflow(
     ticket: JiraTicket,
     config: ConfigManager,
     ...
@@ -224,9 +224,9 @@ def run_spec_driven_workflow(
     state.ticket = fetch_ticket_info(state.ticket, auggie)
 
 # After
-from spec.integrations.providers import GenericTicket
+from ingot.integrations.providers import GenericTicket
 
-def run_spec_driven_workflow(
+def run_ingot_workflow(
     ticket: GenericTicket,
     config: ConfigManager,
     ...
@@ -237,7 +237,7 @@ def run_spec_driven_workflow(
 ```
 
 **Specific Changes:**
-1. Change import to `from spec.integrations.providers import GenericTicket`
+1. Change import to `from ingot.integrations.providers import GenericTicket`
 2. Remove `fetch_ticket_info` import (no longer needed - TicketService handles this)
 3. Change function parameter type from `JiraTicket` to `GenericTicket`
 4. Update `ticket.ticket_id` → `ticket.id` in print statement
@@ -246,7 +246,7 @@ def run_spec_driven_workflow(
 
 #### Step 2.2: Update _setup_branch
 
-**File:** `spec/workflow/runner.py`
+**File:** `ingot/workflow/runner.py`
 
 ```python
 # Before
@@ -269,7 +269,7 @@ def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:
 
 ### Phase 3: CLI Integration (OUT OF SCOPE - See AMI-25)
 
-> **Note:** CLI migration is handled by [AMI-25](https://linear.app/amiadspec/issue/AMI-25). This ticket (AMI-24) focuses on workflow internals only.
+> **Note:** CLI migration is handled by [AMI-25](https://linear.app/amiadingot/issue/AMI-25). This ticket (AMI-24) focuses on workflow internals only.
 >
 > AMI-25 will:
 > - Replace `parse_jira_ticket()` with `TicketService.get_ticket()`
@@ -277,13 +277,13 @@ def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:
 > - Handle Jira/Linear ID ambiguity with user prompts
 > - Use proper async context management for TicketService
 
-For AMI-24, the CLI continues to use `parse_jira_ticket()` temporarily. The workflow runner signature changes to accept `GenericTicket`, so AMI-25 will need to convert the ticket before calling `run_spec_driven_workflow()`.
+For AMI-24, the CLI continues to use `parse_jira_ticket()` temporarily. The workflow runner signature changes to accept `GenericTicket`, so AMI-25 will need to convert the ticket before calling `run_ingot_workflow()`.
 
 ### Phase 4: Workflow Step Updates
 
 #### Step 4.1: Update step1_plan.py
 
-**File:** `spec/workflow/step1_plan.py`
+**File:** `ingot/workflow/step1_plan.py`
 
 Field renames in `_build_minimal_prompt()`:
 - `state.ticket.ticket_id` → `state.ticket.id`
@@ -292,7 +292,7 @@ No import changes needed (uses `state.ticket` which is already `WorkflowState.ti
 
 #### Step 4.2: Update step2_tasklist.py
 
-**File:** `spec/workflow/step2_tasklist.py`
+**File:** `ingot/workflow/step2_tasklist.py`
 
 Field renames:
 - `state.ticket.ticket_id` → `state.ticket.id`
@@ -305,7 +305,7 @@ Affected functions:
 
 #### Step 4.3: Update step3_execute.py
 
-**File:** `spec/workflow/step3_execute.py`
+**File:** `ingot/workflow/step3_execute.py`
 
 Field renames:
 - `state.ticket.ticket_id` → `state.ticket.id`
@@ -326,7 +326,7 @@ Affected locations (8 occurrences):
 
 1. **Type Change in WorkflowState** - `WorkflowState.ticket` changes from `JiraTicket` to `GenericTicket`
 2. **Field Name Changes** - All code accessing `ticket.ticket_id` must use `ticket.id`
-3. **Function Signature Changes** - `run_spec_driven_workflow()` and related functions now accept `GenericTicket`
+3. **Function Signature Changes** - `run_ingot_workflow()` and related functions now accept `GenericTicket`
 4. **Removed Function** - `fetch_ticket_info()` call is removed from workflow runner (TicketService handles this)
 
 No backward compatibility or migration path is needed.
@@ -341,7 +341,7 @@ All test files creating `JiraTicket` fixtures must be updated to create `Generic
 
 ```python
 # Before
-from spec.integrations.jira import JiraTicket
+from ingot.integrations.jira import JiraTicket
 
 @pytest.fixture
 def ticket():
@@ -354,7 +354,7 @@ def ticket():
     )
 
 # After
-from spec.integrations.providers import GenericTicket, Platform
+from ingot.integrations.providers import GenericTicket, Platform
 
 @pytest.fixture
 def ticket():
@@ -390,7 +390,7 @@ Create a shared fixture in `tests/conftest.py` to reduce duplication:
 ```python
 # tests/conftest.py
 import pytest
-from spec.integrations.providers import GenericTicket, Platform
+from ingot.integrations.providers import GenericTicket, Platform
 
 @pytest.fixture
 def generic_ticket():
@@ -453,7 +453,7 @@ def generic_ticket_no_summary():
 
 | Ticket | Description |
 |--------|-------------|
-| [AMI-25](https://linear.app/amiadspec/issue/AMI-25) | CLI migration to platform-agnostic providers (final ticket) |
+| [AMI-25](https://linear.app/amiadingot/issue/AMI-25) | CLI migration to platform-agnostic providers (final ticket) |
 
 ### Scope Split: AMI-24 vs AMI-25
 
@@ -483,8 +483,8 @@ def generic_ticket_no_summary():
 
 ### Core Migration
 - [ ] `WorkflowState.ticket` type changed to `GenericTicket`
-- [ ] Import changed from `spec.integrations.jira` to `spec.integrations.providers`
-- [ ] `run_spec_driven_workflow()` accepts `GenericTicket` parameter
+- [ ] Import changed from `ingot.integrations.jira` to `ingot.integrations.providers`
+- [ ] `run_ingot_workflow()` accepts `GenericTicket` parameter
 - [ ] `_setup_branch()` uses `GenericTicket.safe_branch_name`
 - [ ] `detect_context_conflict()` accepts `GenericTicket` parameter
 - [ ] `fetch_ticket_info()` call removed from runner
@@ -505,7 +505,7 @@ def generic_ticket_no_summary():
 - [ ] All existing tests pass
 - [ ] No type errors reported by mypy/pyright
 
-> **Note:** CLI changes (`spec/cli.py`) are out of scope - see AMI-25.
+> **Note:** CLI changes (`ingot/cli.py`) are out of scope - see AMI-25.
 
 ---
 
@@ -527,7 +527,7 @@ def generic_ticket_no_summary():
 - `specs/00_Architecture_Refactor_Spec.md` - Original architecture specification
 - `specs/AMI-32-implementation-plan.md` - TicketService orchestration (entry point)
 - `specs/AMI-18-implementation-plan.md` - JiraProvider (example provider implementation)
-- `spec/integrations/providers/base.py` - GenericTicket dataclass definition
+- `ingot/integrations/providers/base.py` - GenericTicket dataclass definition
 
 ---
 
@@ -537,12 +537,12 @@ def generic_ticket_no_summary():
 
 **Production Code (7 files):**
 ```
-spec/integrations/jira.py        - JiraTicket class definition + parse_jira_ticket()
-spec/integrations/__init__.py    - Re-exports JiraTicket
-spec/workflow/state.py           - WorkflowState.ticket: JiraTicket
-spec/workflow/runner.py          - JiraTicket parameter, fetch_ticket_info()
-spec/workflow/conflict_detection.py - JiraTicket parameter
-spec/cli.py                      - parse_jira_ticket() usage
+ingot/integrations/jira.py        - JiraTicket class definition + parse_jira_ticket()
+ingot/integrations/__init__.py    - Re-exports JiraTicket
+ingot/workflow/state.py           - WorkflowState.ticket: JiraTicket
+ingot/workflow/runner.py          - JiraTicket parameter, fetch_ticket_info()
+ingot/workflow/conflict_detection.py - JiraTicket parameter
+ingot/cli.py                      - parse_jira_ticket() usage
 ```
 
 **Test Files (10 files with JiraTicket fixtures):**

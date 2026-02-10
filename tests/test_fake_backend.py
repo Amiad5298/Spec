@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
 from tests.fakes.fake_backend import (
     FakeBackend,
     make_failing_backend,
@@ -330,10 +330,10 @@ class TestFakeBackendEdgeCases:
     def test_subagent_recorded(self):
         """subagent kwarg is correctly recorded across methods."""
         fb = FakeBackend([(True, "a"), (True, "b")])
-        fb.run_print_with_output("p", subagent="spec-planner")
-        fb.run_with_callback("p", output_callback=lambda _: None, subagent="spec-implementer")
-        assert fb.print_with_output_calls[0][1]["subagent"] == "spec-planner"
-        assert fb.calls[0][1]["subagent"] == "spec-implementer"
+        fb.run_print_with_output("p", subagent="ingot-planner")
+        fb.run_with_callback("p", output_callback=lambda _: None, subagent="ingot-implementer")
+        assert fb.print_with_output_calls[0][1]["subagent"] == "ingot-planner"
+        assert fb.calls[0][1]["subagent"] == "ingot-implementer"
 
     def test_timeout_seconds_recorded(self):
         """timeout_seconds kwarg is correctly recorded."""

@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.providers.base module.
+"""Tests for ingot.integrations.providers.base module.
 
 Tests cover:
 - Platform, TicketStatus, TicketType enums
@@ -17,7 +17,7 @@ from enum import Enum
 
 import pytest
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,

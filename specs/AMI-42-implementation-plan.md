@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-42 - Update spec --config Output for Multi-Platform Support
 
-**Ticket:** [AMI-42](https://linear.app/amiadspec/issue/AMI-42/update-spec-config-output-for-multi-platform-support)
+**Ticket:** [AMI-42](https://linear.app/amiadingot/issue/AMI-42/update-spec-config-output-for-multi-platform-support)
 **Status:** Draft
 **Date:** 2026-01-29
 
@@ -31,7 +31,7 @@ Users cannot verify their multi-platform configuration is correct. When debuggin
 
 ### Current Implementation
 
-The `ConfigManager.show()` method in `spec/config/manager.py` (lines 883-915) displays configuration using Rich formatting, but is Jira-centric:
+The `ConfigManager.show()` method in `ingot/config/manager.py` (lines 883-915) displays configuration using Rich formatting, but is Jira-centric:
 
 ```python
 def show(self) -> None:
@@ -65,8 +65,8 @@ Update `ConfigManager.show()` to display:
 │                           spec --config OUTPUT                                   │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │  Config File Locations                                                          │
-│  ├── Global: ~/.spec-config                                                     │
-│  └── Local: .spec (if found)                                                    │
+│  ├── Global: ~/.ingot-config                                                     │
+│  └── Local: .ingot (if found)                                                    │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │  Platform Settings                                                               │
 │  ├── Default Platform: jira  (or "(not set)")                                   │
@@ -104,12 +104,12 @@ Update `ConfigManager.show()` to display:
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-25](https://linear.app/amiadspec/issue/AMI-25) | CLI Migration | Added `DEFAULT_PLATFORM` setting |
-| [AMI-33](https://linear.app/amiadspec/issue/AMI-33) | Fetch Configuration | Agent integration settings |
-| [AMI-38](https://linear.app/amiadspec/issue/AMI-38) | README Update | References `spec --config` |
-| [AMI-39](https://linear.app/amiadspec/issue/AMI-39) | Platform Config Guide | Documents verification via `spec --config` |
-| [AMI-41](https://linear.app/amiadspec/issue/AMI-41) | Config Guide Update | References `spec --config` output |
-| [AMI-43](https://linear.app/amiadspec/issue/AMI-43) | String Audit | Related user-facing text updates |
+| [AMI-25](https://linear.app/amiadingot/issue/AMI-25) | CLI Migration | Added `DEFAULT_PLATFORM` setting |
+| [AMI-33](https://linear.app/amiadingot/issue/AMI-33) | Fetch Configuration | Agent integration settings |
+| [AMI-38](https://linear.app/amiadingot/issue/AMI-38) | README Update | References `spec --config` |
+| [AMI-39](https://linear.app/amiadingot/issue/AMI-39) | Platform Config Guide | Documents verification via `spec --config` |
+| [AMI-41](https://linear.app/amiadingot/issue/AMI-41) | Config Guide Update | References `spec --config` output |
+| [AMI-43](https://linear.app/amiadingot/issue/AMI-43) | String Audit | Related user-facing text updates |
 
 ---
 
@@ -117,7 +117,7 @@ Update `ConfigManager.show()` to display:
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `spec/config/manager.py` | **Major Update** | Update `show()` method (lines 883-915) |
+| `ingot/config/manager.py` | **Major Update** | Update `show()` method (lines 883-915) |
 | `tests/test_config_manager.py` | **Update** | Update test for `show()` method |
 
 ### Import Requirements
@@ -126,15 +126,15 @@ The helper methods will use lazy imports to avoid circular dependencies. The fol
 
 ```python
 # In _get_agent_integrations():
-from spec.config.fetch_config import KNOWN_PLATFORMS
+from ingot.config.fetch_config import KNOWN_PLATFORMS
 
 # In _get_fallback_status():
-from spec.config.fetch_config import KNOWN_PLATFORMS
-from spec.integrations.auth import AuthenticationManager
-from spec.integrations.providers import Platform
+from ingot.config.fetch_config import KNOWN_PLATFORMS
+from ingot.integrations.auth import AuthenticationManager
+from ingot.integrations.providers import Platform
 
 # In _show_platform_status():
-from spec.config.fetch_config import KNOWN_PLATFORMS
+from ingot.config.fetch_config import KNOWN_PLATFORMS
 from rich.table import Table
 ```
 
@@ -148,8 +148,8 @@ from rich.table import Table
 
 ```
 ════════════════ Current Configuration ════════════════
-Global config: /Users/user/.spec-config
-Local config:  /path/to/project/.spec
+Global config: /Users/user/.ingot-config
+Local config:  /path/to/project/.ingot
 
   Default Model (Legacy): (not set)
   Planning Model: claude-sonnet-4-20250514
@@ -166,18 +166,18 @@ Local config:  /path/to/project/.spec
     Fail Fast: True
 
   Subagents:
-    Planner: .augment/agents/spec-planner.md
-    Tasklist: .augment/agents/spec-tasklist-refiner.md
-    Implementer: .augment/agents/spec-implementer.md
-    Reviewer: .augment/agents/spec-reviewer.md
+    Planner: .augment/agents/ingot-planner.md
+    Tasklist: .augment/agents/ingot-tasklist-refiner.md
+    Implementer: .augment/agents/ingot-implementer.md
+    Reviewer: .augment/agents/ingot-reviewer.md
 ```
 
 ### After (New Output)
 
 ```
 ════════════════ Current Configuration ════════════════
-Global config: /Users/user/.spec-config
-Local config:  /path/to/project/.spec
+Global config: /Users/user/.ingot-config
+Local config:  /path/to/project/.ingot
 
   Platform Settings:
     Default Platform: jira
@@ -227,7 +227,7 @@ def _get_agent_integrations(self) -> dict[str, bool]:
     Returns:
         Dict mapping platform names to their agent integration status.
     """
-    from spec.config.fetch_config import KNOWN_PLATFORMS
+    from ingot.config.fetch_config import KNOWN_PLATFORMS
 
     agent_config = self.get_agent_config()
 
@@ -259,9 +259,9 @@ def _get_fallback_status(self) -> dict[str, bool]:
     Returns:
         Dict mapping platform names to whether fallback credentials are configured.
     """
-    from spec.config.fetch_config import KNOWN_PLATFORMS
-    from spec.integrations.auth import AuthenticationManager
-    from spec.integrations.providers import Platform
+    from ingot.config.fetch_config import KNOWN_PLATFORMS
+    from ingot.integrations.auth import AuthenticationManager
+    from ingot.integrations.providers import Platform
 
     auth = AuthenticationManager(self)
     result = {}
@@ -299,7 +299,7 @@ def _get_platform_ready_status(
     Returns:
         Dict mapping platform names to ready status
     """
-    from spec.config.fetch_config import KNOWN_PLATFORMS
+    from ingot.config.fetch_config import KNOWN_PLATFORMS
 
     return {
         p: agent_integrations.get(p, False) or fallback_status.get(p, False)
@@ -311,7 +311,7 @@ def _get_platform_ready_status(
 
 #### Step 2.1: Update show() to Display Platform Settings
 
-**Location:** `spec/config/manager.py` lines 895-904
+**Location:** `ingot/config/manager.py` lines 895-904
 
 **Current Code (lines 895-904):**
 ```python
@@ -377,7 +377,7 @@ def _show_platform_status(self) -> None:
     Handles errors gracefully - if status cannot be determined,
     displays an error message instead of crashing.
     """
-    from spec.config.fetch_config import KNOWN_PLATFORMS
+    from ingot.config.fetch_config import KNOWN_PLATFORMS
 
     try:
         from rich.table import Table
@@ -436,9 +436,9 @@ def _show_platform_status(self) -> None:
 Update the test to verify new platform status display:
 
 ```python
-@patch("spec.config.manager.print_header")
-@patch("spec.config.manager.print_info")
-@patch("spec.config.manager.console")
+@patch("ingot.config.manager.print_header")
+@patch("ingot.config.manager.print_info")
+@patch("ingot.config.manager.console")
 def test_show_displays_settings(self, mock_console, mock_info, mock_header, temp_config_file):
     """Shows all settings including platform status from config file."""
     manager = ConfigManager(temp_config_file)
@@ -461,9 +461,9 @@ def test_show_displays_settings(self, mock_console, mock_info, mock_header, temp
 Add a new test specifically for platform status display:
 
 ```python
-@patch("spec.config.manager.print_header")
-@patch("spec.config.manager.print_info")
-@patch("spec.config.manager.console")
+@patch("ingot.config.manager.print_header")
+@patch("ingot.config.manager.print_info")
+@patch("ingot.config.manager.console")
 def test_show_displays_platform_status_table(
     self, mock_console, mock_info, mock_header, temp_config_file
 ):
@@ -499,7 +499,7 @@ class TestPlatformStatusHelpers:
         integrations = manager._get_agent_integrations()
 
         # Should return dict with all known platforms
-        from spec.config.fetch_config import KNOWN_PLATFORMS
+        from ingot.config.fetch_config import KNOWN_PLATFORMS
         assert set(integrations.keys()) == KNOWN_PLATFORMS
 
         # Default Auggie integrations: jira, linear, github are True
@@ -510,7 +510,7 @@ class TestPlatformStatusHelpers:
 
     def test_get_agent_integrations_respects_explicit_config(self, tmp_path):
         """Respects explicit AGENT_INTEGRATION_* config keys."""
-        config_file = tmp_path / ".spec-config"
+        config_file = tmp_path / ".ingot-config"
         config_file.write_text(
             'AGENT_INTEGRATION_JIRA="false"\n'
             'AGENT_INTEGRATION_MONDAY="true"\n'
@@ -524,7 +524,7 @@ class TestPlatformStatusHelpers:
         assert integrations["jira"] is False
         assert integrations["monday"] is True
 
-    @patch("spec.integrations.auth.AuthenticationManager")
+    @patch("ingot.integrations.auth.AuthenticationManager")
     def test_get_fallback_status_checks_all_platforms(
         self, mock_auth_class, temp_config_file
     ):
@@ -538,7 +538,7 @@ class TestPlatformStatusHelpers:
         status = manager._get_fallback_status()
 
         # Should check all platforms
-        from spec.config.fetch_config import KNOWN_PLATFORMS
+        from ingot.config.fetch_config import KNOWN_PLATFORMS
         assert set(status.keys()) == KNOWN_PLATFORMS
 
     def test_get_platform_ready_status_logic(self, temp_config_file):
@@ -588,16 +588,16 @@ class TestPlatformStatusHelpers:
 spec --config
 
 # 2. Configure fallback credentials for a platform and verify status updates
-echo 'FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg' >> ~/.spec-config
-echo 'FALLBACK_AZURE_DEVOPS_PAT=test' >> ~/.spec-config
+echo 'FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg' >> ~/.ingot-config
+echo 'FALLBACK_AZURE_DEVOPS_PAT=test' >> ~/.ingot-config
 spec --config  # Should show Azure DevOps as "✅ Ready"
 
 # 3. Set default platform and verify it's displayed
-echo 'DEFAULT_PLATFORM=linear' >> ~/.spec-config
+echo 'DEFAULT_PLATFORM=linear' >> ~/.ingot-config
 spec --config  # Should show "Default Platform: linear"
 
 # 4. Verify output works without any configuration
-rm ~/.spec-config
+rm ~/.ingot-config
 spec --config  # Should show all platforms with appropriate status
 ```
 
@@ -629,8 +629,8 @@ The `AuthenticationManager` import must be inside the method to avoid import cyc
 ```python
 def _get_fallback_status(self) -> dict[str, bool]:
     # Import inside method to avoid circular import
-    from spec.integrations.auth import AuthenticationManager
-    from spec.integrations.providers import Platform
+    from ingot.integrations.auth import AuthenticationManager
+    from ingot.integrations.providers import Platform
     # ...
 ```
 
@@ -644,8 +644,8 @@ def _get_fallback_status(self) -> dict[str, bool]:
 $ spec --config
 
 ════════════════ Current Configuration ════════════════
-ℹ Global config: /Users/user/.spec-config
-ℹ Local config:  /path/to/project/.spec
+ℹ Global config: /Users/user/.ingot-config
+ℹ Local config:  /path/to/project/.ingot
 
   Platform Settings:
     Default Platform: jira
@@ -682,10 +682,10 @@ $ spec --config
     Fail Fast: True
 
   Subagents:
-    Planner: .augment/agents/spec-planner.md
-    Tasklist: .augment/agents/spec-tasklist-refiner.md
-    Implementer: .augment/agents/spec-implementer.md
-    Reviewer: .augment/agents/spec-reviewer.md
+    Planner: .augment/agents/ingot-planner.md
+    Tasklist: .augment/agents/ingot-tasklist-refiner.md
+    Implementer: .augment/agents/ingot-implementer.md
+    Reviewer: .augment/agents/ingot-reviewer.md
 ```
 
 ---
@@ -706,10 +706,10 @@ $ spec --config
 
 | File | Relevant Code |
 |------|--------------|
-| `spec/config/manager.py:883-915` | Current `show()` implementation |
-| `spec/integrations/auth.py:186-225` | `has_fallback_configured()` method |
-| `spec/config/fetch_config.py:148-155` | `PLATFORM_REQUIRED_CREDENTIALS` |
-| `spec/config/settings.py:92` | `default_platform` setting |
+| `ingot/config/manager.py:883-915` | Current `show()` implementation |
+| `ingot/integrations/auth.py:186-225` | `has_fallback_configured()` method |
+| `ingot/config/fetch_config.py:148-155` | `PLATFORM_REQUIRED_CREDENTIALS` |
+| `ingot/config/settings.py:92` | `default_platform` setting |
 
 ---
 

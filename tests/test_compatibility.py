@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from spec.config.compatibility import API_SUPPORT, MCP_SUPPORT, get_platform_support
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.providers.base import Platform
+from ingot.config.compatibility import API_SUPPORT, MCP_SUPPORT, get_platform_support
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.providers.base import Platform
 
 
 class TestMCPSupportCompleteness:
@@ -167,7 +167,7 @@ class TestCreateTicketServiceCompatibilityIntegration:
         mock_backend = MagicMock()
         mock_backend.platform = AgentPlatform.AUGGIE
 
-        with patch("spec.integrations.ticket_service.AuggieMediatedFetcher") as mock_fetcher_cls:
+        with patch("ingot.integrations.ticket_service.AuggieMediatedFetcher") as mock_fetcher_cls:
             mock_fetcher_cls.return_value.name = "AuggieMediatedFetcher"
 
             service = await _create_service(mock_backend)
@@ -183,11 +183,11 @@ class TestCreateTicketServiceCompatibilityIntegration:
         mock_backend.platform = AgentPlatform.AIDER
         mock_auth = MagicMock()
 
-        with patch("spec.integrations.ticket_service.DirectAPIFetcher") as mock_direct_cls:
+        with patch("ingot.integrations.ticket_service.DirectAPIFetcher") as mock_direct_cls:
             mock_direct_cls.return_value.name = "DirectAPIFetcher"
             mock_direct_cls.return_value.close = AsyncMock()
 
-            from spec.integrations.ticket_service import create_ticket_service
+            from ingot.integrations.ticket_service import create_ticket_service
 
             service = await create_ticket_service(
                 backend=mock_backend,
@@ -215,13 +215,13 @@ class TestCreateTicketServiceCompatibilityIntegration:
         }
 
         with (
-            patch("spec.config.compatibility.MCP_SUPPORT", patched_mcp),
-            patch("spec.integrations.ticket_service.DirectAPIFetcher") as mock_direct_cls,
+            patch("ingot.config.compatibility.MCP_SUPPORT", patched_mcp),
+            patch("ingot.integrations.ticket_service.DirectAPIFetcher") as mock_direct_cls,
         ):
             mock_direct_cls.return_value.name = "DirectAPIFetcher"
             mock_direct_cls.return_value.close = AsyncMock()
 
-            from spec.integrations.ticket_service import create_ticket_service
+            from ingot.integrations.ticket_service import create_ticket_service
 
             service = await create_ticket_service(
                 backend=mock_backend,
@@ -238,7 +238,7 @@ class TestCreateTicketServiceCompatibilityIntegration:
         mock_backend = MagicMock()
         mock_backend.platform = AgentPlatform.MANUAL
 
-        from spec.integrations.ticket_service import create_ticket_service
+        from ingot.integrations.ticket_service import create_ticket_service
 
         with pytest.raises(ValueError, match="no fetchers configured"):
             await create_ticket_service(backend=mock_backend)
@@ -246,6 +246,6 @@ class TestCreateTicketServiceCompatibilityIntegration:
 
 async def _create_service(mock_backend):
     """Helper to create a TicketService with minimal mocking."""
-    from spec.integrations.ticket_service import create_ticket_service
+    from ingot.integrations.ticket_service import create_ticket_service
 
     return await create_ticket_service(backend=mock_backend)

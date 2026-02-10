@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-20 - Implement LinearProvider Concrete Class
 
-**Ticket:** [AMI-20](https://linear.app/amiadspec/issue/AMI-20/implement-linearprovider-concrete-class)
+**Ticket:** [AMI-20](https://linear.app/amiadingot/issue/AMI-20/implement-linearprovider-concrete-class)
 **Status:** ✅ Implemented (PR #28)
 **Date:** 2026-01-25
 
@@ -61,7 +61,7 @@ The provider is responsible for:
 
 ## Components to Create
 
-### New File: `spec/integrations/providers/linear.py`
+### New File: `ingot/integrations/providers/linear.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -74,7 +74,7 @@ The provider is responsible for:
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/providers/__init__.py` | Export `LinearProvider` |
+| `ingot/integrations/providers/__init__.py` | Export `LinearProvider` |
 
 ### ABC Extension Note
 
@@ -95,7 +95,7 @@ The provider is responsible for:
 > state_name = self.safe_nested_get(state_obj, "name", "")
 > ```
 >
-> This pattern is consistent with the JiraProvider implementation (PR #26) and uses the base class utility method defined in `spec/integrations/providers/base.py`.
+> This pattern is consistent with the JiraProvider implementation (PR #26) and uses the base class utility method defined in `ingot/integrations/providers/base.py`.
 
 ---
 
@@ -103,7 +103,7 @@ The provider is responsible for:
 
 ### Step 1: Create LinearProvider Module
 
-**File:** `spec/integrations/providers/linear.py`
+**File:** `ingot/integrations/providers/linear.py`
 
 ```python
 """Linear issue tracker provider.
@@ -125,7 +125,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
@@ -134,8 +134,8 @@ from spec.integrations.providers.base import (
     TicketType,
     sanitize_title_for_branch,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     UserInteractionInterface,
 )
@@ -194,7 +194,7 @@ STATE_NAME_MAPPING: MappingProxyType[str, TicketStatus] = MappingProxyType(
 
 ### Step 2: Add Type Keywords and Prompt Template
 
-Continue in `spec/integrations/providers/linear.py`:
+Continue in `ingot/integrations/providers/linear.py`:
 
 ```python
 # Type inference keywords: keyword → TicketType
@@ -553,11 +553,11 @@ class LinearProvider(IssueTrackerProvider):
 
 ### Step 6: Update Package Exports
 
-**File:** `spec/integrations/providers/__init__.py`
+**File:** `ingot/integrations/providers/__init__.py`
 
 ```python
 # Add to existing imports
-from spec.integrations.providers.linear import LinearProvider
+from ingot.integrations.providers.linear import LinearProvider
 
 # Add to __all__
 __all__ = [
@@ -580,19 +580,19 @@ __all__ = [
 import pytest
 from datetime import datetime
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.linear import (
+from ingot.integrations.providers.linear import (
     LinearProvider,
     STATUS_MAPPING,
     STATE_NAME_MAPPING,
     TYPE_KEYWORDS,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 class TestLinearProviderRegistration:
@@ -613,7 +613,7 @@ class TestLinearProviderRegistration:
     def test_provider_registers_successfully(self):
         """LinearProvider can be registered with ProviderRegistry."""
         # Import triggers registration due to decorator
-        from spec.integrations.providers.linear import LinearProvider
+        from ingot.integrations.providers.linear import LinearProvider
 
         provider = ProviderRegistry.get_provider(Platform.LINEAR)
         assert provider is not None
@@ -1006,8 +1006,8 @@ class DirectAPIFetcher(TicketFetcher):
 Uses `@ProviderRegistry.register` decorator:
 
 ```python
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get Linear provider
 provider = ProviderRegistry.get_provider(Platform.LINEAR)
@@ -1083,9 +1083,9 @@ From Linear ticket AMI-20:
 ### Basic Provider Usage
 
 ```python
-from spec.integrations.providers.linear import LinearProvider
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.linear import LinearProvider
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get provider via registry (singleton)
 provider = ProviderRegistry.get_provider(Platform.LINEAR)
@@ -1099,7 +1099,7 @@ if provider.can_handle("https://linear.app/myteam/issue/ENG-123"):
 ### Normalizing Raw Linear Response
 
 ```python
-from spec.integrations.providers.linear import LinearProvider
+from ingot.integrations.providers.linear import LinearProvider
 
 provider = LinearProvider()
 
@@ -1122,7 +1122,7 @@ print(f"Type: {ticket.type}")  # TicketType.BUG
 ### Integration with TicketService (AMI-32)
 
 ```python
-from spec.integrations.ticket_service import TicketService
+from ingot.integrations.ticket_service import TicketService
 
 # TicketService handles provider lookup and fetching
 service = TicketService()
@@ -1139,7 +1139,7 @@ print(f"Team: {ticket.platform_metadata['team_key']}")
 
 ```python
 import pytest
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 @pytest.fixture(autouse=True)
 def reset_registry():
@@ -1152,7 +1152,7 @@ def reset_registry():
 def test_isolated_provider():
     """Test runs with clean registry state."""
     # Re-import to trigger registration
-    from spec.integrations.providers.linear import LinearProvider
+    from ingot.integrations.providers.linear import LinearProvider
 
     provider = ProviderRegistry.get_provider(Platform.LINEAR)
     assert provider is not None

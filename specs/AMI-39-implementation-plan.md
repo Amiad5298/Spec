@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-39 - Create Platform Configuration Guide
 
-**Ticket:** [AMI-39](https://linear.app/amiadspec/issue/AMI-39/create-platform-configuration-guide)
+**Ticket:** [AMI-39](https://linear.app/amiadingot/issue/AMI-39/create-platform-configuration-guide)
 **Status:** Draft
 **Date:** 2026-01-28
 
@@ -8,7 +8,7 @@
 
 ## Summary
 
-This ticket creates comprehensive documentation for configuring credentials and settings for each of the 6 supported ticket platforms. While a configuration template exists (`spec/config/templates/fetch_config.template`), users need a clear, user-friendly guide explaining:
+This ticket creates comprehensive documentation for configuring credentials and settings for each of the 6 supported ticket platforms. While a configuration template exists (`ingot/config/templates/fetch_config.template`), users need a clear, user-friendly guide explaining:
 
 1. **Two authentication modes** - Auggie MCP integration (primary) vs fallback credentials (direct API)
 2. **Platform-specific setup** - Where to obtain API keys/tokens for each platform
@@ -208,7 +208,7 @@ This is useful when you primarily work with one ticket system.
 ### Configuration
 
 ```bash
-# ~/.spec-config
+# ~/.ingot-config
 DEFAULT_PLATFORM=jira
 ```
 
@@ -241,7 +241,7 @@ spec --platform jira PROJ-123
 Provide complete example configurations:
 
 ```bash
-# ~/.spec-config or .spec file
+# ~/.ingot-config or .ingot file
 
 # ============================================================
 # DEFAULT PLATFORM (optional - avoids --platform flag)
@@ -366,7 +366,7 @@ For environments without Auggie (CI/CD, backup), configure fallback credentials:
 #### Configuration
 
 ```bash
-# ~/.spec-config
+# ~/.ingot-config
 FALLBACK_JIRA_URL=https://company.atlassian.net
 FALLBACK_JIRA_EMAIL=user@example.com
 FALLBACK_JIRA_TOKEN=${JIRA_API_TOKEN}
@@ -468,8 +468,8 @@ From the Linear ticket:
 ### Content Validation
 
 1. **Technical accuracy** - Verify all credential keys match implementation:
-   - Cross-reference with `PLATFORM_REQUIRED_CREDENTIALS` in `spec/config/fetch_config.py`
-   - Verify against `AuthenticationManager` docstrings in `spec/integrations/auth.py`
+   - Cross-reference with `PLATFORM_REQUIRED_CREDENTIALS` in `ingot/config/fetch_config.py`
+   - Verify against `AuthenticationManager` docstrings in `ingot/integrations/auth.py`
 
 2. **Link validation** - All external links are valid and point to correct locations
 
@@ -485,10 +485,10 @@ From the Linear ticket:
 
 ```bash
 # Verify config keys match implementation
-grep -E "PLATFORM_REQUIRED_CREDENTIALS" spec/config/fetch_config.py
+grep -E "PLATFORM_REQUIRED_CREDENTIALS" ingot/config/fetch_config.py
 
 # Verify credential aliases
-grep -E "CREDENTIAL_ALIASES" spec/config/fetch_config.py
+grep -E "CREDENTIAL_ALIASES" ingot/config/fetch_config.py
 
 # Test the spec --config command
 spec --config
@@ -519,9 +519,9 @@ spec --config
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-38](https://linear.app/amiadspec/issue/AMI-38) | Update README for Multi-Platform | Links to this guide |
-| [AMI-42](https://linear.app/amiadspec/issue/AMI-42) | Update spec --config Output | Shows configuration status |
-| [AMI-43](https://linear.app/amiadspec/issue/AMI-43) | Audit User-Facing Strings | Error messages referenced here |
+| [AMI-38](https://linear.app/amiadingot/issue/AMI-38) | Update README for Multi-Platform | Links to this guide |
+| [AMI-42](https://linear.app/amiadingot/issue/AMI-42) | Update spec --config Output | Shows configuration status |
+| [AMI-43](https://linear.app/amiadingot/issue/AMI-43) | Audit User-Facing Strings | Error messages referenced here |
 
 ---
 
@@ -595,7 +595,7 @@ Azure DevOps does not have Auggie MCP integration. Fallback credentials are **re
 # Set environment variable (add to ~/.bashrc or ~/.zshrc)
 export AZURE_DEVOPS_PAT="your-personal-access-token"
 
-# ~/.spec-config
+# ~/.ingot-config
 FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg
 FALLBACK_AZURE_DEVOPS_PAT=${AZURE_DEVOPS_PAT}
 ```

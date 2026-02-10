@@ -1,4 +1,4 @@
-# Pre-commit hooks for SPEC project
+# Pre-commit hooks for INGOT project
 # Install: pip install pre-commit && pre-commit install
 # Run manually: pre-commit run --all-files
 
@@ -17,14 +17,14 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: .venv/bin/mypy spec --config-file=pyproject.toml
+        entry: .venv/bin/mypy ingot --config-file=pyproject.toml
         language: system
         types: [python]
         pass_filenames: false
         # Uses dependencies from the active virtual environment
         # No need to duplicate deps - just run: pip install -e ".[dev]"
       - id: no-legacy-naming
-        name: no-legacy-naming (forbid AGENT_PLATFORM)
+        name: no-legacy-naming (forbid legacy patterns)
         entry: bash scripts/check-legacy-naming.sh
         language: system
         always_run: true

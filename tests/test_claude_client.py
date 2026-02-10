@@ -1,11 +1,11 @@
-"""Tests for spec.integrations.claude module - ClaudeClient class."""
+"""Tests for ingot.integrations.claude module - ClaudeClient class."""
 
 import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.claude import (
+from ingot.integrations.claude import (
     CLAUDE_CLI_NAME,
     ClaudeClient,
     check_claude_installed,
@@ -144,7 +144,7 @@ class TestClaudeClientExecution:
         mock_process.returncode = 0
         mock_process.wait.return_value = None
 
-        with patch("spec.integrations.claude.subprocess.Popen", return_value=mock_process):
+        with patch("ingot.integrations.claude.subprocess.Popen", return_value=mock_process):
             success, output = client.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
@@ -167,7 +167,7 @@ class TestClaudeClientExecution:
         mock_process.returncode = 1
         mock_process.wait.return_value = None
 
-        with patch("spec.integrations.claude.subprocess.Popen", return_value=mock_process):
+        with patch("ingot.integrations.claude.subprocess.Popen", return_value=mock_process):
             success, output = client.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
@@ -185,7 +185,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             success, output = client.run_print_with_output("test prompt")
 
         assert success is True
@@ -200,7 +200,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             client.run_print_with_output("test prompt")
 
         captured = capsys.readouterr()
@@ -215,7 +215,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = "Error: invalid model"
         mock_result.returncode = 1
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             success, output = client.run_print_with_output("test prompt")
 
         assert success is False
@@ -230,7 +230,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = "some error"
         mock_result.returncode = 1
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             success, output = client.run_print_with_output("test prompt")
 
         assert success is False
@@ -245,7 +245,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             output = client.run_print_quiet("test prompt")
 
         assert output == "quiet output content"
@@ -259,7 +259,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             output = client.run_print_quiet("test prompt")
 
         assert output == ""
@@ -273,7 +273,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = "Error: rate limit exceeded"
         mock_result.returncode = 1
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             output = client.run_print_quiet("test prompt")
 
         assert "Error: rate limit exceeded" in output
@@ -287,7 +287,7 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.claude.subprocess.run", return_value=mock_result):
             client.run_print_quiet("test prompt")
 
         captured = capsys.readouterr()
@@ -302,7 +302,9 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.claude.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_quiet("test", timeout_seconds=30.0)
 
         assert mock_run.call_args.kwargs.get("timeout") == 30.0
@@ -313,7 +315,7 @@ class TestClaudeClientExecution:
 
         with (
             patch(
-                "spec.integrations.claude.subprocess.run",
+                "ingot.integrations.claude.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd=["claude"], timeout=5),
             ),
             pytest.raises(subprocess.TimeoutExpired),
@@ -329,7 +331,9 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.claude.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_with_output("test", timeout_seconds=45.0)
 
         assert mock_run.call_args.kwargs.get("timeout") == 45.0
@@ -340,7 +344,7 @@ class TestClaudeClientExecution:
 
         with (
             patch(
-                "spec.integrations.claude.subprocess.run",
+                "ingot.integrations.claude.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd=["claude"], timeout=10),
             ),
             pytest.raises(subprocess.TimeoutExpired),
@@ -356,7 +360,9 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.claude.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_quiet("test", system_prompt="You are a planner.")
 
         cmd = mock_run.call_args[0][0]
@@ -375,7 +381,9 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.claude.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_with_output("test", system_prompt="You are a planner.")
 
         cmd = mock_run.call_args[0][0]
@@ -390,7 +398,9 @@ class TestClaudeClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.claude.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.claude.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_quiet("test")
 
         assert mock_run.call_args.kwargs.get("timeout") is None
@@ -402,9 +412,9 @@ class TestCheckClaudeInstalled:
     def test_installed_returns_true_and_version(self):
         """Returns (True, version) when CLI is installed."""
         with (
-            patch("spec.integrations.claude.shutil.which", return_value="/usr/local/bin/claude"),
+            patch("ingot.integrations.claude.shutil.which", return_value="/usr/local/bin/claude"),
             patch(
-                "spec.integrations.claude.subprocess.run",
+                "ingot.integrations.claude.subprocess.run",
                 return_value=MagicMock(
                     returncode=0,
                     stdout="claude 1.0.0",
@@ -419,7 +429,7 @@ class TestCheckClaudeInstalled:
 
     def test_not_installed_returns_false(self):
         """Returns (False, message) when CLI is not in PATH."""
-        with patch("spec.integrations.claude.shutil.which", return_value=None):
+        with patch("ingot.integrations.claude.shutil.which", return_value=None):
             is_installed, message = check_claude_installed()
 
         assert is_installed is False
@@ -487,14 +497,14 @@ class TestClaudeClientModuleExports:
 
     def test_no_private_functions_exported(self):
         """No underscore-prefixed names in __all__."""
-        from spec.integrations.claude import __all__
+        from ingot.integrations.claude import __all__
 
         for name in __all__:
             assert not name.startswith("_"), f"Private name '{name}' should not be in __all__"
 
     def test_expected_exports(self):
         """Only expected public names are exported."""
-        from spec.integrations.claude import __all__
+        from ingot.integrations.claude import __all__
 
         assert set(__all__) == {
             "CLAUDE_CLI_NAME",

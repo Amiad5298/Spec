@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for SPEC tests."""
+"""Shared pytest fixtures for INGOT tests."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -13,9 +13,9 @@ pytest_plugins = ("pytest_asyncio", "tests.fixtures.cli_integration")
 @pytest.fixture
 def temp_config_file(tmp_path: Path) -> Path:
     """Create a temporary config file with sample values."""
-    config_file = tmp_path / ".spec-config"
+    config_file = tmp_path / ".ingot-config"
     config_file.write_text(
-        """# SPEC Configuration
+        """# INGOT Configuration
 DEFAULT_MODEL="claude-3"
 PLANNING_MODEL="claude-3-opus"
 IMPLEMENTATION_MODEL="claude-3-sonnet"
@@ -30,7 +30,7 @@ SQUASH_AT_END="true"
 @pytest.fixture
 def empty_config_file(tmp_path: Path) -> Path:
     """Create an empty config file."""
-    config_file = tmp_path / ".spec-config"
+    config_file = tmp_path / ".ingot-config"
     config_file.write_text("")
     return config_file
 
@@ -104,7 +104,7 @@ def mock_auggie_client():
 @pytest.fixture
 def mock_backend():
     """Mock AIBackend for testing workflow code."""
-    from spec.config.fetch_config import AgentPlatform
+    from ingot.config.fetch_config import AgentPlatform
 
     backend = MagicMock()
     backend.name = "MockBackend"
@@ -123,14 +123,14 @@ def mock_backend():
 def mock_console(monkeypatch):
     """Mock console output for testing."""
     mock = MagicMock()
-    monkeypatch.setattr("spec.utils.console.console", mock)
+    monkeypatch.setattr("ingot.utils.console.console", mock)
     return mock
 
 
 @pytest.fixture
 def sample_tasks_with_categories():
     """Create sample tasks with category metadata for parallel execution tests."""
-    from spec.workflow.tasks import Task, TaskCategory, TaskStatus
+    from ingot.workflow.tasks import Task, TaskCategory, TaskStatus
 
     return [
         Task(
@@ -174,7 +174,7 @@ def sample_tasks_with_categories():
 @pytest.fixture
 def rate_limit_config():
     """Create a RateLimitConfig for testing."""
-    from spec.workflow.state import RateLimitConfig
+    from ingot.workflow.state import RateLimitConfig
 
     return RateLimitConfig(
         max_retries=3,
@@ -191,7 +191,7 @@ def generic_ticket():
     This is the platform-agnostic ticket fixture that should be used
     for all workflow tests after the JiraTicket to GenericTicket migration.
     """
-    from spec.integrations.providers import GenericTicket, Platform
+    from ingot.integrations.providers import GenericTicket, Platform
 
     return GenericTicket(
         id="TEST-123",
@@ -206,7 +206,7 @@ def generic_ticket():
 @pytest.fixture
 def generic_ticket_no_summary():
     """Create a test ticket without branch summary."""
-    from spec.integrations.providers import GenericTicket, Platform
+    from ingot.integrations.providers import GenericTicket, Platform
 
     return GenericTicket(
         id="TEST-456",

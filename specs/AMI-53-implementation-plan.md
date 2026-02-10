@@ -1,10 +1,10 @@
 # Implementation Plan: AMI-53 - Phase 1.7: Create Backend Platform Resolver
 
-**Ticket:** [AMI-53](https://linear.app/amiadspec/issue/AMI-53/phase-17-create-backend-platform-resolver)
+**Ticket:** [AMI-53](https://linear.app/amiadingot/issue/AMI-53/phase-17-create-backend-platform-resolver)
 **Status:** Draft
 **Date:** 2026-02-01
 **Labels:** MultiAgent
-**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadspec/issue/AMI-45)
+**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadingot/issue/AMI-45)
 
 ---
 
@@ -16,12 +16,12 @@ This ticket creates the `resolve_backend_platform()` function that serves as the
 - Provides a centralized location for backend resolution logic (DRY principle)
 - Enforces the "no default backend" policy with clear error messages
 - Enables fail-fast behavior at CLI entry points before workflows begin
-- Foundation for the onboarding flow (when resolver raises `BackendNotConfiguredError`, prompt user to run `spec init`)
+- Foundation for the onboarding flow (when resolver raises `BackendNotConfiguredError`, prompt user to run `ingot init`)
 
 **Scope:**
-- Create `spec/config/backend_resolver.py` containing:
+- Create `ingot/config/backend_resolver.py` containing:
   - `resolve_backend_platform()` function with CLI → config precedence
-  - Clear error messages directing users to `spec init`
+  - Clear error messages directing users to `ingot init`
 - Does NOT modify CLI or workflow code (that's downstream work in Phase 1.5+/Phase 2)
 
 **Reference:** `specs/Pluggable Multi-Agent Support.md` - Phase 1.7 (lines 1992-2039)
@@ -53,14 +53,14 @@ This is **Phase 1.7** of the Backend Infrastructure work (AMI-45), completing th
 
 > **⚠️ Pre-Implementation Verification Required:** Before starting this ticket, verify that `BackendFactory` and `BackendNotConfiguredError` exist. Run:
 > ```bash
-> python -c "from spec.integrations.backends.factory import BackendFactory; from spec.integrations.backends.errors import BackendNotConfiguredError; print('Dependencies available')"
+> python -c "from ingot.integrations.backends.factory import BackendFactory; from ingot.integrations.backends.errors import BackendNotConfiguredError; print('Dependencies available')"
 > ```
 
 ### Position in Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     spec/config/backend_resolver.py                          │
+│                     ingot/config/backend_resolver.py                          │
 │                     ← THIS TICKET (AMI-53)                                   │
 │                                                                              │
 │   resolve_backend_platform(                                                  │
@@ -78,7 +78,7 @@ This is **Phase 1.7** of the Backend Infrastructure work (AMI-45), completing th
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │   CLI Entry Points (Phase 1.5+)                                             │
-│   spec/cli.py                                                                │
+│   ingot/cli.py                                                                │
 │                                                                              │
 │   @app.command()                                                             │
 │   def run(ticket_id: str, backend: str | None = None):                      │
@@ -87,7 +87,7 @@ This is **Phase 1.7** of the Backend Infrastructure work (AMI-45), completing th
 │           ai_backend = BackendFactory.create(platform, verify_installed=True)│
 │       except BackendNotConfiguredError:                                      │
 │           print_error("No AI backend configured.")                          │
-│           print_info("Run 'spec init' to configure a backend.")             │
+│           print_info("Run 'ingot init' to configure a backend.")             │
 │           return                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -117,23 +117,23 @@ The resolver answers "which backend?" while the factory answers "give me that ba
 
 ### Existing Infrastructure (Dependencies)
 
-1. **`spec/integrations/backends/errors.py`** (AMI-47)
+1. **`ingot/integrations/backends/errors.py`** (AMI-47)
    - `BackendNotConfiguredError` - Raised when no backend is configured
    - Constructor: `BackendNotConfiguredError(message: str)`
 
-2. **`spec/config/fetch_config.py`**
+2. **`ingot/config/fetch_config.py`**
    - `AgentPlatform` enum: `AUGGIE`, `CLAUDE`, `CURSOR`, `AIDER`, `MANUAL`
    - `parse_ai_backend()` - Converts string to enum, raises `ConfigValidationError`
 
-3. **`spec/config/manager.py`**
+3. **`ingot/config/manager.py`**
    - `ConfigManager` class - Provides `get(key, default)` method for reading config values
    - Currently reads `AI_BACKEND` key (to be migrated to `AI_BACKEND` in future)
 
 ### Current Backend Resolution (To Be Replaced)
 
 The current codebase has scattered backend resolution logic:
-- `spec/config/manager.py` line 580: `self._raw_values.get("AI_BACKEND")`
-- `spec/cli.py` line 98: `_disambiguate_platform()` for ticket platforms (different concern)
+- `ingot/config/manager.py` line 580: `self._raw_values.get("AI_BACKEND")`
+- `ingot/cli.py` line 98: `_disambiguate_platform()` for ticket platforms (different concern)
 
 This ticket creates a single source of truth that will eventually replace scattered logic.
 
@@ -143,15 +143,15 @@ This ticket creates a single source of truth that will eventually replace scatte
 
 ### File Structure
 
-**Create:** `spec/config/backend_resolver.py`
+**Create:** `ingot/config/backend_resolver.py`
 
 ### Function Definition
 
 ```python
 """Single source of truth for backend platform resolution."""
-from spec.config.fetch_config import AgentPlatform, parse_ai_backend
-from spec.config.manager import ConfigManager
-from spec.integrations.backends.errors import BackendNotConfiguredError
+from ingot.config.fetch_config import AgentPlatform, parse_ai_backend
+from ingot.config.manager import ConfigManager
+from ingot.integrations.backends.errors import BackendNotConfiguredError
 
 
 def resolve_backend_platform(
@@ -192,7 +192,7 @@ def resolve_backend_platform(
 
     # 3. No backend configured - raise error with helpful message
     raise BackendNotConfiguredError(
-        "No AI backend configured. Please run 'spec init' to configure a backend, "
+        "No AI backend configured. Please run 'ingot init' to configure a backend, "
         "or use the --backend flag to specify one."
     )
 ```
@@ -201,13 +201,13 @@ def resolve_backend_platform(
 
 1. **CLI override first**: The `--backend` flag allows one-time overrides without modifying persisted config. This is useful for testing different backends.
 
-2. **Persisted config second**: The `AI_BACKEND` key in config (set by `spec init` or manual edit) is the default for normal usage.
+2. **Persisted config second**: The `AI_BACKEND` key in config (set by `ingot init` or manual edit) is the default for normal usage.
 
 3. **No implicit default**: Unlike `parse_ai_backend()` which accepts a `default` parameter, the resolver explicitly raises `BackendNotConfiguredError` when no backend is configured. This enforces the "no default backend" policy from Final Decision #2.
 
 4. **Delegation to parse_ai_backend()**: Uses the existing parser for string-to-enum conversion. This ensures consistent validation and error messages.
 
-5. **Helpful error messages**: The `BackendNotConfiguredError` message guides users to either run `spec init` or use `--backend` flag.
+5. **Helpful error messages**: The `BackendNotConfiguredError` message guides users to either run `ingot init` or use `--backend` flag.
 
 6. **Whitespace handling**: CLI override is stripped of whitespace before parsing. Empty string `""` and whitespace-only `"   "` are treated as "no override" (falsy check + strip).
 
@@ -219,7 +219,7 @@ def resolve_backend_platform(
 
 ### Phase 1: Create File and Function (~0.25 hours)
 
-1. Create `spec/config/backend_resolver.py`
+1. Create `ingot/config/backend_resolver.py`
 2. Add module docstring and imports
 3. Implement `resolve_backend_platform()` function
 4. Add `__all__` export list
@@ -244,14 +244,14 @@ def resolve_backend_platform(
 > **Note:** This follows the existing flat test file pattern in the repo (e.g., `tests/test_backend_errors.py`, `tests/test_backend_factory.py`).
 
 ```python
-"""Tests for spec.config.backend_resolver module."""
+"""Tests for ingot.config.backend_resolver module."""
 
 import pytest
 from unittest.mock import MagicMock
 
-from spec.config.fetch_config import AgentPlatform, ConfigValidationError
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.integrations.backends.errors import BackendNotConfiguredError
+from ingot.config.fetch_config import AgentPlatform, ConfigValidationError
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.integrations.backends.errors import BackendNotConfiguredError
 
 
 class TestResolveBackendPlatformPrecedence:
@@ -318,7 +318,7 @@ class TestResolveBackendPlatformNoBackend:
             resolve_backend_platform(config, cli_backend_override=None)
 
         assert "No AI backend configured" in str(exc_info.value)
-        assert "spec init" in str(exc_info.value)
+        assert "ingot init" in str(exc_info.value)
 
     def test_raises_when_config_is_whitespace_only(self):
         """Whitespace-only config is treated as empty."""
@@ -409,14 +409,14 @@ class TestResolveBackendPlatformStringNormalization:
 
 ### Edge Case 1: No Backend Configured
 
-**Scenario:** User runs `spec run TICKET-123` without ever running `spec init` or setting `AI_BACKEND`.
+**Scenario:** User runs `ingot run TICKET-123` without ever running `ingot init` or setting `AI_BACKEND`.
 
-**Handling:** Raise `BackendNotConfiguredError` with actionable message directing to `spec init` or `--backend` flag.
+**Handling:** Raise `BackendNotConfiguredError` with actionable message directing to `ingot init` or `--backend` flag.
 
 **Example:**
 ```python
 >>> resolve_backend_platform(config, cli_backend_override=None)
-BackendNotConfiguredError: No AI backend configured. Please run 'spec init' to configure a backend, or use the --backend flag to specify one.
+BackendNotConfiguredError: No AI backend configured. Please run 'ingot init' to configure a backend, or use the --backend flag to specify one.
 ```
 
 ### Edge Case 2: Invalid Platform String
@@ -439,7 +439,7 @@ ConfigValidationError: Invalid AI backend 'openai'. Allowed values: auggie, clau
 
 ### Edge Case 4: CLI Override Bypasses Config
 
-**Scenario:** User has `AI_BACKEND=auggie` in config but runs `spec run --backend=cursor TICKET-123`.
+**Scenario:** User has `AI_BACKEND=auggie` in config but runs `ingot run --backend=cursor TICKET-123`.
 
 **Handling:** CLI wins. Returns `AgentPlatform.CURSOR`. Config is not modified.
 
@@ -470,16 +470,16 @@ ConfigValidationError: Invalid AI backend 'openai'. Allowed values: auggie, clau
 
 ```bash
 # Verify file exists
-ls -la spec/config/backend_resolver.py
+ls -la ingot/config/backend_resolver.py
 
 # Verify imports work without cycles
-python -c "from spec.config.backend_resolver import resolve_backend_platform; print('Import OK')"
+python -c "from ingot.config.backend_resolver import resolve_backend_platform; print('Import OK')"
 
 # Verify resolver with CLI override
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform
 
 config = MagicMock()
 config.get.return_value = ''
@@ -491,8 +491,8 @@ print('CLI override: OK')
 # Verify resolver with config value
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform
 
 config = MagicMock()
 config.get.return_value = 'cursor'
@@ -504,23 +504,23 @@ print('Config value: OK')
 # Verify 'no backend' raises BackendNotConfiguredError
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.integrations.backends.errors import BackendNotConfiguredError
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.integrations.backends.errors import BackendNotConfiguredError
 
 config = MagicMock()
 config.get.return_value = ''
 try:
     resolve_backend_platform(config, cli_backend_override=None)
 except BackendNotConfiguredError as e:
-    assert 'spec init' in str(e)
+    assert 'ingot init' in str(e)
     print('No backend error: OK')
 "
 
 # Verify CLI precedence over config
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform
 
 config = MagicMock()
 config.get.return_value = 'auggie'  # Config says auggie
@@ -532,8 +532,8 @@ print('CLI precedence: OK')
 # Verify invalid platform raises ConfigValidationError
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import ConfigValidationError
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import ConfigValidationError
 
 config = MagicMock()
 config.get.return_value = ''
@@ -547,8 +547,8 @@ except ConfigValidationError as e:
 # Verify empty string CLI override falls through to config
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform
 
 config = MagicMock()
 config.get.return_value = 'cursor'
@@ -560,8 +560,8 @@ print('Empty string CLI override: OK')
 # Verify whitespace-only CLI override falls through to config
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform
 
 config = MagicMock()
 config.get.return_value = 'auggie'
@@ -574,13 +574,13 @@ print('Whitespace-only CLI override: OK')
 pytest tests/test_backend_resolver.py -v
 
 # Run mypy type checking (uses project's pyproject.toml config)
-mypy spec/config/backend_resolver.py
+mypy ingot/config/backend_resolver.py
 
 # Verify no import cycles
 python -c "
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.integrations.backends.factory import BackendFactory
-from spec.config.manager import ConfigManager
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.config.manager import ConfigManager
 print('No import cycles detected')
 "
 ```
@@ -591,7 +591,7 @@ print('No import cycles detected')
 
 ### Implementation Checklist
 
-- [ ] `spec/config/backend_resolver.py` created
+- [ ] `ingot/config/backend_resolver.py` created
 - [ ] `resolve_backend_platform()` function implemented
 - [ ] Function accepts `ConfigManager` and optional `cli_backend_override`
 - [ ] Returns `AgentPlatform` enum for valid inputs
@@ -618,7 +618,7 @@ print('No import cycles detected')
 | **AC4** | Raises `ConfigValidationError` for invalid platform strings | Unit test | [ ] |
 | **AC5** | String inputs are case-insensitive | Unit test | [ ] |
 | **AC6** | Whitespace is stripped from inputs | Unit test | [ ] |
-| **AC7** | Error message mentions `spec init` | Unit test | [ ] |
+| **AC7** | Error message mentions `ingot init` | Unit test | [ ] |
 | **AC8** | Empty string CLI override falls through to config | Unit test | [ ] |
 | **AC9** | Whitespace-only CLI override falls through to config | Unit test | [ ] |
 | **AC10** | Whitespace-only CLI + empty config raises `BackendNotConfiguredError` | Unit test | [ ] |
@@ -641,10 +641,10 @@ print('No import cycles detected')
 
 | File | Description |
 |------|-------------|
-| `spec/integrations/backends/errors.py` | BackendNotConfiguredError definition |
-| `spec/config/fetch_config.py` | AgentPlatform enum, parse_ai_backend() |
-| `spec/config/manager.py` | ConfigManager class |
-| `spec/integrations/backends/factory.py` | BackendFactory (companion to resolver) |
+| `ingot/integrations/backends/errors.py` | BackendNotConfiguredError definition |
+| `ingot/config/fetch_config.py` | AgentPlatform enum, parse_ai_backend() |
+| `ingot/config/manager.py` | ConfigManager class |
+| `ingot/integrations/backends/factory.py` | BackendFactory (companion to resolver) |
 
 ### Related Implementation Plans
 
@@ -661,7 +661,7 @@ print('No import cycles detected')
 > **Note:** This section documents how the resolver will be used in Phase 1.5+ when CLI is updated. This is informational only - CLI changes are **out of scope** for this ticket.
 
 ```python
-# Future: spec/cli.py integration example
+# Future: ingot/cli.py integration example
 
 @app.command()
 def run(
@@ -669,9 +669,9 @@ def run(
     backend: Optional[str] = typer.Option(None, "--backend", "-b", help="AI backend to use"),
 ):
     """Run SPEC workflow for a ticket."""
-    from spec.config.backend_resolver import resolve_backend_platform
-    from spec.integrations.backends.errors import BackendNotConfiguredError
-    from spec.integrations.backends.factory import BackendFactory
+    from ingot.config.backend_resolver import resolve_backend_platform
+    from ingot.integrations.backends.errors import BackendNotConfiguredError
+    from ingot.integrations.backends.factory import BackendFactory
 
     try:
         platform = resolve_backend_platform(config, cli_backend_override=backend)
@@ -679,7 +679,7 @@ def run(
     except BackendNotConfiguredError as e:
         print_error(str(e))
         print_info("Available backends: auggie, claude, cursor")
-        print_info("Run 'spec init' to configure a backend interactively.")
+        print_info("Run 'ingot init' to configure a backend interactively.")
         raise typer.Exit(1)
 
     # Continue with workflow using ai_backend...

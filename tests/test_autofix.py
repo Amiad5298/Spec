@@ -1,4 +1,4 @@
-"""Tests for spec.workflow.autofix module.
+"""Tests for ingot.workflow.autofix module.
 
 Tests cover:
 - Prompt construction with review feedback and plan path
@@ -9,8 +9,8 @@ Tests cover:
 
 import pytest
 
-from spec.workflow.autofix import _run_auto_fix, run_auto_fix
-from spec.workflow.state import WorkflowState
+from ingot.workflow.autofix import _run_auto_fix, run_auto_fix
+from ingot.workflow.state import WorkflowState
 
 
 @pytest.fixture

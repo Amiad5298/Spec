@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from spec.config.compatibility import get_platform_support
-from spec.config.fetch_config import AgentPlatform, ConfigValidationError
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.factory import BackendFactory
-from spec.integrations.providers.base import Platform
+from ingot.config.compatibility import get_platform_support
+from ingot.config.fetch_config import AgentPlatform, ConfigValidationError
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.integrations.providers.base import Platform
 
 
 class TestBackendFactory:

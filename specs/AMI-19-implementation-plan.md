@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-19 - Implement GitHubProvider Concrete Class
 
-**Ticket:** [AMI-19](https://linear.app/amiadspec/issue/AMI-19/implement-githubprovider-concrete-class)
+**Ticket:** [AMI-19](https://linear.app/amiadingot/issue/AMI-19/implement-githubprovider-concrete-class)
 **Status:** Draft
 **Date:** 2026-01-25
 
@@ -61,7 +61,7 @@ The provider is responsible for:
 
 ## Components to Create
 
-### New File: `spec/integrations/providers/github.py`
+### New File: `ingot/integrations/providers/github.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -75,7 +75,7 @@ The provider is responsible for:
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/providers/__init__.py` | Export `GitHubProvider` |
+| `ingot/integrations/providers/__init__.py` | Export `GitHubProvider` |
 
 ### ABC Extension Note
 
@@ -95,7 +95,7 @@ The provider is responsible for:
 > author_login = self.safe_nested_get(user_obj, "login", "")
 > ```
 >
-> This pattern is consistent with the JiraProvider implementation (PR #26) and uses the base class utility method defined in `spec/integrations/providers/base.py`.
+> This pattern is consistent with the JiraProvider implementation (PR #26) and uses the base class utility method defined in `ingot/integrations/providers/base.py`.
 
 ---
 
@@ -103,7 +103,7 @@ The provider is responsible for:
 
 ### Step 1: Create GitHubProvider Module
 
-**File:** `spec/integrations/providers/github.py`
+**File:** `ingot/integrations/providers/github.py`
 
 ```python
 """GitHub issue tracker provider.
@@ -132,7 +132,7 @@ import warnings
 from datetime import datetime
 from typing import Any
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     IssueTrackerProvider,
     Platform,
@@ -141,8 +141,8 @@ from spec.integrations.providers.base import (
     TicketType,
     sanitize_title_for_branch,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.user_interaction import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.user_interaction import (
     CLIUserInteraction,
     UserInteractionInterface,
 )
@@ -179,7 +179,7 @@ LABEL_STATUS_MAP: dict[str, TicketStatus] = {
 
 ### Step 2: Add Type Keywords and Prompt Template
 
-Continue in `spec/integrations/providers/github.py`:
+Continue in `ingot/integrations/providers/github.py`:
 
 ```python
 # Type inference keywords: keyword → TicketType
@@ -589,11 +589,11 @@ class GitHubProvider(IssueTrackerProvider):
 
 ### Step 6: Update Package Exports
 
-**File:** `spec/integrations/providers/__init__.py`
+**File:** `ingot/integrations/providers/__init__.py`
 
 ```python
 # Add to existing imports
-from spec.integrations.providers.github import GitHubProvider
+from ingot.integrations.providers.github import GitHubProvider
 
 # Add to __all__
 __all__ = [
@@ -616,20 +616,20 @@ __all__ = [
 import pytest
 from datetime import datetime
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.github import (
+from ingot.integrations.providers.github import (
     GitHubProvider,
     STATUS_MAPPING,
     STATE_REASON_MAPPING,
     LABEL_STATUS_MAP,
     TYPE_KEYWORDS,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 class TestGitHubProviderRegistration:
@@ -649,7 +649,7 @@ class TestGitHubProviderRegistration:
 
     def test_provider_registers_successfully(self):
         """GitHubProvider can be registered with ProviderRegistry."""
-        from spec.integrations.providers.github import GitHubProvider
+        from ingot.integrations.providers.github import GitHubProvider
 
         provider = ProviderRegistry.get_provider(Platform.GITHUB)
         assert provider is not None
@@ -1044,8 +1044,8 @@ class DirectAPIFetcher(TicketFetcher):
 Uses `@ProviderRegistry.register` decorator:
 
 ```python
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get GitHub provider
 provider = ProviderRegistry.get_provider(Platform.GITHUB)
@@ -1128,9 +1128,9 @@ From Linear ticket AMI-19:
 ### Basic Provider Usage
 
 ```python
-from spec.integrations.providers.github import GitHubProvider
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.github import GitHubProvider
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.base import Platform
 
 # Get provider via registry (singleton)
 provider = ProviderRegistry.get_provider(Platform.GITHUB)
@@ -1144,7 +1144,7 @@ if provider.can_handle("https://github.com/octocat/Hello-World/issues/42"):
 ### Normalizing Raw GitHub Response
 
 ```python
-from spec.integrations.providers.github import GitHubProvider
+from ingot.integrations.providers.github import GitHubProvider
 
 provider = GitHubProvider()
 
@@ -1169,7 +1169,7 @@ print(f"Type: {ticket.type}")  # TicketType.BUG
 ### Using Default Owner/Repo
 
 ```python
-from spec.integrations.providers.github import GitHubProvider
+from ingot.integrations.providers.github import GitHubProvider
 
 # Configure provider with defaults for bare issue references
 provider = GitHubProvider(default_owner="myorg", default_repo="myrepo")
@@ -1183,7 +1183,7 @@ if provider.can_handle("#123"):
 ### Integration with TicketService (AMI-32)
 
 ```python
-from spec.integrations.ticket_service import TicketService
+from ingot.integrations.ticket_service import TicketService
 
 # TicketService handles provider lookup and fetching
 service = TicketService()
@@ -1200,7 +1200,7 @@ print(f"Is PR: {ticket.platform_metadata['is_pull_request']}")
 
 ```python
 import pytest
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 @pytest.fixture(autouse=True)
 def reset_registry():
@@ -1213,7 +1213,7 @@ def reset_registry():
 def test_isolated_provider():
     """Test runs with clean registry state."""
     # Re-import to trigger registration
-    from spec.integrations.providers.github import GitHubProvider
+    from ingot.integrations.providers.github import GitHubProvider
 
     provider = ProviderRegistry.get_provider(Platform.GITHUB)
     assert provider is not None

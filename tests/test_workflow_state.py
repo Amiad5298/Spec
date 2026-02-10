@@ -1,10 +1,10 @@
-"""Tests for spec.workflow.state module."""
+"""Tests for ingot.workflow.state module."""
 
 from pathlib import Path
 
 import pytest
 
-from spec.workflow.state import RateLimitConfig, WorkflowState
+from ingot.workflow.state import RateLimitConfig, WorkflowState
 
 
 @pytest.fixture
@@ -105,7 +105,7 @@ class TestWorkflowState:
 
     def test_task_memories_can_be_appended(self, state):
         """task_memories can have items appended."""
-        from spec.workflow.task_memory import TaskMemory
+        from ingot.workflow.task_memory import TaskMemory
 
         memory = TaskMemory(
             task_name="Test Task",
@@ -243,13 +243,13 @@ class TestWorkflowStateParallelFields:
     def test_subagent_names_default(self, state):
         """subagent_names has correct defaults."""
         assert state.subagent_names == {
-            "planner": "spec-planner",
-            "tasklist": "spec-tasklist",
-            "tasklist_refiner": "spec-tasklist-refiner",
-            "implementer": "spec-implementer",
-            "reviewer": "spec-reviewer",
-            "fixer": "spec-implementer",
-            "doc_updater": "spec-doc-updater",
+            "planner": "ingot-planner",
+            "tasklist": "ingot-tasklist",
+            "tasklist_refiner": "ingot-tasklist-refiner",
+            "implementer": "ingot-implementer",
+            "reviewer": "ingot-reviewer",
+            "fixer": "ingot-implementer",
+            "doc_updater": "ingot-doc-updater",
         }
 
     def test_subagent_names_custom(self, generic_ticket):

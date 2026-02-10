@@ -1,11 +1,11 @@
-"""Tests for spec.integrations.cursor module - CursorClient class."""
+"""Tests for ingot.integrations.cursor module - CursorClient class."""
 
 import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.cursor import (
+from ingot.integrations.cursor import (
     CURSOR_STARTUP_DELAY_MAX_MS,
     CURSOR_STARTUP_DELAY_MIN_MS,
     CursorClient,
@@ -21,7 +21,7 @@ class TestCursorClientDetectCliCommand:
         """Detects 'cursor' when it's in PATH."""
         client = CursorClient(enable_startup_jitter=False)
 
-        with patch("spec.integrations.cursor.shutil.which", side_effect=lambda x: x == "cursor"):
+        with patch("ingot.integrations.cursor.shutil.which", side_effect=lambda x: x == "cursor"):
             cmd = client._detect_cli_command()
 
         assert cmd == "cursor"
@@ -35,7 +35,7 @@ class TestCursorClientDetectCliCommand:
                 return "/usr/local/bin/agent"
             return None
 
-        with patch("spec.integrations.cursor.shutil.which", side_effect=which_side_effect):
+        with patch("ingot.integrations.cursor.shutil.which", side_effect=which_side_effect):
             cmd = client._detect_cli_command()
 
         assert cmd == "agent"
@@ -44,7 +44,7 @@ class TestCursorClientDetectCliCommand:
         """Defaults to 'cursor' when neither command is found."""
         client = CursorClient(enable_startup_jitter=False)
 
-        with patch("spec.integrations.cursor.shutil.which", return_value=None):
+        with patch("ingot.integrations.cursor.shutil.which", return_value=None):
             cmd = client._detect_cli_command()
 
         assert cmd == "cursor"
@@ -54,7 +54,7 @@ class TestCursorClientDetectCliCommand:
         client = CursorClient(enable_startup_jitter=False)
 
         with patch(
-            "spec.integrations.cursor.shutil.which", return_value="/usr/local/bin/cursor"
+            "ingot.integrations.cursor.shutil.which", return_value="/usr/local/bin/cursor"
         ) as mock_which:
             client._detect_cli_command()
             client._detect_cli_command()
@@ -75,7 +75,7 @@ class TestCursorClientSupportsModelFlag:
         mock_result.stdout = "Options:\n  --model <model>  Specify model\n  --help"
         mock_result.stderr = ""
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             assert client._supports_model_flag() is True
 
     def test_no_model_when_not_in_help(self):
@@ -87,7 +87,7 @@ class TestCursorClientSupportsModelFlag:
         mock_result.stdout = "Options:\n  --print  Print mode\n  --help"
         mock_result.stderr = ""
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             assert client._supports_model_flag() is False
 
     def test_caches_result(self):
@@ -99,7 +99,9 @@ class TestCursorClientSupportsModelFlag:
         mock_result.stdout = "--model"
         mock_result.stderr = ""
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.cursor.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client._supports_model_flag()
             client._supports_model_flag()
 
@@ -111,7 +113,7 @@ class TestCursorClientSupportsModelFlag:
         client._cli_command = "cursor"
 
         with patch(
-            "spec.integrations.cursor.subprocess.run",
+            "ingot.integrations.cursor.subprocess.run",
             side_effect=OSError("command not found"),
         ):
             assert client._supports_model_flag() is False
@@ -243,7 +245,7 @@ class TestCursorClientExecution:
         mock_process.returncode = 0
         mock_process.wait.return_value = None
 
-        with patch("spec.integrations.cursor.subprocess.Popen", return_value=mock_process):
+        with patch("ingot.integrations.cursor.subprocess.Popen", return_value=mock_process):
             success, output = client.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
@@ -266,7 +268,7 @@ class TestCursorClientExecution:
         mock_process.returncode = 1
         mock_process.wait.return_value = None
 
-        with patch("spec.integrations.cursor.subprocess.Popen", return_value=mock_process):
+        with patch("ingot.integrations.cursor.subprocess.Popen", return_value=mock_process):
             success, output = client.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
@@ -284,7 +286,7 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             success, output = client.run_print_with_output("test prompt")
 
         assert success is True
@@ -299,7 +301,7 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             client.run_print_with_output("test prompt")
 
         captured = capsys.readouterr()
@@ -314,7 +316,7 @@ class TestCursorClientExecution:
         mock_result.stderr = "Error: invalid model"
         mock_result.returncode = 1
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             success, output = client.run_print_with_output("test prompt")
 
         assert success is False
@@ -329,7 +331,7 @@ class TestCursorClientExecution:
         mock_result.stderr = "some error"
         mock_result.returncode = 1
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             success, output = client.run_print_with_output("test prompt")
 
         assert success is False
@@ -344,7 +346,7 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             output = client.run_print_quiet("test prompt")
 
         assert output == "quiet output content"
@@ -358,7 +360,7 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             output = client.run_print_quiet("test prompt")
 
         assert output == ""
@@ -372,7 +374,7 @@ class TestCursorClientExecution:
         mock_result.stderr = "Error: rate limit exceeded"
         mock_result.returncode = 1
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             output = client.run_print_quiet("test prompt")
 
         assert "Error: rate limit exceeded" in output
@@ -386,7 +388,7 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result):
+        with patch("ingot.integrations.cursor.subprocess.run", return_value=mock_result):
             client.run_print_quiet("test prompt")
 
         captured = capsys.readouterr()
@@ -401,7 +403,9 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.cursor.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_quiet("test", timeout_seconds=30.0)
 
         assert mock_run.call_args.kwargs.get("timeout") == 30.0
@@ -412,7 +416,7 @@ class TestCursorClientExecution:
 
         with (
             patch(
-                "spec.integrations.cursor.subprocess.run",
+                "ingot.integrations.cursor.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd=["cursor"], timeout=5),
             ),
             pytest.raises(subprocess.TimeoutExpired),
@@ -428,7 +432,9 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.cursor.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_with_output("test", timeout_seconds=45.0)
 
         assert mock_run.call_args.kwargs.get("timeout") == 45.0
@@ -439,7 +445,7 @@ class TestCursorClientExecution:
 
         with (
             patch(
-                "spec.integrations.cursor.subprocess.run",
+                "ingot.integrations.cursor.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(cmd=["cursor"], timeout=10),
             ),
             pytest.raises(subprocess.TimeoutExpired),
@@ -455,7 +461,9 @@ class TestCursorClientExecution:
         mock_result.stderr = ""
         mock_result.returncode = 0
 
-        with patch("spec.integrations.cursor.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "ingot.integrations.cursor.subprocess.run", return_value=mock_result
+        ) as mock_run:
             client.run_print_quiet("test")
 
         assert mock_run.call_args.kwargs.get("timeout") is None
@@ -468,11 +476,11 @@ class TestCheckCursorInstalled:
         """Returns (True, version) when CLI is installed."""
         with (
             patch(
-                "spec.integrations.cursor.shutil.which",
+                "ingot.integrations.cursor.shutil.which",
                 side_effect=lambda x: "/usr/local/bin/cursor" if x == "cursor" else None,
             ),
             patch(
-                "spec.integrations.cursor.subprocess.run",
+                "ingot.integrations.cursor.subprocess.run",
                 return_value=MagicMock(
                     returncode=0,
                     stdout="cursor 0.1.0",
@@ -487,7 +495,7 @@ class TestCheckCursorInstalled:
 
     def test_not_installed_returns_false(self):
         """Returns (False, message) when CLI is not in PATH."""
-        with patch("spec.integrations.cursor.shutil.which", return_value=None):
+        with patch("ingot.integrations.cursor.shutil.which", return_value=None):
             is_installed, message = check_cursor_installed()
 
         assert is_installed is False
@@ -502,9 +510,9 @@ class TestCheckCursorInstalled:
             return None
 
         with (
-            patch("spec.integrations.cursor.shutil.which", side_effect=which_side_effect),
+            patch("ingot.integrations.cursor.shutil.which", side_effect=which_side_effect),
             patch(
-                "spec.integrations.cursor.subprocess.run",
+                "ingot.integrations.cursor.subprocess.run",
                 return_value=MagicMock(
                     returncode=0,
                     stdout="agent 1.2.3",
@@ -526,9 +534,9 @@ class TestCheckCursorInstalled:
             return None
 
         with (
-            patch("spec.integrations.cursor.shutil.which", side_effect=which_side_effect),
+            patch("ingot.integrations.cursor.shutil.which", side_effect=which_side_effect),
             patch(
-                "spec.integrations.cursor.subprocess.run",
+                "ingot.integrations.cursor.subprocess.run",
                 return_value=MagicMock(
                     returncode=1,
                     stdout="",
@@ -592,7 +600,7 @@ class TestCursorStabilityMechanism:
         """Startup jitter calls time.sleep with appropriate delay."""
         client = CursorClient(enable_startup_jitter=True)
 
-        with patch("spec.integrations.cursor.time.sleep") as mock_sleep:
+        with patch("ingot.integrations.cursor.time.sleep") as mock_sleep:
             client._apply_startup_jitter()
 
         mock_sleep.assert_called_once()
@@ -603,7 +611,7 @@ class TestCursorStabilityMechanism:
         """No jitter when enable_startup_jitter=False."""
         client = CursorClient(enable_startup_jitter=False)
 
-        with patch("spec.integrations.cursor.time.sleep") as mock_sleep:
+        with patch("ingot.integrations.cursor.time.sleep") as mock_sleep:
             client._apply_startup_jitter()
 
         mock_sleep.assert_not_called()
@@ -623,7 +631,7 @@ class TestCursorStabilityMechanism:
                 return False, "Error: socket in use"
             return True, "success"
 
-        with patch("spec.integrations.cursor.time.sleep"):
+        with patch("ingot.integrations.cursor.time.sleep"):
             success, output = client._run_with_spawn_retry(mock_run)
 
         assert success is True
@@ -637,7 +645,7 @@ class TestCursorStabilityMechanism:
         def mock_run():
             return False, "Error: socket in use"
 
-        with patch("spec.integrations.cursor.time.sleep"):
+        with patch("ingot.integrations.cursor.time.sleep"):
             success, output = client._run_with_spawn_retry(mock_run)
 
         assert success is False
@@ -685,7 +693,7 @@ class TestCursorStabilityMechanism:
                 raise OSError("Too many open files")
             return True, "success"
 
-        with patch("spec.integrations.cursor.time.sleep"):
+        with patch("ingot.integrations.cursor.time.sleep"):
             success, output = client._run_with_spawn_retry(mock_run)
 
         assert success is True
@@ -700,7 +708,7 @@ class TestCursorStabilityMechanism:
             raise OSError("Too many open files")
 
         with (
-            patch("spec.integrations.cursor.time.sleep"),
+            patch("ingot.integrations.cursor.time.sleep"),
             pytest.raises(OSError, match="Too many open files"),
         ):
             client._run_with_spawn_retry(mock_run)
@@ -711,14 +719,14 @@ class TestCursorClientModuleExports:
 
     def test_no_private_functions_exported(self):
         """No underscore-prefixed names in __all__."""
-        from spec.integrations.cursor import __all__
+        from ingot.integrations.cursor import __all__
 
         for name in __all__:
             assert not name.startswith("_"), f"Private name '{name}' should not be in __all__"
 
     def test_expected_exports(self):
         """Only expected public names are exported."""
-        from spec.integrations.cursor import __all__
+        from ingot.integrations.cursor import __all__
 
         assert set(__all__) == {
             "CURSOR_CLI_NAME",

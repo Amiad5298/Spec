@@ -1,4 +1,4 @@
-"""Tests for MondayProvider in spec.integrations.providers.monday module.
+"""Tests for MondayProvider in ingot.integrations.providers.monday module.
 
 Tests cover:
 - Provider registration with ProviderRegistry
@@ -13,15 +13,15 @@ Tests cover:
 
 import pytest
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.monday import (
+from ingot.integrations.providers.monday import (
     MondayProvider,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 @pytest.fixture(autouse=True)

@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "spec"
-version = "2.0.0"
-description = "SPEC - Spec-driven development workflow using Auggie CLI"
+name = "ingot"
+version = "0.0.0-dev"
+description = "INGOT - Spec-driven development workflow using AI backends"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
     { name = "Development Team" }
 ]
-keywords = ["spec", "workflow", "auggie", "cli", "development"]
+keywords = ["ingot", "workflow", "ai", "cli", "development"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-spec = "spec.cli:app"
+ingot = "ingot.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/Amiad5298/Spec"
@@ -57,7 +57,7 @@ Documentation = "https://github.com/Amiad5298/Spec#readme"
 Repository = "https://github.com/Amiad5298/Spec"
 
 [tool.hatch.build.targets.wheel]
-packages = ["spec"]
+packages = ["ingot"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -65,7 +65,7 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = [
     "-v",
-    "--cov=spec",
+    "--cov=ingot",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",          # For coverage-gutters extension
@@ -79,7 +79,7 @@ asyncio_mode = "auto"            # pytest-asyncio: auto-detect async tests
 asyncio_default_fixture_loop_scope = "function"  # Each test gets its own event loop
 
 [tool.coverage.run]
-source = ["spec"]
+source = ["ingot"]
 branch = true
 
 [tool.coverage.report]
@@ -119,4 +119,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["spec"]
+known-first-party = ["ingot"]

@@ -1,10 +1,10 @@
 # Implementation Plan: AMI-52 - Phase 1.6: Create Backend Factory
 
-**Ticket:** [AMI-52](https://linear.app/amiadspec/issue/AMI-52/phase-16-create-backend-factory)
+**Ticket:** [AMI-52](https://linear.app/amiadingot/issue/AMI-52/phase-16-create-backend-factory)
 **Status:** Draft
 **Date:** 2026-02-01
 **Labels:** MultiAgent
-**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadspec/issue/AMI-45)
+**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadingot/issue/AMI-45)
 
 ---
 
@@ -20,12 +20,12 @@ This ticket creates the `BackendFactory` class that provides a centralized facto
 - Foundation for the onboarding flow and CLI integration in Phase 1.5+ and Phase 2
 
 **Scope:**
-- Create `spec/integrations/backends/factory.py` containing:
+- Create `ingot/integrations/backends/factory.py` containing:
   - `BackendFactory` class with static `create()` method
   - Platform-to-backend mapping with lazy imports
   - Installation verification via `backend.check_installed()`
   - Support for string or `AgentPlatform` enum input
-- Update `spec/integrations/backends/__init__.py` to export `BackendFactory`
+- Update `ingot/integrations/backends/__init__.py` to export `BackendFactory`
 
 **Reference:** `specs/Pluggable Multi-Agent Support.md` - Phase 1.6 (lines 1920-1990)
 
@@ -48,9 +48,9 @@ This is **Phase 1.6** of the Backend Infrastructure work (AMI-45), positioned im
 | **1.6** | **AMI-52** | **Create Backend Factory** | **← This Ticket** |
 | 1.7 | AMI-53+ | Backend Platform Resolver | ⏳ Pending |
 
-> **⚠️ Pre-Implementation Verification Required:** Before starting this ticket, verify that `spec/integrations/backends/auggie.py` exists and exports `AuggieBackend`. Run:
+> **⚠️ Pre-Implementation Verification Required:** Before starting this ticket, verify that `ingot/integrations/backends/auggie.py` exists and exports `AuggieBackend`. Run:
 > ```bash
-> python -c "from spec.integrations.backends.auggie import AuggieBackend; print('AuggieBackend available')"
+> python -c "from ingot.integrations.backends.auggie import AuggieBackend; print('AuggieBackend available')"
 > ```
 
 > **📝 Note on Parent Specification:** The parent specification (`specs/Pluggable Multi-Agent Support.md`, lines 1967-1973) shows the *final* state of the factory with working imports for `ClaudeBackend` and `CursorBackend`. This implementation plan describes the *intermediate* state for Phase 1.6, where Claude and Cursor backends don't exist yet and raise `NotImplementedError` placeholders. The factory will be updated in Phase 3 (Claude) and Phase 4 (Cursor) to replace these placeholders with actual imports.
@@ -59,7 +59,7 @@ This is **Phase 1.6** of the Backend Infrastructure work (AMI-45), positioned im
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     spec/integrations/backends/                             │
+│                     ingot/integrations/backends/                             │
 │                                                                             │
 │   errors.py (AMI-47)         base.py (AMI-48, AMI-49)                      │
 │   ├── BackendError           ├── AIBackend (Protocol)                      │
@@ -77,14 +77,14 @@ This is **Phase 1.6** of the Backend Infrastructure work (AMI-45), positioned im
                                     │ used by
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│   CLI Entry (spec/cli.py)                                                   │
+│   CLI Entry (ingot/cli.py)                                                   │
 │       backend = BackendFactory.create(platform, verify_installed=True)     │
 │                                                                             │
-│   Step 3 Parallel Execution (spec/workflow/step3_execute.py)               │
+│   Step 3 Parallel Execution (ingot/workflow/step3_execute.py)               │
 │       # Create fresh backend per parallel task                             │
 │       task_backend = BackendFactory.create(state.backend_platform)         │
 │                                                                             │
-│   Onboarding Flow (spec/onboarding/flow.py)                                │
+│   Onboarding Flow (ingot/onboarding/flow.py)                                │
 │       backend = BackendFactory.create(platform)                            │
 │       installed, message = backend.check_installed()                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -111,20 +111,20 @@ This is **Phase 1.6** of the Backend Infrastructure work (AMI-45), positioned im
 
 ### Existing Infrastructure (Dependencies)
 
-1. **`spec/integrations/backends/errors.py`** (AMI-47)
+1. **`ingot/integrations/backends/errors.py`** (AMI-47)
    - `BackendNotInstalledError` - Raised when CLI is not installed
    - Constructor: `BackendNotInstalledError(message: str)`
 
-2. **`spec/integrations/backends/base.py`** (AMI-48, AMI-49)
+2. **`ingot/integrations/backends/base.py`** (AMI-48, AMI-49)
    - `AIBackend` Protocol - Return type for factory
    - `BaseBackend` ABC - Extended by all concrete backends
 
-3. **`spec/integrations/backends/auggie.py`** (AMI-51)
+3. **`ingot/integrations/backends/auggie.py`** (AMI-51)
    - `AuggieBackend` - First concrete backend implementation
    - Constructor: `AuggieBackend(model: str = "")`
    - `check_installed()` method for CLI verification
 
-4. **`spec/config/fetch_config.py`**
+4. **`ingot/config/fetch_config.py`**
    - `AgentPlatform` enum: `AUGGIE`, `CLAUDE`, `CURSOR`, `AIDER`, `MANUAL`
    - `parse_ai_backend()` - Converts string to enum
 
@@ -144,15 +144,15 @@ This is **Phase 1.6** of the Backend Infrastructure work (AMI-45), positioned im
 
 ### File Structure
 
-**Create:** `spec/integrations/backends/factory.py`
+**Create:** `ingot/integrations/backends/factory.py`
 
 ### Class Definition
 
 ```python
 """Factory for creating AI backend instances."""
-from spec.config.fetch_config import AgentPlatform, parse_ai_backend
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.errors import BackendNotInstalledError
+from ingot.config.fetch_config import AgentPlatform, parse_ai_backend
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.errors import BackendNotInstalledError
 
 
 class BackendFactory:
@@ -162,7 +162,7 @@ class BackendFactory:
     This ensures consistent initialization and enables future extensions.
 
     Example:
-        >>> from spec.integrations.backends.factory import BackendFactory
+        >>> from ingot.integrations.backends.factory import BackendFactory
         >>> backend = BackendFactory.create("auggie", verify_installed=True)
         >>> success, output = backend.run_print_with_output("Hello")
     """
@@ -195,12 +195,12 @@ class BackendFactory:
         backend: AIBackend
 
         if platform == AgentPlatform.AUGGIE:
-            from spec.integrations.backends.auggie import AuggieBackend
+            from ingot.integrations.backends.auggie import AuggieBackend
             backend = AuggieBackend(model=model)
 
         elif platform == AgentPlatform.CLAUDE:
             # Phase 3: Replace with actual import when ClaudeBackend is implemented
-            # from spec.integrations.backends.claude import ClaudeBackend
+            # from ingot.integrations.backends.claude import ClaudeBackend
             # backend = ClaudeBackend(model=model)
             raise NotImplementedError(
                 "Claude backend not yet implemented. See Phase 3 of AMI-45."
@@ -208,7 +208,7 @@ class BackendFactory:
 
         elif platform == AgentPlatform.CURSOR:
             # Phase 4: Replace with actual import when CursorBackend is implemented
-            # from spec.integrations.backends.cursor import CursorBackend
+            # from ingot.integrations.backends.cursor import CursorBackend
             # backend = CursorBackend(model=model)
             raise NotImplementedError(
                 "Cursor backend not yet implemented. See Phase 4 of AMI-45."
@@ -254,7 +254,7 @@ class BackendFactory:
 
 ### Phase 1: Create File and Factory Class (~0.25 hours)
 
-1. Create `spec/integrations/backends/factory.py`
+1. Create `ingot/integrations/backends/factory.py`
 2. Add module docstring and imports
 3. Implement `BackendFactory` class with `create()` method
 4. Add placeholder error handling for unimplemented backends
@@ -262,8 +262,8 @@ class BackendFactory:
 
 ### Phase 2: Update Package Exports (~0.1 hours)
 
-1. Add `BackendFactory` to `spec/integrations/backends/__init__.py`
-2. Verify export works: `from spec.integrations.backends import BackendFactory`
+1. Add `BackendFactory` to `ingot/integrations/backends/__init__.py`
+2. Verify export works: `from ingot.integrations.backends import BackendFactory`
 
 ### Phase 3: Write Unit Tests (~0.5 hours)
 
@@ -284,14 +284,14 @@ class BackendFactory:
 > **Note:** This follows the existing flat test file pattern in the repo (e.g., `tests/test_backend_errors.py`, `tests/test_backend_protocol.py`, `tests/test_base_backend.py`) rather than nested directories.
 
 ```python
-"""Tests for spec.integrations.backends.factory module."""
+"""Tests for ingot.integrations.backends.factory module."""
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.errors import BackendNotInstalledError
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.errors import BackendNotInstalledError
+from ingot.integrations.backends.factory import BackendFactory
 
 
 class TestBackendFactoryCreate:
@@ -357,7 +357,7 @@ class TestBackendFactoryVerifyInstalled:
         """verify_installed=True succeeds when CLI is installed."""
         # Mock check_installed to return (True, "version info")
         mocker.patch(
-            "spec.integrations.backends.auggie.AuggieBackend.check_installed",
+            "ingot.integrations.backends.auggie.AuggieBackend.check_installed",
             return_value=(True, "Auggie CLI v1.0.0"),
         )
         backend = BackendFactory.create(AgentPlatform.AUGGIE, verify_installed=True)
@@ -367,7 +367,7 @@ class TestBackendFactoryVerifyInstalled:
         """verify_installed=True raises BackendNotInstalledError when CLI missing."""
         # Mock check_installed to return (False, "error message")
         mocker.patch(
-            "spec.integrations.backends.auggie.AuggieBackend.check_installed",
+            "ingot.integrations.backends.auggie.AuggieBackend.check_installed",
             return_value=(False, "Auggie CLI not found. Install from https://..."),
         )
         with pytest.raises(BackendNotInstalledError):
@@ -376,7 +376,7 @@ class TestBackendFactoryVerifyInstalled:
     def test_verify_installed_false_skips_check(self, mocker):
         """verify_installed=False (default) does not call check_installed."""
         mock_check = mocker.patch(
-            "spec.integrations.backends.auggie.AuggieBackend.check_installed",
+            "ingot.integrations.backends.auggie.AuggieBackend.check_installed",
         )
         BackendFactory.create(AgentPlatform.AUGGIE, verify_installed=False)
         mock_check.assert_not_called()
@@ -393,7 +393,7 @@ class TestBackendFactoryInvalidInput:
         because parse_ai_backend() raises ConfigValidationError for invalid values.
         This test reflects the actual implementation behavior.
         """
-        from spec.config.fetch_config import ConfigValidationError
+        from ingot.config.fetch_config import ConfigValidationError
         with pytest.raises(ConfigValidationError):
             BackendFactory.create("unknown_platform")
 
@@ -468,9 +468,9 @@ class TestBackendFactoryLazyImports:
     (imports inside if-branches). However, the package __init__.py currently
     imports AuggieBackend eagerly at package load time:
 
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
-    This means importing `spec.integrations.backends.factory` will trigger
+    This means importing `ingot.integrations.backends.factory` will trigger
     the package __init__.py, which imports auggie.py anyway.
 
     The lazy import pattern in factory.py is still valuable because:
@@ -492,7 +492,7 @@ class TestBackendFactoryLazyImports:
         import ast
         from pathlib import Path
 
-        factory_path = Path("spec/integrations/backends/factory.py")
+        factory_path = Path("ingot/integrations/backends/factory.py")
         if not factory_path.exists():
             pytest.skip("factory.py not yet created")
 
@@ -511,9 +511,9 @@ class TestBackendFactoryLazyImports:
 
         # Backend modules should NOT be in top-level imports
         backend_modules = [
-            "spec.integrations.backends.auggie",
-            "spec.integrations.backends.claude",
-            "spec.integrations.backends.cursor",
+            "ingot.integrations.backends.auggie",
+            "ingot.integrations.backends.claude",
+            "ingot.integrations.backends.cursor",
         ]
         for backend_module in backend_modules:
             assert backend_module not in toplevel_imports, (
@@ -537,18 +537,18 @@ class TestBackendFactoryLazyImports:
 
 ### Integration Tests (Gated)
 
-Integration tests with real CLI are gated behind `SPEC_INTEGRATION_TESTS=1`:
+Integration tests with real CLI are gated behind `INGOT_INTEGRATION_TESTS=1`:
 
 ```python
 import os
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.factory import BackendFactory
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 
 
@@ -660,7 +660,7 @@ def execute_task(task: Task) -> None:
 
 > **⚠️ Blocking Dependency:** AMI-51 must be completed before starting this ticket. Verify with:
 > ```bash
-> python -c "from spec.integrations.backends.auggie import AuggieBackend; print('Ready')"
+> python -c "from ingot.integrations.backends.auggie import AuggieBackend; print('Ready')"
 > ```
 
 ### Downstream Dependencies (Blocked By This)
@@ -680,15 +680,15 @@ def execute_task(task: Task) -> None:
 
 ```bash
 # Verify file exists
-ls -la spec/integrations/backends/factory.py
+ls -la ingot/integrations/backends/factory.py
 
 # Verify imports work without cycles
-python -c "from spec.integrations.backends.factory import BackendFactory; print('Import OK')"
+python -c "from ingot.integrations.backends.factory import BackendFactory; print('Import OK')"
 
 # Verify factory creates Auggie backend
 python -c "
-from spec.integrations.backends.factory import BackendFactory
-from spec.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
 backend = BackendFactory.create(AgentPlatform.AUGGIE)
 assert backend.name == 'Auggie'
 print('Factory creates AuggieBackend: OK')
@@ -696,7 +696,7 @@ print('Factory creates AuggieBackend: OK')
 
 # Verify factory accepts string input
 python -c "
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.factory import BackendFactory
 backend = BackendFactory.create('auggie')
 assert backend.name == 'Auggie'
 print('Factory accepts string: OK')
@@ -704,7 +704,7 @@ print('Factory accepts string: OK')
 
 # Verify case insensitivity
 python -c "
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.factory import BackendFactory
 backend = BackendFactory.create('AUGGIE')
 assert backend.name == 'Auggie'
 print('Case insensitivity: OK')
@@ -712,7 +712,7 @@ print('Case insensitivity: OK')
 
 # Verify whitespace handling
 python -c "
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.factory import BackendFactory
 backend = BackendFactory.create('  auggie  ')
 assert backend.name == 'Auggie'
 print('Whitespace handling: OK')
@@ -720,7 +720,7 @@ print('Whitespace handling: OK')
 
 # Verify unimplemented backends raise NotImplementedError
 python -c "
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.factory import BackendFactory
 try:
     BackendFactory.create('claude')
 except NotImplementedError as e:
@@ -730,7 +730,7 @@ except NotImplementedError as e:
 
 # Verify Aider raises ValueError (deferred indefinitely, not a planned phase)
 python -c "
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.factory import BackendFactory
 try:
     BackendFactory.create('aider')
 except ValueError as e:
@@ -740,7 +740,7 @@ except ValueError as e:
 
 # Verify Manual mode raises ValueError (permanent, not unimplemented)
 python -c "
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.factory import BackendFactory
 try:
     BackendFactory.create('manual')
 except ValueError as e:
@@ -749,19 +749,19 @@ except ValueError as e:
 "
 
 # Verify package export
-python -c "from spec.integrations.backends import BackendFactory; print('Export OK')"
+python -c "from ingot.integrations.backends import BackendFactory; print('Export OK')"
 
 # Run unit tests
 pytest tests/test_backend_factory.py -v
 
 # Run mypy type checking (uses project's pyproject.toml config, no --strict override)
-mypy spec/integrations/backends/factory.py
+mypy ingot/integrations/backends/factory.py
 
 # Verify no import cycles
 python -c "
-from spec.integrations.backends.factory import BackendFactory
-from spec.integrations.backends.base import AIBackend, BaseBackend
-from spec.integrations.backends.errors import BackendNotInstalledError
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.base import AIBackend, BaseBackend
+from ingot.integrations.backends.errors import BackendNotInstalledError
 print('No import cycles detected')
 "
 ```
@@ -772,7 +772,7 @@ print('No import cycles detected')
 
 ### Implementation Checklist
 
-- [ ] `spec/integrations/backends/factory.py` created
+- [ ] `ingot/integrations/backends/factory.py` created
 - [ ] `BackendFactory` class with static `create()` method
 - [ ] `create()` accepts `AgentPlatform` enum or string
 - [ ] `create()` returns `AIBackend` instance for supported platforms
@@ -782,7 +782,7 @@ print('No import cycles detected')
 - [ ] Placeholder `NotImplementedError` for unimplemented backends (Claude, Cursor) with phase references
 - [ ] `ValueError` for Aider (deferred indefinitely, not a planned phase)
 - [ ] `ValueError` for Manual mode (permanent behavior, not unimplemented)
-- [ ] `BackendFactory` exported from `spec/integrations/backends/__init__.py`
+- [ ] `BackendFactory` exported from `ingot/integrations/backends/__init__.py`
 
 ### Quality Checklist
 
@@ -802,7 +802,7 @@ print('No import cycles detected')
 | **AC4** | Unimplemented backends (Claude, Cursor) raise `NotImplementedError` with phase reference | Unit tests | [ ] |
 | **AC4b** | Aider raises `ValueError` (deferred indefinitely, per parent spec line 1976) | Unit test | [ ] |
 | **AC5** | Manual mode raises `ValueError` (permanent, not unimplemented) | Unit test | [ ] |
-| **AC6** | `BackendFactory` exported from `spec/integrations/backends` | Import test | [ ] |
+| **AC6** | `BackendFactory` exported from `ingot/integrations/backends` | Import test | [ ] |
 | **AC7** | String input is case-insensitive and whitespace-trimmed | Unit tests | [ ] |
 | **AC8** | Factory is thread-safe (creates independent instances) | Unit test | [ ] |
 | **AC9** | Backend imports are lazy (inside `if` branches in factory.py) | AST-based unit test | [ ] |
@@ -825,11 +825,11 @@ print('No import cycles detected')
 
 | File | Description |
 |------|-------------|
-| `spec/integrations/backends/errors.py` | BackendNotInstalledError definition |
-| `spec/integrations/backends/base.py` | AIBackend protocol, BaseBackend class |
-| `spec/integrations/backends/auggie.py` | AuggieBackend implementation |
-| `spec/config/fetch_config.py` | AgentPlatform enum, parse_ai_backend() |
-| `spec/integrations/providers/registry.py` | ProviderRegistry for pattern comparison |
+| `ingot/integrations/backends/errors.py` | BackendNotInstalledError definition |
+| `ingot/integrations/backends/base.py` | AIBackend protocol, BaseBackend class |
+| `ingot/integrations/backends/auggie.py` | AuggieBackend implementation |
+| `ingot/config/fetch_config.py` | AgentPlatform enum, parse_ai_backend() |
+| `ingot/integrations/providers/registry.py` | ProviderRegistry for pattern comparison |
 
 ### Related Implementation Plans
 
@@ -845,7 +845,7 @@ print('No import cycles detected')
 
 ## Appendix: __init__.py Update
 
-Update `spec/integrations/backends/__init__.py` to **add** `BackendFactory` export while **keeping all existing exports** (including `AuggieBackend`):
+Update `ingot/integrations/backends/__init__.py` to **add** `BackendFactory` export while **keeping all existing exports** (including `AuggieBackend`):
 
 > **⚠️ Important:** The current `__init__.py` already exports `AuggieBackend`. This update adds `BackendFactory` to the existing exports—it does NOT replace them.
 
@@ -865,19 +865,19 @@ Modules:
 - factory: Backend factory for instantiation (Phase 1.6+)
 """
 
-from spec.integrations.backends.auggie import AuggieBackend  # Keep existing export
-from spec.integrations.backends.base import (
+from ingot.integrations.backends.auggie import AuggieBackend  # Keep existing export
+from ingot.integrations.backends.base import (
     AIBackend,
     BaseBackend,
     SubagentMetadata,
 )
-from spec.integrations.backends.errors import (
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
     BackendTimeoutError,
 )
-from spec.integrations.backends.factory import BackendFactory  # NEW: Add factory export
+from ingot.integrations.backends.factory import BackendFactory  # NEW: Add factory export
 
 # Explicit public API for IDE support and documentation.
 # All exported symbols should be listed here.

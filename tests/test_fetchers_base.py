@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.fetchers.base module.
+"""Tests for ingot.integrations.fetchers.base module.
 
 Tests cover:
 - TicketFetcher ABC contract (cannot instantiate, must implement methods)
@@ -15,8 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.fetchers import (
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.fetchers import (
     AgentFetchError,
     AgentIntegrationError,
     AgentMediatedFetcher,
@@ -25,7 +25,7 @@ from spec.integrations.fetchers import (
     TicketFetcher,
     TicketFetchError,
 )
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 
 class TestTicketFetcherABC:

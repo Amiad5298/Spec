@@ -5,21 +5,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.cache import CacheKey, InMemoryTicketCache
-from spec.integrations.fetchers.exceptions import (
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.cache import CacheKey, InMemoryTicketCache
+from ingot.integrations.fetchers.exceptions import (
     AgentFetchError,
     AgentIntegrationError,
     AgentResponseParseError,
     PlatformNotSupportedError,
 )
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.ticket_service import (
+from ingot.integrations.ticket_service import (
     TicketService,
     create_ticket_service,
 )
@@ -154,7 +154,7 @@ class TestGetTicket:
     async def test_successful_fetch(self, mock_primary_fetcher, mock_provider, sample_ticket):
         """Should successfully fetch and return a ticket."""
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(primary_fetcher=mock_primary_fetcher)
@@ -172,7 +172,7 @@ class TestGetTicket:
         mock_cache.get.return_value = sample_ticket
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -193,7 +193,7 @@ class TestGetTicket:
         mock_cache.get.return_value = None
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -215,7 +215,7 @@ class TestGetTicket:
         mock_cache.get.return_value = sample_ticket  # Would hit cache normally
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -236,7 +236,7 @@ class TestGetTicket:
         custom_ttl = timedelta(minutes=30)
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -272,7 +272,7 @@ class TestFallbackBehavior:
         )
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -293,7 +293,7 @@ class TestFallbackBehavior:
         mock_primary_fetcher.fetch = AsyncMock(side_effect=AgentFetchError("Fetch failed"))
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -313,7 +313,7 @@ class TestFallbackBehavior:
         mock_primary_fetcher.fetch = AsyncMock(side_effect=AgentResponseParseError("Parse failed"))
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -333,7 +333,7 @@ class TestFallbackBehavior:
         )
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(primary_fetcher=mock_primary_fetcher)
@@ -350,7 +350,7 @@ class TestFallbackBehavior:
         mock_provider.platform = Platform.AZURE_DEVOPS
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(
@@ -370,7 +370,7 @@ class TestFallbackBehavior:
         mock_provider.platform = Platform.AZURE_DEVOPS
 
         with patch(
-            "spec.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
             return_value=mock_provider,
         ):
             service = TicketService(primary_fetcher=mock_primary_fetcher)
@@ -507,9 +507,11 @@ class TestCreateTicketService:
 
         with (
             patch(
-                "spec.integrations.ticket_service.AuggieMediatedFetcher"
+                "ingot.integrations.ticket_service.AuggieMediatedFetcher"
             ) as mock_auggie_fetcher_class,
-            patch("spec.integrations.ticket_service.DirectAPIFetcher") as mock_direct_fetcher_class,
+            patch(
+                "ingot.integrations.ticket_service.DirectAPIFetcher"
+            ) as mock_direct_fetcher_class,
         ):
             mock_auggie_fetcher_class.return_value.name = "AuggieMediatedFetcher"
             mock_direct_fetcher_class.return_value.name = "DirectAPIFetcher"
@@ -532,7 +534,7 @@ class TestCreateTicketService:
         mock_auth = MagicMock()
 
         with patch(
-            "spec.integrations.ticket_service.DirectAPIFetcher"
+            "ingot.integrations.ticket_service.DirectAPIFetcher"
         ) as mock_direct_fetcher_class:
             mock_direct_fetcher_class.return_value.name = "DirectAPIFetcher"
             mock_direct_fetcher_class.return_value.close = AsyncMock()
@@ -560,7 +562,7 @@ class TestCreateTicketService:
         custom_cache = InMemoryTicketCache(max_size=500)
 
         with patch(
-            "spec.integrations.ticket_service.DirectAPIFetcher"
+            "ingot.integrations.ticket_service.DirectAPIFetcher"
         ) as mock_direct_fetcher_class:
             mock_direct_fetcher_class.return_value.name = "DirectAPIFetcher"
             mock_direct_fetcher_class.return_value.close = AsyncMock()
@@ -583,7 +585,7 @@ class TestCreateTicketService:
         mock_auth = MagicMock()
 
         with patch(
-            "spec.integrations.ticket_service.AuggieMediatedFetcher"
+            "ingot.integrations.ticket_service.AuggieMediatedFetcher"
         ) as mock_auggie_fetcher_class:
             mock_auggie_fetcher_class.return_value.name = "AuggieMediatedFetcher"
 
@@ -613,7 +615,7 @@ class TestCreateTicketService:
         mock_backend.platform = platform
         mock_auth = MagicMock()
 
-        with patch("spec.integrations.ticket_service.DirectAPIFetcher") as mock_cls:
+        with patch("ingot.integrations.ticket_service.DirectAPIFetcher") as mock_cls:
             mock_cls.return_value.name = "DirectAPIFetcher"
             mock_cls.return_value.close = AsyncMock()
 
@@ -632,7 +634,7 @@ class TestCreateTicketService:
         mock_backend = MagicMock()
         mock_backend.platform = AgentPlatform.CURSOR
 
-        with patch("spec.integrations.fetchers.cursor_fetcher.CursorMediatedFetcher") as mock_cls:
+        with patch("ingot.integrations.fetchers.cursor_fetcher.CursorMediatedFetcher") as mock_cls:
             mock_cls.return_value.name = "CursorMediatedFetcher"
             mock_cls.return_value.close = AsyncMock()
 
@@ -651,7 +653,7 @@ class TestCreateTicketService:
         mock_backend = MagicMock()
         mock_backend.platform = AgentPlatform.CLAUDE
 
-        with patch("spec.integrations.fetchers.claude_fetcher.ClaudeMediatedFetcher") as mock_cls:
+        with patch("ingot.integrations.fetchers.claude_fetcher.ClaudeMediatedFetcher") as mock_cls:
             mock_cls.return_value.name = "ClaudeMediatedFetcher"
             mock_cls.return_value.close = AsyncMock()
 
@@ -698,8 +700,8 @@ class TestCreateTicketService:
         }
 
         with (
-            patch("spec.config.compatibility.MCP_SUPPORT", patched_mcp),
-            patch("spec.integrations.ticket_service.DirectAPIFetcher") as mock_direct_cls,
+            patch("ingot.config.compatibility.MCP_SUPPORT", patched_mcp),
+            patch("ingot.integrations.ticket_service.DirectAPIFetcher") as mock_direct_cls,
         ):
             mock_direct_cls.return_value.name = "DirectAPIFetcher"
             mock_direct_cls.return_value.close = AsyncMock()

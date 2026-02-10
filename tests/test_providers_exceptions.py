@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.providers.exceptions module.
+"""Tests for ingot.integrations.providers.exceptions module.
 
 Tests cover:
 - Exception inheritance hierarchy
@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from spec.integrations.providers.exceptions import (
+from ingot.integrations.providers.exceptions import (
     AuthenticationError,
     IssueTrackerError,
     PlatformNotSupportedError,
@@ -307,4 +307,3 @@ class TestExceptionHierarchy:
         assert isinstance(error, Exception)
         with pytest.raises(AuthenticationError):
             raise error
-

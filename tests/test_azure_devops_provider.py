@@ -1,4 +1,4 @@
-"""Tests for AzureDevOpsProvider in spec.integrations.providers.azure_devops module.
+"""Tests for AzureDevOpsProvider in ingot.integrations.providers.azure_devops module.
 
 Tests cover:
 - Provider registration with ProviderRegistry
@@ -12,16 +12,16 @@ Tests cover:
 
 import pytest
 
-from spec.integrations.providers.azure_devops import (
+from ingot.integrations.providers.azure_devops import (
     AzureDevOpsProvider,
     strip_html,
 )
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 @pytest.fixture(autouse=True)

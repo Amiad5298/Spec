@@ -4,11 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.integrations.providers import GenericTicket, Platform
-from spec.workflow.state import WorkflowState
-from spec.workflow.step1_plan import _build_minimal_prompt
-from spec.workflow.task_memory import TaskMemory
-from spec.workflow.tasks import Task
+from ingot.integrations.providers import GenericTicket, Platform
+from ingot.workflow.state import WorkflowState
+from ingot.workflow.step1_plan import _build_minimal_prompt
+from ingot.workflow.task_memory import TaskMemory
+from ingot.workflow.tasks import Task
 
 
 @pytest.fixture
@@ -68,8 +68,8 @@ def mock_auggie_client():
 class TestFullWorkflowWithTaskMemory:
     """Integration tests for full workflow with task memory."""
 
-    @patch("spec.workflow.task_memory._get_modified_files")
-    @patch("spec.workflow.task_memory._identify_patterns_in_changes")
+    @patch("ingot.workflow.task_memory._get_modified_files")
+    @patch("ingot.workflow.task_memory._identify_patterns_in_changes")
     def test_task_memory_captured_after_successful_task(
         self,
         mock_identify,
@@ -89,7 +89,7 @@ class TestFullWorkflowWithTaskMemory:
         task = Task(name="Create user module")
 
         # Import and call the function that captures memory
-        from spec.workflow.task_memory import capture_task_memory
+        from ingot.workflow.task_memory import capture_task_memory
 
         capture_task_memory(task, mock_workflow_state)
 
@@ -99,9 +99,9 @@ class TestFullWorkflowWithTaskMemory:
         assert mock_workflow_state.task_memories[0].files_modified == ["src/user.py"]
         assert "Python implementation" in mock_workflow_state.task_memories[0].patterns_used
 
-    @patch("spec.workflow.step3_execute.is_dirty")
-    @patch("spec.workflow.task_memory._get_modified_files")
-    @patch("spec.workflow.task_memory._identify_patterns_in_changes")
+    @patch("ingot.workflow.step3_execute.is_dirty")
+    @patch("ingot.workflow.task_memory._get_modified_files")
+    @patch("ingot.workflow.task_memory._identify_patterns_in_changes")
     def test_pattern_context_used_in_subsequent_tasks(
         self,
         mock_identify,
@@ -123,7 +123,7 @@ class TestFullWorkflowWithTaskMemory:
         task = Task(name="Add tests for user module")
 
         # Build pattern context
-        from spec.workflow.task_memory import build_pattern_context
+        from ingot.workflow.task_memory import build_pattern_context
 
         context = build_pattern_context(task, mock_workflow_state)
 
@@ -137,7 +137,7 @@ class TestFullWorkflowWithTaskMemory:
 class TestRetryWithErrorAnalysis:
     """Integration tests for retry with error analysis."""
 
-    @patch("spec.workflow.step3_execute.is_dirty")
+    @patch("ingot.workflow.step3_execute.is_dirty")
     def test_error_analysis_provides_structured_feedback(
         self,
         mock_is_dirty,
@@ -155,7 +155,7 @@ NameError: name 'User' is not defined
 """
 
         # Analyze the error
-        from spec.utils.error_analysis import analyze_error_output
+        from ingot.utils.error_analysis import analyze_error_output
 
         task = Task(name="Create user module")
         analysis = analyze_error_output(error_output, task)
@@ -174,7 +174,7 @@ NameError: name 'User' is not defined
         error_output = """TypeError: expected str, got int"""
 
         # Analyze error
-        from spec.utils.error_analysis import analyze_error_output
+        from ingot.utils.error_analysis import analyze_error_output
 
         task = Task(name="Create user module")
         analysis = analyze_error_output(error_output, task)
@@ -188,8 +188,8 @@ NameError: name 'User' is not defined
 class TestMultipleTasksWithMemory:
     """Integration tests for multiple tasks with memory accumulation."""
 
-    @patch("spec.workflow.task_memory._get_modified_files")
-    @patch("spec.workflow.task_memory._identify_patterns_in_changes")
+    @patch("ingot.workflow.task_memory._get_modified_files")
+    @patch("ingot.workflow.task_memory._identify_patterns_in_changes")
     def test_memory_accumulates_across_tasks(
         self,
         mock_identify,
@@ -201,7 +201,7 @@ class TestMultipleTasksWithMemory:
         mock_get_files.return_value = ["src/user.py"]
         mock_identify.return_value = ["Python implementation", "Dataclass pattern"]
 
-        from spec.workflow.task_memory import capture_task_memory
+        from ingot.workflow.task_memory import capture_task_memory
 
         task1 = Task(name="Create user module")
         capture_task_memory(task1, mock_workflow_state)
@@ -244,8 +244,8 @@ class TestUserAdditionalContext:
         )
         return WorkflowState(ticket=ticket)
 
-    @patch("spec.workflow.runner.prompt_confirm")
-    @patch("spec.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_input")
     def test_user_declines_additional_context(self, mock_input, mock_confirm, state_with_ticket):
         """User declines to add context - no prompt_input called."""
         mock_confirm.return_value = False
@@ -265,8 +265,8 @@ class TestUserAdditionalContext:
         # Verify state.user_context remains empty
         assert state_with_ticket.user_context == ""
 
-    @patch("spec.workflow.runner.prompt_confirm")
-    @patch("spec.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_input")
     def test_user_adds_additional_context(self, mock_input, mock_confirm, state_with_ticket):
         """User provides additional context - stored in state."""
         mock_confirm.return_value = True
@@ -285,8 +285,8 @@ class TestUserAdditionalContext:
         # Verify state.user_context is set
         assert state_with_ticket.user_context == "Additional details about the feature"
 
-    @patch("spec.workflow.runner.prompt_confirm")
-    @patch("spec.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_input")
     def test_empty_context_handled(self, mock_input, mock_confirm, state_with_ticket):
         """Empty context input is handled gracefully."""
         mock_confirm.return_value = True
@@ -439,8 +439,8 @@ class TestWorkflowWithSquashAtEnd:
 class TestAuggieClientFailures:
     """Tests for handling Auggie client failures."""
 
-    @patch("spec.workflow.task_memory._get_modified_files")
-    @patch("spec.workflow.task_memory._identify_patterns_in_changes")
+    @patch("ingot.workflow.task_memory._get_modified_files")
+    @patch("ingot.workflow.task_memory._identify_patterns_in_changes")
     def test_handles_auggie_failure_gracefully(
         self,
         mock_identify,
@@ -455,8 +455,8 @@ class TestAuggieClientFailures:
         mock_auggie_client.execute.return_value = (False, "Auggie error occurred")
 
         # Even with failure, task memory can still be captured (with empty data)
-        from spec.workflow.task_memory import capture_task_memory
-        from spec.workflow.tasks import Task
+        from ingot.workflow.task_memory import capture_task_memory
+        from ingot.workflow.tasks import Task
 
         task = Task(name="Failed task")
         capture_task_memory(task, mock_workflow_state)
@@ -647,8 +647,8 @@ class TestEndToEndWorkflowScenarios:
         assert "commit1" in complete_state.checkpoint_commits
         assert "commit2" in complete_state.checkpoint_commits
 
-    @patch("spec.workflow.task_memory._get_modified_files")
-    @patch("spec.workflow.task_memory._identify_patterns_in_changes")
+    @patch("ingot.workflow.task_memory._get_modified_files")
+    @patch("ingot.workflow.task_memory._identify_patterns_in_changes")
     def test_workflow_accumulates_task_memories(
         self,
         mock_identify,
@@ -656,8 +656,8 @@ class TestEndToEndWorkflowScenarios:
         complete_state,
     ):
         """Workflow accumulates task memories across tasks."""
-        from spec.workflow.task_memory import capture_task_memory
-        from spec.workflow.tasks import Task
+        from ingot.workflow.task_memory import capture_task_memory
+        from ingot.workflow.tasks import Task
 
         # Task 1
         mock_get_files.return_value = ["src/module1.py"]

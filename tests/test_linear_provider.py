@@ -1,4 +1,4 @@
-"""Tests for LinearProvider in spec.integrations.providers.linear module.
+"""Tests for LinearProvider in ingot.integrations.providers.linear module.
 
 Tests cover:
 - Provider registration with ProviderRegistry (with explicit registration)
@@ -14,15 +14,15 @@ Tests cover:
 
 import pytest
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.linear import (
+from ingot.integrations.providers.linear import (
     LinearProvider,
 )
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 
 @pytest.fixture(autouse=True)

@@ -1,9 +1,9 @@
-"""Tests for spec.integrations.git module."""
+"""Tests for ingot.integrations.git module."""
 
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from spec.integrations.git import (
+from ingot.integrations.git import (
     add_to_gitignore,
     branch_exists,
     checkout_branch,
@@ -80,7 +80,7 @@ class TestIsDirty:
 class TestHasUntrackedFiles:
     """Tests for has_untracked_files function."""
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_true_when_untracked_files_exist(self, mock_run):
         """Returns True when there are untracked files."""
         mock_run.return_value = MagicMock(returncode=0, stdout="new_file.txt\nanother.py")
@@ -90,7 +90,7 @@ class TestHasUntrackedFiles:
         assert result is True
         mock_run.assert_called_once()
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_false_when_no_untracked_files(self, mock_run):
         """Returns False when there are no untracked files."""
         mock_run.return_value = MagicMock(returncode=0, stdout="")
@@ -99,7 +99,7 @@ class TestHasUntrackedFiles:
 
         assert result is False
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_false_on_git_error(self, mock_run):
         """Returns False when git command fails."""
         mock_run.return_value = MagicMock(returncode=128, stdout="")
@@ -108,7 +108,7 @@ class TestHasUntrackedFiles:
 
         assert result is False
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_false_on_exception(self, mock_run):
         """Returns False when exception occurs."""
         mock_run.side_effect = Exception("Git not found")
@@ -121,8 +121,8 @@ class TestHasUntrackedFiles:
 class TestHasAnyChanges:
     """Tests for has_any_changes function."""
 
-    @patch("spec.integrations.git.has_untracked_files")
-    @patch("spec.integrations.git.is_dirty")
+    @patch("ingot.integrations.git.has_untracked_files")
+    @patch("ingot.integrations.git.is_dirty")
     def test_returns_true_when_dirty(self, mock_dirty, mock_untracked):
         """Returns True when repo is dirty (staged/unstaged changes)."""
         mock_dirty.return_value = True
@@ -132,8 +132,8 @@ class TestHasAnyChanges:
 
         assert result is True
 
-    @patch("spec.integrations.git.has_untracked_files")
-    @patch("spec.integrations.git.is_dirty")
+    @patch("ingot.integrations.git.has_untracked_files")
+    @patch("ingot.integrations.git.is_dirty")
     def test_returns_true_when_untracked_only(self, mock_dirty, mock_untracked):
         """Returns True when only untracked files exist (critical test case)."""
         mock_dirty.return_value = False
@@ -143,8 +143,8 @@ class TestHasAnyChanges:
 
         assert result is True
 
-    @patch("spec.integrations.git.has_untracked_files")
-    @patch("spec.integrations.git.is_dirty")
+    @patch("ingot.integrations.git.has_untracked_files")
+    @patch("ingot.integrations.git.is_dirty")
     def test_returns_true_when_both_dirty_and_untracked(self, mock_dirty, mock_untracked):
         """Returns True when both dirty and untracked files exist."""
         mock_dirty.return_value = True
@@ -154,8 +154,8 @@ class TestHasAnyChanges:
 
         assert result is True
 
-    @patch("spec.integrations.git.has_untracked_files")
-    @patch("spec.integrations.git.is_dirty")
+    @patch("ingot.integrations.git.has_untracked_files")
+    @patch("ingot.integrations.git.is_dirty")
     def test_returns_false_when_clean(self, mock_dirty, mock_untracked):
         """Returns False when repo is clean with no untracked files."""
         mock_dirty.return_value = False
@@ -219,7 +219,7 @@ class TestBranchExists:
 class TestCreateBranch:
     """Tests for create_branch function."""
 
-    @patch("spec.integrations.git.print_success")
+    @patch("ingot.integrations.git.print_success")
     def test_creates_branch_successfully(self, mock_print, mock_subprocess):
         """Creates and checks out new branch."""
         mock_subprocess.return_value = MagicMock(returncode=0, stderr="")
@@ -229,7 +229,7 @@ class TestCreateBranch:
         assert result is True
         mock_print.assert_called_once()
 
-    @patch("spec.integrations.git.print_error")
+    @patch("ingot.integrations.git.print_error")
     def test_returns_false_on_failure(self, mock_print, mock_subprocess):
         """Returns False when branch creation fails."""
         mock_subprocess.side_effect = subprocess.CalledProcessError(
@@ -244,7 +244,7 @@ class TestCreateBranch:
 class TestAddToGitignore:
     """Tests for add_to_gitignore function."""
 
-    @patch("spec.integrations.git.print_success")
+    @patch("ingot.integrations.git.print_success")
     def test_adds_pattern_to_new_file(self, mock_print, tmp_path, monkeypatch):
         """Creates .gitignore and adds pattern."""
         monkeypatch.chdir(tmp_path)
@@ -255,7 +255,7 @@ class TestAddToGitignore:
         assert gitignore.exists()
         assert "*.log" in gitignore.read_text()
 
-    @patch("spec.integrations.git.print_success")
+    @patch("ingot.integrations.git.print_success")
     def test_adds_pattern_to_existing_file(self, mock_print, tmp_path, monkeypatch):
         """Appends pattern to existing .gitignore."""
         monkeypatch.chdir(tmp_path)
@@ -283,7 +283,7 @@ class TestAddToGitignore:
 class TestGetDiffFromBaseline:
     """Tests for get_diff_from_baseline function (returns DiffResult)."""
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_diff_result_with_content(self, mock_run):
         """Returns DiffResult with diff content from baseline commit."""
         # Mock all the subprocess calls that get_diff_from_baseline makes
@@ -307,7 +307,9 @@ class TestGetDiffFromBaseline:
             # 8. git diff --stat (unstaged stat)
             MagicMock(returncode=0, stdout="", stderr=""),
             # 9. git diff --stat base..HEAD (committed stat)
-            MagicMock(returncode=0, stdout=" file.py | 1 +\n 1 file changed, 1 insertion(+)", stderr=""),
+            MagicMock(
+                returncode=0, stdout=" file.py | 1 +\n 1 file changed, 1 insertion(+)", stderr=""
+            ),
             # 10. git ls-files --others --exclude-standard
             MagicMock(returncode=0, stdout="", stderr=""),
         ]
@@ -320,7 +322,7 @@ class TestGetDiffFromBaseline:
         assert result.has_changes
         assert "file.py" in result.changed_files
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_no_changes_on_empty_diff(self, mock_run):
         """Returns DiffResult with has_changes=False when no changes."""
         mock_run.side_effect = [
@@ -342,8 +344,8 @@ class TestGetDiffFromBaseline:
         assert not result.has_changes
         assert result.diff == ""
 
-    @patch("spec.integrations.git.print_warning")
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.print_warning")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_error_on_git_failure(self, mock_run, mock_warning):
         """Returns DiffResult with has_error=True when git command fails."""
         # First call fails with non-zero returncode
@@ -358,7 +360,7 @@ class TestGetDiffFromBaseline:
         assert "failed" in result.error_message.lower()
         mock_warning.assert_called()
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_empty_commit_falls_back_to_staged_unstaged_untracked(self, mock_run):
         """Falls back to staged+unstaged+untracked when base_commit is empty."""
         # When no base commit: staged diff, unstaged diff, staged files, unstaged files,
@@ -380,7 +382,7 @@ class TestGetDiffFromBaseline:
             MagicMock(returncode=0, stdout="new_file.txt", stderr=""),
         ]
 
-        with patch("spec.integrations.git._generate_untracked_file_diff") as mock_gen:
+        with patch("ingot.integrations.git._generate_untracked_file_diff") as mock_gen:
             mock_gen.return_value = "diff --git a/new_file.txt\n+content"
 
             result = get_diff_from_baseline("")
@@ -392,7 +394,7 @@ class TestGetDiffFromBaseline:
             assert "Unstaged Changes" in result.diff
             assert "new_file.txt" in result.untracked_files
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_empty_commit_none_value_also_falls_back(self, mock_run):
         """None base_commit also falls back to staged+unstaged+untracked."""
         mock_run.side_effect = [
@@ -410,7 +412,7 @@ class TestGetDiffFromBaseline:
         assert result.is_success
         assert "file.py" in result.changed_files
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_includes_all_change_types(self, mock_run):
         """Includes committed, staged, unstaged changes with section headers."""
         mock_run.side_effect = [
@@ -436,7 +438,7 @@ class TestGetDiffFromBaseline:
         assert "staged changes" in result.diff
         assert "unstaged changes" in result.diff
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_includes_untracked_files(self, mock_run):
         """Includes untracked files in diff output."""
         mock_run.side_effect = [
@@ -453,7 +455,7 @@ class TestGetDiffFromBaseline:
         ]
 
         # We need to mock _generate_untracked_file_diff or create the file
-        with patch("spec.integrations.git._generate_untracked_file_diff") as mock_gen:
+        with patch("ingot.integrations.git._generate_untracked_file_diff") as mock_gen:
             mock_gen.return_value = "diff --git a/new_file.txt\n+content"
 
             result = get_diff_from_baseline("abc123")
@@ -462,8 +464,8 @@ class TestGetDiffFromBaseline:
             assert "new_file.txt" in result.untracked_files
             assert result.has_changes  # Untracked files count as changes
 
-    @patch("spec.integrations.git.print_warning")
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.print_warning")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_handles_exception_gracefully(self, mock_run, mock_warning):
         """Returns DiffResult with error on unexpected exception."""
         mock_run.side_effect = Exception("Unexpected error")
@@ -474,7 +476,7 @@ class TestGetDiffFromBaseline:
         assert "Exception" in result.error_message
         mock_warning.assert_called()
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_populates_diffstat(self, mock_run):
         """Populates diffstat summary in result."""
         mock_run.side_effect = [
@@ -486,7 +488,11 @@ class TestGetDiffFromBaseline:
             MagicMock(returncode=0, stdout="M\tfile.py", stderr=""),  # committed files
             MagicMock(returncode=0, stdout="", stderr=""),  # staged stat
             MagicMock(returncode=0, stdout="", stderr=""),  # unstaged stat
-            MagicMock(returncode=0, stdout=" file.py | 10 +++++++---\n 1 file changed, 7 insertions(+), 3 deletions(-)", stderr=""),  # committed stat
+            MagicMock(
+                returncode=0,
+                stdout=" file.py | 10 +++++++---\n 1 file changed, 7 insertions(+), 3 deletions(-)",
+                stderr="",
+            ),  # committed stat
             MagicMock(returncode=0, stdout="", stderr=""),  # untracked
         ]
 
@@ -495,8 +501,6 @@ class TestGetDiffFromBaseline:
         assert result.is_success
         assert "7 insertions" in result.diffstat
         assert "3 deletions" in result.diffstat
-
-
 
 
 # =============================================================================
@@ -509,25 +513,25 @@ class TestParseNameStatusLine:
 
     def test_parses_regular_modified_file(self):
         """Parses regular modified file line."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         assert _parse_name_status_line("M\tpath/to/file.py") == "path/to/file.py"
 
     def test_parses_added_file(self):
         """Parses added file line."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         assert _parse_name_status_line("A\tnewfile.py") == "newfile.py"
 
     def test_parses_deleted_file(self):
         """Parses deleted file line."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         assert _parse_name_status_line("D\tremoved.py") == "removed.py"
 
     def test_parses_rename_returns_new_path(self):
         """Parses rename line - returns destination/new path."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         # Rename format: R100\told.py\tnew.py (100% similarity)
         assert _parse_name_status_line("R100\told.py\tnew.py") == "new.py"
@@ -536,7 +540,7 @@ class TestParseNameStatusLine:
 
     def test_parses_copy_returns_new_path(self):
         """Parses copy line - returns destination/copy path."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         # Copy format: C100\tsrc.py\tcopy.py
         assert _parse_name_status_line("C100\tsrc.py\tcopy.py") == "copy.py"
@@ -544,14 +548,14 @@ class TestParseNameStatusLine:
 
     def test_handles_paths_with_spaces(self):
         """Handles file paths with spaces."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         assert _parse_name_status_line("M\tpath/to/my file.py") == "path/to/my file.py"
         assert _parse_name_status_line("R100\told file.py\tnew file.py") == "new file.py"
 
     def test_handles_empty_line(self):
         """Returns empty string for empty input."""
-        from spec.integrations.git import _parse_name_status_line
+        from ingot.integrations.git import _parse_name_status_line
 
         assert _parse_name_status_line("") == ""
 
@@ -559,7 +563,7 @@ class TestParseNameStatusLine:
 class TestGetDiffFromBaselineCommandSyntax:
     """Tests to verify correct git command syntax in get_diff_from_baseline."""
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_committed_diff_uses_double_dot_syntax(self, mock_run):
         """Committed diff uses 'base..HEAD' (double dot), not 'base.HEAD' (single dot)."""
         mock_run.side_effect = [
@@ -591,7 +595,9 @@ class TestGetDiffFromBaselineCommandSyntax:
         # Verify committed name-status uses ..HEAD (double dot)
         name_status_cmd = committed_files_call[0][0]
         assert "abc123..HEAD" in name_status_cmd, f"Expected 'abc123..HEAD' in {name_status_cmd}"
-        assert "abc123.HEAD" not in name_status_cmd, f"Found invalid 'abc123.HEAD' in {name_status_cmd}"
+        assert (
+            "abc123.HEAD" not in name_status_cmd
+        ), f"Found invalid 'abc123.HEAD' in {name_status_cmd}"
 
         # Verify committed stat uses ..HEAD (double dot)
         stat_cmd = committed_stat_call[0][0]
@@ -602,7 +608,7 @@ class TestGetDiffFromBaselineCommandSyntax:
 class TestGetDiffFromBaselineRenameHandling:
     """Tests for rename/copy handling in get_diff_from_baseline."""
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_changed_files_contains_only_new_path_for_renames(self, mock_run):
         """For renames, changed_files contains only the destination path."""
         mock_run.side_effect = [
@@ -612,7 +618,9 @@ class TestGetDiffFromBaselineRenameHandling:
             MagicMock(returncode=0, stdout="", stderr=""),  # staged files
             MagicMock(returncode=0, stdout="", stderr=""),  # unstaged files
             # Committed files with rename
-            MagicMock(returncode=0, stdout="R100\told_name.py\tnew_name.py\nM\tother.py", stderr=""),
+            MagicMock(
+                returncode=0, stdout="R100\told_name.py\tnew_name.py\nM\tother.py", stderr=""
+            ),
             MagicMock(returncode=0, stdout="", stderr=""),  # staged stat
             MagicMock(returncode=0, stdout="", stderr=""),  # unstaged stat
             MagicMock(returncode=0, stdout="", stderr=""),  # committed stat
@@ -634,7 +642,7 @@ class TestGetDiffFromBaselineRenameHandling:
 class TestGetStatusShort:
     """Tests for get_status_short function."""
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_returns_status_output(self, mock_run):
         """Returns git status --short output."""
         mock_run.return_value = MagicMock(returncode=0, stdout=" M file.py\n?? new.txt\n")
@@ -648,8 +656,8 @@ class TestGetStatusShort:
 class TestCheckoutBranch:
     """Tests for checkout_branch function."""
 
-    @patch("spec.integrations.git.print_success")
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.print_success")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_checkout_branch_successfully(self, mock_run, mock_print):
         """Checks out existing branch successfully."""
         mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -659,8 +667,8 @@ class TestCheckoutBranch:
         assert result is True
         mock_print.assert_called_once()
 
-    @patch("spec.integrations.git.print_error")
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.print_error")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_checkout_branch_failure(self, mock_run, mock_print):
         """Returns False when checkout fails."""
         mock_run.side_effect = subprocess.CalledProcessError(
@@ -676,8 +684,8 @@ class TestCheckoutBranch:
 class TestSquashCommits:
     """Tests for squash_commits function."""
 
-    @patch("spec.integrations.git.print_success")
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.print_success")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_squash_single_task(self, mock_run, mock_print):
         """Squashes commits for single task."""
         mock_run.return_value = MagicMock(returncode=0)
@@ -688,8 +696,8 @@ class TestSquashCommits:
         assert mock_run.call_count == 2
         mock_print.assert_called_once()
 
-    @patch("spec.integrations.git.print_success")
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.print_success")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_squash_multiple_tasks(self, mock_run, mock_print):
         """Squashes commits for multiple tasks."""
         mock_run.return_value = MagicMock(returncode=0)
@@ -708,7 +716,7 @@ class TestSquashCommits:
 class TestCreateCheckpointCommit:
     """Tests for create_checkpoint_commit function."""
 
-    @patch("spec.integrations.git.subprocess.run")
+    @patch("ingot.integrations.git.subprocess.run")
     def test_creates_checkpoint_commit(self, mock_run):
         """Creates checkpoint commit and returns short hash."""
         mock_run.side_effect = [

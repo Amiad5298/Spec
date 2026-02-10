@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">SPEC</h1>
+  <h1 align="center">INGOT</h1>
   <p align="center">
     <strong>Spec-Driven Development Workflow Powered by AI</strong>
   </p>
@@ -22,21 +22,21 @@
 
 ---
 
-## What is SPEC?
+## What is INGOT?
 
-SPEC is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a ticket from any supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, or Trello), SPEC:
+INGOT is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a ticket from any supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, or Trello), INGOT:
 
 1. **Plans** - Creates a detailed implementation plan by analyzing requirements and your codebase
 2. **Tasks** - Generates an optimized task list, identifying which tasks can run in parallel
 3. **Executes** - Runs specialized AI agents to complete each task, with checkpoint commits and progress tracking
 
-SPEC orchestrates AI coding assistants—[Auggie](https://docs.augmentcode.com/cli), [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), or [Cursor](https://www.cursor.com/cli)—with specialized AI agents to deliver a structured, reproducible development workflow.
+INGOT orchestrates AI coding assistants—[Auggie](https://docs.augmentcode.com/cli), [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), or [Cursor](https://www.cursor.com/cli)—with specialized AI agents to deliver a structured, reproducible development workflow.
 
-[Screenshot placeholder: SPEC main workflow showing the three steps with progress indicators]
+[Screenshot placeholder: INGOT main workflow showing the three steps with progress indicators]
 
 ## AI Backends
 
-SPEC supports multiple AI coding assistants as backends. You choose one during first-run setup, and can switch at any time.
+INGOT supports multiple AI coding assistants as backends. You choose one during first-run setup, and can switch at any time.
 
 | Backend | CLI Requirement | Installation |
 |---------|----------------|--------------|
@@ -47,15 +47,15 @@ SPEC supports multiple AI coding assistants as backends. You choose one during f
 ### Selecting Your Backend
 
 1. **First run**: The onboarding wizard prompts you to choose a backend and verifies installation
-2. **Configuration**: Your choice is saved as `AI_BACKEND` in `~/.spec-config`
+2. **Configuration**: Your choice is saved as `AI_BACKEND` in `~/.ingot-config`
 3. **CLI override**: Use `--backend` (`-b`) to override for a single run
 
 ```bash
 # Override backend for a single run
-spec --backend claude PROJECT-123
-spec -b cursor PROJECT-123
+ingot --backend claude PROJECT-123
+ingot -b cursor PROJECT-123
 
-# Or change the default in ~/.spec-config
+# Or change the default in ~/.ingot-config
 # AI_BACKEND="claude"
 ```
 
@@ -81,11 +81,11 @@ Dramatically reduce implementation time:
 - **Multi-Backend Support**: Works with Auggie, Claude Code, or Cursor—choose your preferred AI coding assistant
 
 ### 🔧 Git Integration Details
-SPEC integrates with Git while giving you full control over your commits:
+INGOT integrates with Git while giving you full control over your commits:
 
-- **Automatic `.gitignore` Configuration**: On first run, SPEC automatically adds patterns to your project's `.gitignore` to exclude run logs (`.spec/` and `*.log`), keeping your repository clean without manual configuration.
+- **Automatic `.gitignore` Configuration**: On first run, INGOT automatically adds patterns to your project's `.gitignore` to exclude run logs (`.ingot/` and `*.log`), keeping your repository clean without manual configuration.
 
-- **Manual Staging by Design**: SPEC generates and modifies files but does **not** automatically stage them with `git add`. This gives you full control to review changes before committing. After execution, you'll see a note reminding you to manually `git add` files you want to include.
+- **Manual Staging by Design**: INGOT generates and modifies files but does **not** automatically stage them with `git add`. This gives you full control to review changes before committing. After execution, you'll see a note reminding you to manually `git add` files you want to include.
 
 ### 🎨 Rich Terminal UI
 - Real-time task progress visualization
@@ -95,10 +95,10 @@ SPEC integrates with Git while giving you full control over your commits:
 
 ### 🤖 Specialized AI Agents
 Four purpose-built agents work together:
-- **spec-planner**: Analyzes requirements and creates implementation plans
-- **spec-tasklist**: Converts plans into optimized, executable task lists
-- **spec-implementer**: Executes individual tasks with codebase awareness
-- **spec-reviewer**: Validates completed work and triggers auto-fix for issues
+- **ingot-planner**: Analyzes requirements and creates implementation plans
+- **ingot-tasklist**: Converts plans into optimized, executable task lists
+- **ingot-implementer**: Executes individual tasks with codebase awareness
+- **ingot-reviewer**: Validates completed work and triggers auto-fix for issues
 
 ### 🔍 Automated Code Review
 Optional phase reviews that validate work quality:
@@ -138,16 +138,16 @@ Example task list with file annotations:
 
 ## Supported Platforms
 
-SPEC supports 6 ticket platforms. Three integrate with Auggie's MCP tools for zero-config ticket fetching; the others require fallback API credentials:
+INGOT supports 6 ticket platforms. Three integrate with Auggie's MCP tools for zero-config ticket fetching; the others require fallback API credentials:
 
 | Platform | URL Support | Ticket ID Support | Auggie MCP | Notes |
 |----------|-------------|-------------------|------------|-------|
 | **Jira** | ✅ | ✅ `PROJECT-123` | ✅ | Works out of the box with Auggie backend |
 | **Linear** | ✅ | ⚠️ URL preferred | ✅ | IDs like `ENG-123` may be ambiguous with Jira |
 | **GitHub Issues** | ✅ | ✅ `owner/repo#42` | ✅ | Works out of the box with Auggie backend |
-| **Azure DevOps** | ✅ | ✅ `AB#123` | ❌ | Requires credentials in `~/.spec-config` |
-| **Monday** | ✅ | ❌ URL only | ❌ | Requires credentials in `~/.spec-config` |
-| **Trello** | ✅ | ✅ 8-char short ID | ❌ | Requires credentials in `~/.spec-config` |
+| **Azure DevOps** | ✅ | ✅ `AB#123` | ❌ | Requires credentials in `~/.ingot-config` |
+| **Monday** | ✅ | ❌ URL only | ❌ | Requires credentials in `~/.ingot-config` |
+| **Trello** | ✅ | ✅ 8-char short ID | ❌ | Requires credentials in `~/.ingot-config` |
 
 > **MCP-integrated platforms (when using Auggie backend)** (Jira, Linear, GitHub): No additional configuration needed—works via Auggie's built-in MCP integrations.
 >
@@ -155,72 +155,72 @@ SPEC supports 6 ticket platforms. Three integrate with Auggie's MCP tools for ze
 
 ### Platform Detection
 
-SPEC automatically detects the platform from the ticket URL or ID:
+INGOT automatically detects the platform from the ticket URL or ID:
 
 ```bash
 # URLs are auto-detected
-spec https://company.atlassian.net/browse/PROJ-123        # → Jira
-spec https://linear.app/team/issue/ENG-456                # → Linear
-spec https://github.com/owner/repo/issues/42              # → GitHub
-spec https://dev.azure.com/org/project/_workitems/edit/789  # → Azure DevOps
+ingot https://company.atlassian.net/browse/PROJ-123        # → Jira
+ingot https://linear.app/team/issue/ENG-456                # → Linear
+ingot https://github.com/owner/repo/issues/42              # → GitHub
+ingot https://dev.azure.com/org/project/_workitems/edit/789  # → Azure DevOps
 
 # Ambiguous IDs require --platform flag
-spec PROJ-123 --platform jira
-spec ENG-456 --platform linear
+ingot PROJ-123 --platform jira
+ingot ENG-456 --platform linear
 ```
 
 ### Ambiguous IDs
 
-Some ticket ID formats are shared across platforms (e.g., `ABC-123` matches both Jira and Linear). When SPEC cannot determine the platform unambiguously, it will:
+Some ticket ID formats are shared across platforms (e.g., `ABC-123` matches both Jira and Linear). When INGOT cannot determine the platform unambiguously, it will:
 
-1. Check `DEFAULT_PLATFORM` in `~/.spec-config` (if set)
+1. Check `DEFAULT_PLATFORM` in `~/.ingot-config` (if set)
 2. Prompt you to select a platform interactively
 
 **Rule of thumb:** If your ticket ID looks like `ABC-123` and you use both Jira and Linear, always pass `--platform` or set `DEFAULT_PLATFORM`.
 
 ```bash
 # Example: You have "ENG-456" which exists in both Jira and Linear
-spec ENG-456                    # ⚠️ Ambiguous → prompts or uses DEFAULT_PLATFORM
-spec ENG-456 --platform linear  # ✅ Explicitly targets Linear
-spec ENG-456 --platform jira    # ✅ Explicitly targets Jira
+ingot ENG-456                    # ⚠️ Ambiguous → prompts or uses DEFAULT_PLATFORM
+ingot ENG-456 --platform linear  # ✅ Explicitly targets Linear
+ingot ENG-456 --platform jira    # ✅ Explicitly targets Jira
 ```
 
 ## Quick Start
 
 ```bash
-# Install SPEC
-pip install spec
+# Install INGOT
+pip install ingot
 
 # Navigate to your git repository
 cd your-project
 
 # Start a workflow with any ticket
-spec https://company.atlassian.net/browse/PROJECT-123  # Jira URL
-spec https://linear.app/team/issue/ENG-456              # Linear URL
-spec https://github.com/owner/repo/issues/42            # GitHub URL
+ingot https://company.atlassian.net/browse/PROJECT-123  # Jira URL
+ingot https://linear.app/team/issue/ENG-456              # Linear URL
+ingot https://github.com/owner/repo/issues/42            # GitHub URL
 
 # URL-based examples for fallback platforms
-spec https://dev.azure.com/org/project/_workitems/edit/789    # Azure DevOps
-spec https://mycompany.monday.com/boards/123456/pulses/789    # Monday
-spec https://trello.com/c/aBcDeFgH/123-card-title             # Trello
+ingot https://dev.azure.com/org/project/_workitems/edit/789    # Azure DevOps
+ingot https://mycompany.monday.com/boards/123456/pulses/789    # Monday
+ingot https://trello.com/c/aBcDeFgH/123-card-title             # Trello
 
 # Or use a ticket ID with explicit platform
-spec PROJECT-123 --platform jira
-spec ENG-456 --platform linear
-spec owner/repo#42                                            # GitHub (unambiguous)
+ingot PROJECT-123 --platform jira
+ingot ENG-456 --platform linear
+ingot owner/repo#42                                            # GitHub (unambiguous)
 ```
 
-That's it! SPEC will guide you through the entire workflow with interactive prompts.
+That's it! INGOT will guide you through the entire workflow with interactive prompts.
 
 [Screenshot placeholder: Quick start workflow showing initial prompts and plan generation]
 
 ## How It Works
 
-### The SPEC Workflow
+### The INGOT Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           SPEC WORKFLOW                                  │
+│                           INGOT WORKFLOW                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │   Ticket (Any Platform)                                                  │
@@ -260,7 +260,7 @@ That's it! SPEC will guide you through the entire workflow with interactive prom
 
 ### Task Categories
 
-SPEC organizes tasks into two categories for optimal execution:
+INGOT organizes tasks into two categories for optimal execution:
 
 #### Fundamental Tasks (Sequential)
 Tasks that must run in order due to dependencies:
@@ -278,14 +278,14 @@ Tasks that can run concurrently with no dependencies:
 
 ### Generated Files
 
-SPEC creates files in the `specs/` directory:
+INGOT creates files in the `specs/` directory:
 
 | File | Description |
 |------|-------------|
 | `specs/{ticket}-plan.md` | Detailed implementation plan with technical approach, steps, and testing strategy |
 | `specs/{ticket}-tasklist.md` | Executable task list with categories and checkboxes |
 
-Run logs are stored in `.spec/runs/{ticket}/` for debugging and audit purposes.
+Run logs are stored in `.ingot/runs/{ticket}/` for debugging and audit purposes.
 
 ## Installation
 
@@ -303,7 +303,7 @@ Run logs are stored in `.spec/runs/{ticket}/` for debugging and audit purposes.
 ### Install from PyPI
 
 ```bash
-pip install spec
+pip install ingot
 ```
 
 ### Install from Source
@@ -325,25 +325,25 @@ pip install -e ".[dev]"
 
 ```bash
 # Check version
-spec --version
+ingot --version
 
 # View help
-spec --help
+ingot --help
 ```
 
 ### First Run
 
-On first run, SPEC launches an onboarding wizard that walks you through backend setup:
+On first run, INGOT launches an onboarding wizard that walks you through backend setup:
 
 1. **Select AI Backend** — choose Auggie, Claude Code, or Cursor
-2. **Verify Installation** — SPEC checks that the CLI is installed and provides installation links if not
-3. **Save Configuration** — your choice is saved to `~/.spec-config` as `AI_BACKEND`
+2. **Verify Installation** — INGOT checks that the CLI is installed and provides installation links if not
+3. **Save Configuration** — your choice is saved to `~/.ingot-config` as `AI_BACKEND`
 
 ```
-$ spec PROJECT-123
+$ ingot PROJECT-123
 
-  Welcome to SPEC!
-  Let's set up your AI backend. You can change this later with 'spec config'.
+  Welcome to INGOT!
+  Let's set up your AI backend. You can change this later with 'ingot config'.
 
   ? Which AI backend would you like to use?
   > Auggie (Augment Code CLI)
@@ -351,7 +351,7 @@ $ spec PROJECT-123
     Cursor
 
   ✓ Auggie CLI detected (v0.15.2).
-  ✓ Configuration saved to ~/.spec-config
+  ✓ Configuration saved to ~/.ingot-config
 ```
 
 **Note:** Azure DevOps, Monday, and Trello require fallback credentials regardless of your backend choice. See [Platform Configuration Guide](docs/platform-configuration.md) for setup instructions.
@@ -362,29 +362,29 @@ $ spec PROJECT-123
 
 ```bash
 # Start workflow with a ticket URL (auto-detected platform)
-spec https://company.atlassian.net/browse/PROJECT-123     # Jira
-spec https://linear.app/team/issue/ENG-456                 # Linear
-spec https://github.com/owner/repo/issues/42               # GitHub
+ingot https://company.atlassian.net/browse/PROJECT-123     # Jira
+ingot https://linear.app/team/issue/ENG-456                 # Linear
+ingot https://github.com/owner/repo/issues/42               # GitHub
 
 # Start with ticket ID (may need --platform for ambiguous IDs)
-spec PROJECT-123 --platform jira
-spec ENG-456 --platform linear
-spec owner/repo#42                                          # GitHub (unambiguous)
+ingot PROJECT-123 --platform jira
+ingot ENG-456 --platform linear
+ingot owner/repo#42                                          # GitHub (unambiguous)
 
 # Show interactive main menu
-spec
+ingot
 
 # Check version (confirm supported flags)
-spec --version
+ingot --version
 
 # View current configuration
-spec --config
+ingot --config
 ```
 
 ### Command-Line Options
 
 ```bash
-spec [OPTIONS] [TICKET]
+ingot [OPTIONS] [TICKET]
 
 Arguments:
   TICKET                      Ticket ID or URL from a supported platform
@@ -437,9 +437,9 @@ Other:
 
 ```bash
 # Start a new feature
-spec PROJ-456
+ingot PROJ-456
 
-# SPEC will:
+# INGOT will:
 # 1. Fetch ticket from platform
 # 2. Ask if you want to add context
 # 3. Create feature branch (e.g., proj-456-add-user-authentication)
@@ -452,37 +452,37 @@ spec PROJ-456
 #### Fast Mode (Skip Clarification)
 
 ```bash
-spec PROJ-789 --skip-clarification
+ingot PROJ-789 --skip-clarification
 ```
 
 #### Custom Model Selection
 
 ```bash
 # Use specific model for planning (faster, cheaper)
-spec PROJ-101 --planning-model claude-sonnet-4-5 --impl-model claude-opus-4
+ingot PROJ-101 --planning-model claude-sonnet-4-5 --impl-model claude-opus-4
 
 # Use same model for everything
-spec PROJ-101 --model claude-opus-4
+ingot PROJ-101 --model claude-opus-4
 ```
 
 #### Parallel Execution Control
 
 ```bash
 # Run up to 5 tasks in parallel
-spec PROJ-202 --max-parallel 5
+ingot PROJ-202 --max-parallel 5
 
 # Disable parallel execution (sequential only)
-spec PROJ-202 --no-parallel
+ingot PROJ-202 --no-parallel
 
 # Stop immediately on any task failure
-spec PROJ-202 --fail-fast
+ingot PROJ-202 --fail-fast
 ```
 
 ## Configuration
 
 ### Configuration File
 
-SPEC stores configuration in `~/.spec-config`:
+INGOT stores configuration in `~/.ingot-config`:
 
 ```bash
 # AI Backend
@@ -506,10 +506,10 @@ MAX_PARALLEL_TASKS="3"
 FAIL_FAST="false"
 
 # Custom Subagent Names (customize agent identifiers)
-SUBAGENT_PLANNER="spec-planner"
-SUBAGENT_TASKLIST="spec-tasklist"
-SUBAGENT_IMPLEMENTER="spec-implementer"
-SUBAGENT_REVIEWER="spec-reviewer"
+SUBAGENT_PLANNER="ingot-planner"
+SUBAGENT_TASKLIST="ingot-tasklist"
+SUBAGENT_IMPLEMENTER="ingot-implementer"
+SUBAGENT_REVIEWER="ingot-reviewer"
 ```
 
 ### Configuration Options
@@ -526,14 +526,14 @@ SUBAGENT_REVIEWER="spec-reviewer"
 | `PARALLEL_EXECUTION_ENABLED` | bool | true | Enable parallel task execution |
 | `MAX_PARALLEL_TASKS` | int | 3 | Max concurrent tasks (1-5) |
 | `FAIL_FAST` | bool | false | Stop on first task failure |
-| `SUBAGENT_PLANNER` | string | "spec-planner" | Custom planner subagent name |
-| `SUBAGENT_TASKLIST` | string | "spec-tasklist" | Custom tasklist subagent name |
-| `SUBAGENT_IMPLEMENTER` | string | "spec-implementer" | Custom implementer subagent name |
-| `SUBAGENT_REVIEWER` | string | "spec-reviewer" | Custom reviewer subagent name |
+| `SUBAGENT_PLANNER` | string | "ingot-planner" | Custom planner subagent name |
+| `SUBAGENT_TASKLIST` | string | "ingot-tasklist" | Custom tasklist subagent name |
+| `SUBAGENT_IMPLEMENTER` | string | "ingot-implementer" | Custom implementer subagent name |
+| `SUBAGENT_REVIEWER` | string | "ingot-reviewer" | Custom reviewer subagent name |
 
 ### Changing AI Backend
 
-To switch your default backend, edit `AI_BACKEND` in `~/.spec-config`:
+To switch your default backend, edit `AI_BACKEND` in `~/.ingot-config`:
 
 ```bash
 AI_BACKEND="claude"   # Options: auggie, claude, cursor
@@ -542,8 +542,8 @@ AI_BACKEND="claude"   # Options: auggie, claude, cursor
 Or override for a single run without changing the default:
 
 ```bash
-spec --backend cursor PROJECT-123
-spec -b auggie PROJECT-123
+ingot --backend cursor PROJECT-123
+ingot -b auggie PROJECT-123
 ```
 
 Installation links:
@@ -563,8 +563,8 @@ See the **[Platform Configuration Guide](docs/platform-configuration.md)** for:
 ### Interactive Configuration
 
 ```bash
-# Run SPEC without arguments to access the menu
-spec
+# Run INGOT without arguments to access the menu
+ingot
 
 # Select "Configure settings" from the menu
 ```
@@ -574,12 +574,12 @@ spec
 ### View Current Configuration
 
 ```bash
-spec --config
+ingot --config
 ```
 
 ## Agent Customization
 
-SPEC uses specialized AI agents defined in `.augment/agents/`. These are created automatically on first run and updated when SPEC detects newer internal templates.
+INGOT uses specialized AI agents defined in `.augment/agents/`. These are created automatically on first run and updated when INGOT detects newer internal templates.
 
 > **Note:** The `.augment/agents/` directory and agent file format are specific to the **Auggie backend**. Claude Code and Cursor use their own agent/configuration systems.
 
@@ -587,10 +587,10 @@ SPEC uses specialized AI agents defined in `.augment/agents/`. These are created
 
 | File | Purpose |
 |------|---------|
-| `.augment/agents/spec-planner.md` | Creates implementation plans from tickets |
-| `.augment/agents/spec-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
-| `.augment/agents/spec-implementer.md` | Executes individual tasks with codebase awareness |
-| `.augment/agents/spec-reviewer.md` | Validates completed tasks with PASS/NEEDS_ATTENTION output |
+| `.augment/agents/ingot-planner.md` | Creates implementation plans from tickets |
+| `.augment/agents/ingot-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
+| `.augment/agents/ingot-implementer.md` | Executes individual tasks with codebase awareness |
+| `.augment/agents/ingot-reviewer.md` | Validates completed tasks with PASS/NEEDS_ATTENTION output |
 
 ### Agent File Format
 
@@ -598,12 +598,12 @@ Each agent file uses YAML frontmatter followed by markdown instructions:
 
 ```yaml
 ---
-name: spec-planner
-description: SPEC workflow planner
+name: ingot-planner
+description: INGOT workflow planner
 model: claude-sonnet-4-5
 color: blue
-spec_version: 2.0.0
-spec_content_hash: abc123def456
+ingot_version: 2.0.0
+ingot_content_hash: abc123def456
 ---
 
 # Your custom instructions here...
@@ -617,22 +617,22 @@ spec_content_hash: abc123def456
 | `description` | Human-readable description shown in agent listings |
 | `model` | AI model for this agent (e.g., `claude-sonnet-4-5`, `claude-opus-4`) |
 | `color` | Terminal color for agent output (blue, green, purple, etc.) |
-| `spec_version` | SPECFLOW version that created/updated this agent |
-| `spec_content_hash` | Hash for detecting template updates (auto-managed) |
+| `spec_version` | INGOT version that created/updated this agent |
+| `ingot_content_hash` | Hash for detecting template updates (auto-managed) |
 
 ### Version Management
 
-SPEC tracks agent file versions:
-- **Automatic updates**: When SPEC's internal templates are newer, you'll be prompted to update
-- **User customizations preserved**: If you've modified the instructions, SPEC won't overwrite without confirmation
-- **Hash-based detection**: The `spec_content_hash` field tracks whether the file matches the expected template
+INGOT tracks agent file versions:
+- **Automatic updates**: When INGOT's internal templates are newer, you'll be prompted to update
+- **User customizations preserved**: If you've modified the instructions, INGOT won't overwrite without confirmation
+- **Hash-based detection**: The `ingot_content_hash` field tracks whether the file matches the expected template
 
 ## Project Structure
 
 ```
-spec/
+ingot/
 ├── __init__.py          # Version and constants
-├── __main__.py          # Module entry point (python -m specflow)
+├── __main__.py          # Module entry point (python -m ingot)
 ├── cli.py               # CLI entry point and command handling
 ├── config/
 │   ├── manager.py       # Configuration loading/saving
@@ -705,13 +705,13 @@ pytest -v --no-cov
 
 ```bash
 # Type checking
-mypy spec
+mypy ingot
 
 # Linting
-ruff check spec tests
+ruff check ingot tests
 
 # Fix auto-fixable issues
-ruff check --fix spec tests
+ruff check --fix ingot tests
 ```
 
 ### Test Coverage
@@ -719,7 +719,7 @@ ruff check --fix spec tests
 The project maintains 80%+ code coverage. Coverage reports are generated in `htmlcov/`:
 
 ```bash
-pytest --cov=spec --cov-report=html
+pytest --cov=ingot --cov-report=html
 open htmlcov/index.html
 ```
 
@@ -730,7 +730,7 @@ We welcome contributions! Here's how to get started:
 ### Reporting Issues
 
 - Check existing issues before creating a new one
-- Include SPEC version, Python version, and OS
+- Include INGOT version, Python version, and OS
 - Provide steps to reproduce the issue
 - Include relevant error messages and logs
 
@@ -740,7 +740,7 @@ We welcome contributions! Here's how to get started:
 2. Create a feature branch: `git checkout -b feature/your-feature`
 3. Make your changes
 4. Run tests: `pytest`
-5. Run linting: `ruff check spec tests`
+5. Run linting: `ruff check ingot tests`
 6. Commit with clear messages
 7. Push and create a Pull Request
 
@@ -765,22 +765,22 @@ We welcome contributions! Here's how to get started:
 
 #### "AI Backend CLI is not installed"
 
-SPEC requires a supported AI backend CLI. Install the one matching your `AI_BACKEND` setting:
+INGOT requires a supported AI backend CLI. Install the one matching your `AI_BACKEND` setting:
 
 - **Auggie**: `npm install -g @augmentcode/auggie && auggie login` — [docs](https://docs.augmentcode.com/cli)
 - **Claude Code**: See [docs.anthropic.com/en/docs/claude-code](https://docs.anthropic.com/en/docs/claude-code/overview)
 - **Cursor**: Download from [cursor.com/cli](https://www.cursor.com/cli)
 
-Run `spec` again after installing — the onboarding wizard will re-verify.
+Run `ingot` again after installing — the onboarding wizard will re-verify.
 
 #### "Not in a git repository"
 
-SPEC must be run from within a git repository:
+INGOT must be run from within a git repository:
 
 ```bash
 cd your-project
 git init  # if not already a repo
-spec PROJECT-123
+ingot PROJECT-123
 ```
 
 #### Rate Limit Errors
@@ -789,10 +789,10 @@ If you encounter rate limits during parallel execution:
 
 ```bash
 # Reduce parallelism
-spec PROJECT-123 --max-parallel 2
+ingot PROJECT-123 --max-parallel 2
 
 # Or increase retry attempts
-spec PROJECT-123 --max-retries 10 --retry-base-delay 5
+ingot PROJECT-123 --max-retries 10 --retry-base-delay 5
 ```
 
 #### TUI Display Issues
@@ -801,7 +801,7 @@ If the TUI doesn't render correctly:
 
 ```bash
 # Force simple output mode
-spec PROJECT-123 --no-tui
+ingot PROJECT-123 --no-tui
 ```
 
 #### Dirty Working Tree Error
@@ -810,28 +810,28 @@ If you see "Working tree has uncommitted changes":
 
 ```bash
 # Option 1: Stash your changes
-git stash push -m "WIP before spec workflow"
-spec PROJECT-123
+git stash push -m "WIP before ingot workflow"
+ingot PROJECT-123
 git stash pop  # Restore after workflow
 
 # Option 2: Commit your changes
 git add -A && git commit -m "WIP"
-spec PROJECT-123
+ingot PROJECT-123
 
 # Option 3: Continue anyway (not recommended - diffs may be polluted)
-spec PROJECT-123 --dirty-tree-policy warn
+ingot PROJECT-123 --dirty-tree-policy warn
 ```
 
 #### Platform Detection Issues
 
-If SPEC detects the wrong platform:
+If INGOT detects the wrong platform:
 
 ```bash
 # Use --platform to explicitly specify
-spec PROJ-123 --platform jira
+ingot PROJ-123 --platform jira
 
 # Or set a default in configuration
-# Add to ~/.spec-config:
+# Add to ~/.ingot-config:
 DEFAULT_PLATFORM="jira"
 ```
 
@@ -841,26 +841,26 @@ For Azure DevOps, Monday, or Trello, fallback credentials are required:
 
 ```bash
 # Check which platforms are configured
-spec --config
+ingot --config
 
 # See docs/platform-configuration.md for credential setup
 ```
 
 #### Ambiguous Ticket ID
 
-Ticket IDs like `ABC-123` match both Jira and Linear formats. SPEC resolves ambiguity by:
+Ticket IDs like `ABC-123` match both Jira and Linear formats. INGOT resolves ambiguity by:
 
-1. Checking `DEFAULT_PLATFORM` in `~/.spec-config`
+1. Checking `DEFAULT_PLATFORM` in `~/.ingot-config`
 2. Prompting you to select a platform interactively
 
 To avoid prompts, either:
 
 ```bash
 # Option 1: Use --platform flag
-spec ENG-456 --platform linear
+ingot ENG-456 --platform linear
 
 # Option 2: Set a default platform
-echo 'DEFAULT_PLATFORM=jira' >> ~/.spec-config
+echo 'DEFAULT_PLATFORM=jira' >> ~/.ingot-config
 ```
 
 > **Tip:** Use full URLs when possible—they're always unambiguous.
@@ -873,11 +873,11 @@ echo 'DEFAULT_PLATFORM=jira' >> ~/.spec-config
 
 ### Debug Logging
 
-SPEC writes detailed logs to `.spec/runs/{ticket}/`. Check these for debugging:
+INGOT writes detailed logs to `.ingot/runs/{ticket}/`. Check these for debugging:
 
 ```bash
-ls -la .spec/runs/PROJECT-123/
-cat .spec/runs/PROJECT-123/*/task_*.log
+ls -la .ingot/runs/PROJECT-123/
+cat .ingot/runs/PROJECT-123/*/task_*.log
 ```
 
 ## License

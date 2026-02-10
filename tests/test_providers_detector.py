@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.providers.detector module.
+"""Tests for ingot.integrations.providers.detector module.
 
 Tests cover:
 - PlatformPattern dataclass
@@ -11,13 +11,13 @@ Tests cover:
 
 import pytest
 
-from spec.integrations.providers.base import Platform
-from spec.integrations.providers.detector import (
+from ingot.integrations.providers.base import Platform
+from ingot.integrations.providers.detector import (
     PLATFORM_PATTERNS,
     PlatformDetector,
     PlatformPattern,
 )
-from spec.integrations.providers.exceptions import PlatformNotSupportedError
+from ingot.integrations.providers.exceptions import PlatformNotSupportedError
 
 
 class TestPlatformPattern:
@@ -399,18 +399,18 @@ class TestPlatformDetectorImport:
 
     def test_import_from_providers(self):
         """Can import PlatformDetector from providers package."""
-        from spec.integrations.providers import PlatformDetector as PD
+        from ingot.integrations.providers import PlatformDetector as PD
 
         assert PD is PlatformDetector
 
     def test_import_platform_pattern_from_providers(self):
         """Can import PlatformPattern from providers package."""
-        from spec.integrations.providers import PlatformPattern as PP
+        from ingot.integrations.providers import PlatformPattern as PP
 
         assert PP is PlatformPattern
 
     def test_import_platform_patterns_from_providers(self):
         """Can import PLATFORM_PATTERNS from providers package."""
-        from spec.integrations.providers import PLATFORM_PATTERNS as PP
+        from ingot.integrations.providers import PLATFORM_PATTERNS as PP
 
         assert PP is PLATFORM_PATTERNS

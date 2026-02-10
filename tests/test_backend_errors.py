@@ -1,23 +1,23 @@
-"""Tests for spec.integrations.backends.errors module."""
+"""Tests for ingot.integrations.backends.errors module."""
 
 import pytest
 
-from spec.integrations.backends.errors import (
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
     BackendTimeoutError,
 )
-from spec.utils.errors import ExitCode, SpecError
+from ingot.utils.errors import ExitCode, IngotError
 
 
 class TestBackendRateLimitError:
     """Tests for BackendRateLimitError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendRateLimitError("Rate limit hit")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -82,9 +82,9 @@ class TestBackendNotInstalledError:
     """Tests for BackendNotInstalledError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendNotInstalledError("CLI not found")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -107,9 +107,9 @@ class TestBackendNotConfiguredError:
     """Tests for BackendNotConfiguredError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendNotConfiguredError("No backend configured")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -132,9 +132,9 @@ class TestBackendTimeoutError:
     """Tests for BackendTimeoutError."""
 
     def test_inherits_from_spec_error(self):
-        """Error inherits from SpecError."""
+        """Error inherits from IngotError."""
         error = BackendTimeoutError("Execution timed out")
-        assert isinstance(error, SpecError)
+        assert isinstance(error, IngotError)
 
     def test_message_stored(self):
         """Message is stored correctly."""
@@ -171,7 +171,7 @@ class TestErrorImports:
 
     def test_all_errors_importable_from_package(self):
         """All errors can be imported from backends package."""
-        from spec.integrations.backends import (
+        from ingot.integrations.backends import (
             BackendNotConfiguredError,
             BackendNotInstalledError,
             BackendRateLimitError,
@@ -186,7 +186,7 @@ class TestErrorImports:
 
     def test_all_errors_in_module_all(self):
         """All errors are listed in __all__."""
-        from spec.integrations.backends import errors
+        from ingot.integrations.backends import errors
 
         assert "BackendRateLimitError" in errors.__all__
         assert "BackendNotInstalledError" in errors.__all__

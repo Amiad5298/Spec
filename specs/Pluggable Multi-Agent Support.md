@@ -19,7 +19,7 @@ This specification has been reviewed and updated to address all identified gaps:
 | 5 | **Timeout Implementation Unclear** | ✅ Added `_run_streaming_with_timeout()` method to BaseBackend with full watchdog implementation |
 | 6 | **Thread Safety Not Exemplified** | ✅ Added `ThreadSafeTaskBuffer` example for parallel execution in Step 3 |
 | 7 | **`prompt_user_for_clarification()` Undefined** | ✅ Added implementation note and example code for TUI function |
-| 8 | **settings.py Import Verification Missing** | ✅ Added grep commands to verify imports from new `spec.workflow.constants` location |
+| 8 | **settings.py Import Verification Missing** | ✅ Added grep commands to verify imports from new `ingot.workflow.constants` location |
 | 9 | **Documentation URLs Unverified** | ✅ Added pre-release verification checklist for vendor URLs |
 
 **Note:** This is a new system implementation. No backward compatibility or rollback mechanisms are required.
@@ -34,20 +34,20 @@ This section provides the verified inventory of current codebase state, ensuring
 
 | # | File | Function | Current Call Pattern | Intended Replacement |
 |---|------|----------|---------------------|----------------------|
-| 1 | `spec/workflow/step1_plan.py:92` | `_generate_plan_with_tui()` | `auggie_client = AuggieClient()` followed by `auggie_client.run_with_callback(...)` | Use injected `backend: AIBackend` |
-| 2 | `spec/workflow/step1_plan.py:144` | `step_1_create_plan()` | Function signature accepts `auggie: AuggieClient` param | Change param to `backend: AIBackend` |
-| 3 | `spec/workflow/step1_plan.py:215` | `_run_clarification()` | Function accepts `auggie: AuggieClient`, calls `auggie.run_print()` on line 296 | **⚠️ REFACTOR: `run_print()` → TUI + `run_streaming()`** |
-| 4 | `spec/workflow/step2_tasklist.py:27` | `step_2_create_tasklist()` | Function signature accepts `auggie: AuggieClient` param | Change param to `backend: AIBackend` |
-| 5 | `spec/workflow/step2_tasklist.py:305` | `_generate_tasklist()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend or factory |
-| 6 | `spec/workflow/step2_tasklist.py:447` | `_refine_tasklist()` (inferred) | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend or factory |
-| 7 | `spec/workflow/step3_execute.py:816` | `_execute_task()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Create fresh backend via factory per-task |
-| 8 | `spec/workflow/step3_execute.py:864` | `_execute_task_with_callback()` | `auggie_client = AuggieClient()` then `auggie_client.run_with_callback(...)` | Create fresh backend via factory per-task |
-| 9 | `spec/workflow/step3_execute.py:1024` | `_run_post_implementation_tests()` | `auggie_client = AuggieClient()` then `auggie_client.run_with_callback(...)` | Use injected backend |
-| 10 | `spec/workflow/step4_update_docs.py:604` | `step_4_update_docs()` | `client = auggie_client or AuggieClient()` | Use injected backend, **delete `AuggieClientProtocol`** (line 517) |
-| 11 | `spec/workflow/autofix.py:62` | `run_auto_fix()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend or factory |
-| 12 | `spec/workflow/review.py:326` | `run_phase_review()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend |
-| 13 | `spec/workflow/review.py:211` | `_run_rereview_after_fix()` | Function accepts `auggie_client: AuggieClient` param | Change param to `backend: AIBackend` |
-| 14 | `spec/workflow/conflict_detection.py:49` | `detect_context_conflict()` | Function accepts `auggie: AuggieClient` param | Change param to `backend: AIBackend` |
+| 1 | `ingot/workflow/step1_plan.py:92` | `_generate_plan_with_tui()` | `auggie_client = AuggieClient()` followed by `auggie_client.run_with_callback(...)` | Use injected `backend: AIBackend` |
+| 2 | `ingot/workflow/step1_plan.py:144` | `step_1_create_plan()` | Function signature accepts `auggie: AuggieClient` param | Change param to `backend: AIBackend` |
+| 3 | `ingot/workflow/step1_plan.py:215` | `_run_clarification()` | Function accepts `auggie: AuggieClient`, calls `auggie.run_print()` on line 296 | **⚠️ REFACTOR: `run_print()` → TUI + `run_streaming()`** |
+| 4 | `ingot/workflow/step2_tasklist.py:27` | `step_2_create_tasklist()` | Function signature accepts `auggie: AuggieClient` param | Change param to `backend: AIBackend` |
+| 5 | `ingot/workflow/step2_tasklist.py:305` | `_generate_tasklist()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend or factory |
+| 6 | `ingot/workflow/step2_tasklist.py:447` | `_refine_tasklist()` (inferred) | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend or factory |
+| 7 | `ingot/workflow/step3_execute.py:816` | `_execute_task()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Create fresh backend via factory per-task |
+| 8 | `ingot/workflow/step3_execute.py:864` | `_execute_task_with_callback()` | `auggie_client = AuggieClient()` then `auggie_client.run_with_callback(...)` | Create fresh backend via factory per-task |
+| 9 | `ingot/workflow/step3_execute.py:1024` | `_run_post_implementation_tests()` | `auggie_client = AuggieClient()` then `auggie_client.run_with_callback(...)` | Use injected backend |
+| 10 | `ingot/workflow/step4_update_docs.py:604` | `step_4_update_docs()` | `client = auggie_client or AuggieClient()` | Use injected backend, **delete `AuggieClientProtocol`** (line 517) |
+| 11 | `ingot/workflow/autofix.py:62` | `run_auto_fix()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend or factory |
+| 12 | `ingot/workflow/review.py:326` | `run_phase_review()` | `auggie_client = AuggieClient()` then `auggie_client.run_print_with_output(...)` | Use injected backend |
+| 13 | `ingot/workflow/review.py:211` | `_run_rereview_after_fix()` | Function accepts `auggie_client: AuggieClient` param | Change param to `backend: AIBackend` |
+| 14 | `ingot/workflow/conflict_detection.py:49` | `detect_context_conflict()` | Function accepts `auggie: AuggieClient` param | Change param to `backend: AIBackend` |
 
 ### B. Verified run_print / run_with_callback Usage Inventory
 
@@ -65,8 +65,8 @@ This section provides the verified inventory of current codebase state, ensuring
 **Verification Command (run before Phase 2):**
 ```bash
 # Verify run_print() is only used in one location (excluding run_print_with_output, run_print_quiet)
-grep -rn "\.run_print(" --include="*.py" spec/ | grep -v "run_print_"
-# Expected output: spec/workflow/step1_plan.py:296:    success = auggie.run_print(...)
+grep -rn "\.run_print(" --include="*.py" ingot/ | grep -v "run_print_"
+# Expected output: ingot/workflow/step1_plan.py:296:    success = auggie.run_print(...)
 ```
 
 ### C. AI_BACKEND Legacy Config — Verified Existing References
@@ -75,11 +75,11 @@ grep -rn "\.run_print(" --include="*.py" spec/ | grep -v "run_print_"
 
 | Category | File | Line | Current State | Required Action |
 |----------|------|------|---------------|-----------------|
-| SpecSettings field | `spec/config/settings.py:95` | `ai_backend: str = "auggie"` | Legacy field | **REMOVE or RENAME to `ai_backend`** |
-| Config key mapping | `spec/config/settings.py:128` | `"AI_BACKEND": "ai_backend"` | Maps env var | **REMOVE from mapping** |
-| ConfigManager parse | `spec/config/manager.py:580` | `platform_str = self._raw_values.get("AI_BACKEND")` | Reads legacy key | **CHANGE to `AI_BACKEND`** |
-| Parser function | `spec/config/fetch_config.py:101` | `def parse_ai_backend(...)` | Used by manager | **RENAME to `parse_ai_backend()` or deprecate with alias** |
-| Config template | `spec/config/templates/fetch_config.template:24-25` | `AI_BACKEND=auggie` and `claude_desktop` reference | Template file | **UPDATE to `AI_BACKEND=auggie` and `claude`** |
+| SpecSettings field | `ingot/config/settings.py:95` | `ai_backend: str = "auggie"` | Legacy field | **REMOVE or RENAME to `ai_backend`** |
+| Config key mapping | `ingot/config/settings.py:128` | `"AI_BACKEND": "ai_backend"` | Maps env var | **REMOVE from mapping** |
+| ConfigManager parse | `ingot/config/manager.py:580` | `platform_str = self._raw_values.get("AI_BACKEND")` | Reads legacy key | **CHANGE to `AI_BACKEND`** |
+| Parser function | `ingot/config/fetch_config.py:101` | `def parse_ai_backend(...)` | Used by manager | **RENAME to `parse_ai_backend()` or deprecate with alias** |
+| Config template | `ingot/config/templates/fetch_config.template:24-25` | `AI_BACKEND=auggie` and `claude_desktop` reference | Template file | **UPDATE to `AI_BACKEND=auggie` and `claude`** |
 | Tests | `tests/test_config_manager.py` (22+ refs) | Various | Tests legacy behavior | **UPDATE all tests** |
 | Documentation | `docs/platform-configuration.md:490` | Example shows `AI_BACKEND=auggie` | Docs reference | **UPDATE to `AI_BACKEND=auggie`** |
 | Spec docs | `specs/AMI-33-implementation-plan.md`, `specs/AMI-39-implementation-plan.md` | Various | Plan references | **UPDATE to `AI_BACKEND`** |
@@ -90,49 +90,49 @@ Run these commands to verify migration progress:
 
 ```bash
 # BEFORE migration - these WILL return matches:
-grep -rn "AI_BACKEND" --include="*.py" spec/
+grep -rn "AI_BACKEND" --include="*.py" ingot/
 # Expected: ~6 matches in settings.py, manager.py, fetch_config.py
 
-grep -rn "ai_backend" --include="*.py" spec/config/
+grep -rn "ai_backend" --include="*.py" ingot/config/
 # Expected: ~4 matches
 
 # AFTER migration - these should return 0 matches:
-grep -rn "AI_BACKEND" --include="*.py" spec/
-grep -rn 'ai_backend.*=.*"auggie"' --include="*.py" spec/
+grep -rn "AI_BACKEND" --include="*.py" ingot/
+grep -rn 'ai_backend.*=.*"auggie"' --include="*.py" ingot/
 
 # These are ALLOWED (enum name, not config key):
-grep -rn "AgentPlatform" --include="*.py" spec/
+grep -rn "AgentPlatform" --include="*.py" ingot/
 # Expected: Many matches (this is the enum, keep it)
 
 # AI_BACKEND should be the only config key:
-grep -rn "AI_BACKEND" --include="*.py" spec/
+grep -rn "AI_BACKEND" --include="*.py" ingot/
 # Expected: Matches in backend_resolver.py, cli.py, onboarding
 
-# Verify SPECFLOW_AGENT_* imports are from new location:
+# Verify INGOT_AGENT_* imports are from new location:
 # AFTER migration - these should return 0 matches:
-grep -rn "from spec.integrations.auggie import SPECFLOW_AGENT" --include="*.py" .
-# Expected: 0 matches (all imports moved to spec.workflow.constants)
+grep -rn "from ingot.integrations.auggie import INGOT_AGENT" --include="*.py" .
+# Expected: 0 matches (all imports moved to ingot.workflow.constants)
 
 # Verify settings.py imports from new location:
-grep -n "from spec.workflow.constants import" spec/config/settings.py
-# Expected: 1 match showing SPECFLOW_AGENT_* import
+grep -n "from ingot.workflow.constants import" ingot/config/settings.py
+# Expected: 1 match showing INGOT_AGENT_* import
 
 # Verify state.py imports from new location:
-grep -n "from spec.workflow.constants import" spec/workflow/state.py
-# Expected: 1 match showing SPECFLOW_AGENT_* import
+grep -n "from ingot.workflow.constants import" ingot/workflow/state.py
+# Expected: 1 match showing INGOT_AGENT_* import
 ```
 
-### E. SPECFLOW_AGENT Constants Import Sites
+### E. INGOT_AGENT Constants Import Sites
 
-**All locations that import subagent constants from `spec/integrations/auggie.py`:**
+**All locations that import subagent constants from `ingot/integrations/auggie.py`:**
 
 | File | Current Import | Required Change |
 |------|----------------|-----------------|
-| `spec/workflow/state.py:12-19` | `from spec.integrations.auggie import SPECFLOW_AGENT_*` | Change to `from spec.workflow.constants import SPECFLOW_AGENT_*` |
-| `spec/config/settings.py:18-23` | `from spec.integrations.auggie import SPECFLOW_AGENT_*` | Change to `from spec.workflow.constants import SPECFLOW_AGENT_*` |
-| `spec/integrations/__init__.py:11-14` | Re-exports from `auggie` | Change to re-export from `spec.workflow.constants` |
-| `spec/integrations/agents.py:18-20` | `from spec.integrations.auggie import SPECFLOW_AGENT_*` | Change to `from spec.workflow.constants import SPECFLOW_AGENT_*` |
-| `tests/test_auggie.py:7-11` | `from spec.integrations.auggie import SPECFLOW_AGENT_*` | Change to `from spec.workflow.constants import SPECFLOW_AGENT_*` |
+| `ingot/workflow/state.py:12-19` | `from ingot.integrations.auggie import INGOT_AGENT_*` | Change to `from ingot.workflow.constants import INGOT_AGENT_*` |
+| `ingot/config/settings.py:18-23` | `from ingot.integrations.auggie import INGOT_AGENT_*` | Change to `from ingot.workflow.constants import INGOT_AGENT_*` |
+| `ingot/integrations/__init__.py:11-14` | Re-exports from `auggie` | Change to re-export from `ingot.workflow.constants` |
+| `ingot/integrations/agents.py:18-20` | `from ingot.integrations.auggie import INGOT_AGENT_*` | Change to `from ingot.workflow.constants import INGOT_AGENT_*` |
+| `tests/test_auggie.py:7-11` | `from ingot.integrations.auggie import INGOT_AGENT_*` | Change to `from ingot.workflow.constants import INGOT_AGENT_*` |
 
 ---
 
@@ -188,7 +188,7 @@ This section summarizes the architectural decisions that govern this implementat
 
 9. **Testing Strategy**
    - Unit tests use mocks/fakes for backends (no external CLI required)
-   - Integration tests are optional and gated behind `SPEC_INTEGRATION_TESTS=1` environment variable
+   - Integration tests are optional and gated behind `INGOT_INTEGRATION_TESTS=1` environment variable
 
 10. **Cursor Parallel Execution**
     - `CursorBackend.supports_parallel` defaults to `True` (verified: Cursor CLI supports concurrent execution via worktrees/separate terminals)
@@ -202,7 +202,7 @@ This section summarizes the architectural decisions that govern this implementat
     - Display user-facing message during first run: "First run may take a moment while the AI backend initializes..."
 
 12. **Decoupled Subagent Constants**
-    - Subagent name constants (e.g., `SPECFLOW_AGENT_PLANNER`) are moved from `spec/integrations/auggie.py` to `spec/workflow/constants.py`
+    - Subagent name constants (e.g., `INGOT_AGENT_PLANNER`) are moved from `ingot/integrations/auggie.py` to `ingot/workflow/constants.py`
     - This breaks the conceptual coupling between workflow code and the Auggie module
     - All imports of these constants must be updated to use the new location
 
@@ -255,7 +255,7 @@ The legacy `AI_BACKEND` config key exists in multiple locations. This section pr
 
 #### Step 1: Update SpecSettings
 
-**File:** `spec/config/settings.py`
+**File:** `ingot/config/settings.py`
 
 ```python
 # REMOVE (line 95):
@@ -273,7 +273,7 @@ ai_backend: str = ""  # No default - must be configured
 
 #### Step 2: Update ConfigManager
 
-**File:** `spec/config/manager.py`
+**File:** `ingot/config/manager.py`
 
 ```python
 # CHANGE (line 580):
@@ -293,7 +293,7 @@ context="AI_BACKEND",
 
 #### Step 3: Rename parse_ai_backend (Optional Alias)
 
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 ```python
 # Keep parse_ai_backend() for backward compatibility with callers
@@ -365,13 +365,13 @@ Update all references to use `AI_BACKEND` instead of `AI_BACKEND`.
 - name: Verify no AI_BACKEND references in source
   run: |
     # Check for AI_BACKEND in Python source (excluding tests temporarily)
-    if grep -rn "AI_BACKEND" --include="*.py" spec/; then
-      echo "ERROR: Found AI_BACKEND reference in spec/. Use AI_BACKEND instead."
+    if grep -rn "AI_BACKEND" --include="*.py" ingot/; then
+      echo "ERROR: Found AI_BACKEND reference in ingot/. Use AI_BACKEND instead."
       exit 1
     fi
     # Check for ai_backend as config field (excluding AgentPlatform enum)
-    if grep -rn 'ai_backend.*=.*"' --include="*.py" spec/; then
-      echo "ERROR: Found ai_backend field in spec/. Use ai_backend instead."
+    if grep -rn 'ai_backend.*=.*"' --include="*.py" ingot/; then
+      echo "ERROR: Found ai_backend field in ingot/. Use ai_backend instead."
       exit 1
     fi
 ```
@@ -379,15 +379,15 @@ Update all references to use `AI_BACKEND` instead of `AI_BACKEND`.
 #### Verification Commands
 
 ```bash
-# After migration, these should return 0 matches in spec/:
-grep -rn "AI_BACKEND" --include="*.py" spec/
-grep -rn 'ai_backend:' --include="*.py" spec/config/settings.py
+# After migration, these should return 0 matches in ingot/:
+grep -rn "AI_BACKEND" --include="*.py" ingot/
+grep -rn 'ai_backend:' --include="*.py" ingot/config/settings.py
 
 # These are ALLOWED (enum name):
-grep -rn "AgentPlatform" --include="*.py" spec/  # Enum references OK
+grep -rn "AgentPlatform" --include="*.py" ingot/  # Enum references OK
 
 # This should show AI_BACKEND usage:
-grep -rn "AI_BACKEND" --include="*.py" spec/
+grep -rn "AI_BACKEND" --include="*.py" ingot/
 ```
 
 **Source of Truth for Backend Configuration:**
@@ -399,7 +399,7 @@ grep -rn "AI_BACKEND" --include="*.py" spec/
 │  CLI flag --backend (highest precedence)                            │
 │       │                                                              │
 │       ▼                                                              │
-│  Persisted config AI_BACKEND (~/.spec-config or project config)     │
+│  Persisted config AI_BACKEND (~/.ingot-config or project config)     │
 │       │                                                              │
 │       ▼                                                              │
 │  No default → BackendNotConfiguredError (fail fast)                 │
@@ -584,15 +584,15 @@ def check_installed(self) -> tuple[bool, str]:
 3. Run `cursor --help | grep -i model` to check model flag support
 4. Spawn 2+ concurrent `cursor --print --no-save` processes and confirm no errors
 
-**Automated integration test (gated behind `SPEC_INTEGRATION_TESTS=1`):**
+**Automated integration test (gated behind `INGOT_INTEGRATION_TESTS=1`):**
 ```python
 @pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
     reason="Integration tests disabled",
 )
 def test_cursor_cli_contract():
     """Verify Cursor CLI meets SPEC integration contract."""
-    from spec.integrations.backends.cursor import CursorBackend
+    from ingot.integrations.backends.cursor import CursorBackend
 
     backend = CursorBackend()
 
@@ -792,7 +792,7 @@ Backends implement `close()` method for resource cleanup:
 ### Naming Convention
 
 - **`AIBackend`** — The AI provider/service abstraction (Auggie, Claude Code, Cursor)
-- **Subagent** — Specialized prompt personas (spec-planner, spec-implementer, etc.)
+- **Subagent** — Specialized prompt personas (ingot-planner, ingot-implementer, etc.)
 - **Client** — Low-level subprocess wrapper (e.g., `ClaudeClient`)
 - **Backend** — High-level abstraction implementing `AIBackend` protocol (e.g., `ClaudeBackend`)
 
@@ -853,7 +853,7 @@ Backends implement `close()` method for resource cleanup:
 
 #### Decision 1: Single Source of Truth for Backend Selection
 
-**Location:** `spec/config/backend_resolver.py` (new file)
+**Location:** `ingot/config/backend_resolver.py` (new file)
 
 ```python
 def resolve_backend_platform(
@@ -896,13 +896,13 @@ backend_model: str = ""                         # optional snapshot
 **Rationale:**
 - **Testability**: Mock at Backend level for unit tests; mock at Client level for integration tests
 - **Reuse**: Client can be used standalone for simple calls
-- **Separation**: Backend handles SPEC-specific concerns (subagent loading, frontmatter stripping)
+- **Separation**: Backend handles INGOT-specific concerns (subagent loading, frontmatter stripping)
 
 #### Decision 4: Generic Error Types
 
 Replace `AuggieRateLimitError` with:
 ```python
-class BackendRateLimitError(SpecError):
+class BackendRateLimitError(IngotError):
     """Raised when any backend hits a rate limit."""
     pass
 ```
@@ -991,35 +991,35 @@ For backends that cannot accept a model flag, the model value is safely ignored.
 
 | File | Phase | Change Type |
 |------|-------|-------------|
-| `spec/config/backend_resolver.py` | 1 | NEW |
-| `spec/integrations/backends/__init__.py` | 1 | NEW |
-| `spec/integrations/backends/base.py` | 1 | NEW (AIBackend Protocol + BaseBackend ABC) |
-| `spec/integrations/backends/errors.py` | 1 | NEW |
-| `spec/integrations/backends/auggie.py` | 1 | NEW (extends BaseBackend) |
-| `spec/integrations/backends/factory.py` | 1 | NEW |
-| `spec/workflow/constants.py` | 1 | NEW (subagent constants moved here) |
-| `spec/integrations/auggie.py` | 1 | MODIFY (remove subagent constants) |
-| `spec/workflow/state.py` | 1 | MODIFY (update imports for constants) |
-| `spec/integrations/fetchers/auggie_fetcher.py` | 1.5 | MODIFY (accept AIBackend) |
-| `spec/integrations/ticket_service.py` | 1.5 | MODIFY (accept AIBackend) |
-| `spec/cli.py` | 1.5, 2 | MODIFY (backend resolution + workflow integration) |
-| `spec/workflow/runner.py` | 2 | MODIFY |
-| `spec/workflow/step1_plan.py` | 2 | MODIFY (refactor run_print to TUI + run_streaming) |
-| `spec/workflow/step2_tasklist.py` | 2 | MODIFY |
-| `spec/workflow/step3_execute.py` | 2 | MODIFY |
-| `spec/workflow/step4_update_docs.py` | 2 | MODIFY (delete AuggieClientProtocol) |
-| `spec/workflow/conflict_detection.py` | 2 | MODIFY |
-| `spec/workflow/autofix.py` | 2 | MODIFY |
-| `spec/workflow/review.py` | 2 | MODIFY |
-| `spec/integrations/backends/claude.py` | 3 | NEW (extends BaseBackend) |
-| `spec/integrations/claude.py` | 3 | NEW |
-| `spec/integrations/fetchers/claude_fetcher.py` | 3 | NEW |
-| `spec/integrations/backends/cursor.py` | 4 | NEW (extends BaseBackend) |
-| `spec/integrations/cursor.py` | 4 | NEW |
-| `spec/integrations/fetchers/cursor_fetcher.py` | 4 | NEW |
-| `spec/onboarding/__init__.py` | 5 | NEW |
-| `spec/onboarding/flow.py` | 5 | NEW |
-| `spec/config/compatibility.py` | 5 | NEW |
+| `ingot/config/backend_resolver.py` | 1 | NEW |
+| `ingot/integrations/backends/__init__.py` | 1 | NEW |
+| `ingot/integrations/backends/base.py` | 1 | NEW (AIBackend Protocol + BaseBackend ABC) |
+| `ingot/integrations/backends/errors.py` | 1 | NEW |
+| `ingot/integrations/backends/auggie.py` | 1 | NEW (extends BaseBackend) |
+| `ingot/integrations/backends/factory.py` | 1 | NEW |
+| `ingot/workflow/constants.py` | 1 | NEW (subagent constants moved here) |
+| `ingot/integrations/auggie.py` | 1 | MODIFY (remove subagent constants) |
+| `ingot/workflow/state.py` | 1 | MODIFY (update imports for constants) |
+| `ingot/integrations/fetchers/auggie_fetcher.py` | 1.5 | MODIFY (accept AIBackend) |
+| `ingot/integrations/ticket_service.py` | 1.5 | MODIFY (accept AIBackend) |
+| `ingot/cli.py` | 1.5, 2 | MODIFY (backend resolution + workflow integration) |
+| `ingot/workflow/runner.py` | 2 | MODIFY |
+| `ingot/workflow/step1_plan.py` | 2 | MODIFY (refactor run_print to TUI + run_streaming) |
+| `ingot/workflow/step2_tasklist.py` | 2 | MODIFY |
+| `ingot/workflow/step3_execute.py` | 2 | MODIFY |
+| `ingot/workflow/step4_update_docs.py` | 2 | MODIFY (delete AuggieClientProtocol) |
+| `ingot/workflow/conflict_detection.py` | 2 | MODIFY |
+| `ingot/workflow/autofix.py` | 2 | MODIFY |
+| `ingot/workflow/review.py` | 2 | MODIFY |
+| `ingot/integrations/backends/claude.py` | 3 | NEW (extends BaseBackend) |
+| `ingot/integrations/claude.py` | 3 | NEW |
+| `ingot/integrations/fetchers/claude_fetcher.py` | 3 | NEW |
+| `ingot/integrations/backends/cursor.py` | 4 | NEW (extends BaseBackend) |
+| `ingot/integrations/cursor.py` | 4 | NEW |
+| `ingot/integrations/fetchers/cursor_fetcher.py` | 4 | NEW |
+| `ingot/onboarding/__init__.py` | 5 | NEW |
+| `ingot/onboarding/flow.py` | 5 | NEW |
+| `ingot/config/compatibility.py` | 5 | NEW |
 
 ---
 
@@ -1040,7 +1040,7 @@ These tests capture the current behavior of AuggieClient and workflow steps
 BEFORE the multi-backend refactoring. They serve as regression tests to ensure
 the new AIBackend abstraction maintains identical semantics.
 
-Run with: SPEC_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
+Run with: INGOT_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
 """
 
 import os
@@ -1050,8 +1050,8 @@ from unittest.mock import MagicMock
 
 # Skip all tests unless integration tests are enabled
 pytestmark = pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Baseline tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Baseline tests require INGOT_INTEGRATION_TESTS=1",
 )
 
 
@@ -1060,7 +1060,7 @@ class TestAuggieClientSemantics:
 
     def test_run_with_callback_returns_tuple_bool_str(self):
         """Verify run_with_callback returns (bool, str) tuple."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         output_lines = []
@@ -1080,7 +1080,7 @@ class TestAuggieClientSemantics:
 
     def test_run_print_with_output_returns_tuple_bool_str(self):
         """Verify run_print_with_output returns (bool, str) tuple."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         success, output = client.run_print_with_output(
@@ -1093,7 +1093,7 @@ class TestAuggieClientSemantics:
 
     def test_run_print_quiet_returns_str(self):
         """Verify run_print_quiet returns str only."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         output = client.run_print_quiet(
@@ -1109,7 +1109,7 @@ class TestRateLimitDetection:
 
     def test_looks_like_rate_limit_patterns(self):
         """Verify rate limit detection matches expected patterns."""
-        from spec.integrations.auggie import _looks_like_rate_limit
+        from ingot.integrations.auggie import _looks_like_rate_limit
 
         # These patterns MUST be detected as rate limits
         rate_limit_outputs = [
@@ -1137,8 +1137,8 @@ class TestWorkflowStepBehavior:
     @pytest.fixture
     def mock_state(self, tmp_path):
         """Create a minimal WorkflowState for testing."""
-        from spec.workflow.state import WorkflowState
-        from spec.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+        from ingot.integrations.providers import GenericTicket, Platform
 
         ticket = GenericTicket(
             id="TEST-123",
@@ -1151,17 +1151,17 @@ class TestWorkflowStepBehavior:
         state = WorkflowState(ticket=ticket)
         return state
 
-    def test_step1_uses_spec_planner_subagent(self, mock_state):
+    def test_step1_uses_ingot_planner_subagent(self, mock_state):
         """Verify the default planner subagent name."""
-        assert mock_state.subagent_names["planner"] == "spec-planner"
+        assert mock_state.subagent_names["planner"] == "ingot-planner"
 
-    def test_step2_uses_spec_tasklist_subagent(self, mock_state):
+    def test_step2_uses_ingot_tasklist_subagent(self, mock_state):
         """Verify the default tasklist subagent name."""
-        assert mock_state.subagent_names["tasklist"] == "spec-tasklist"
+        assert mock_state.subagent_names["tasklist"] == "ingot-tasklist"
 
-    def test_step3_uses_spec_implementer_subagent(self, mock_state):
+    def test_step3_uses_ingot_implementer_subagent(self, mock_state):
         """Verify the default implementer subagent name."""
-        assert mock_state.subagent_names["implementer"] == "spec-implementer"
+        assert mock_state.subagent_names["implementer"] == "ingot-implementer"
 
 
 class TestParallelExecutionSemantics:
@@ -1173,7 +1173,7 @@ class TestParallelExecutionSemantics:
         This test documents the expectation that each parallel task
         creates its own AuggieClient instance with dont_save_session=True.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         # Create two independent clients (simulating parallel execution)
         client1 = AuggieClient()
@@ -1194,7 +1194,7 @@ class TestParallelExecutionSemantics:
 **Execution Command:**
 ```bash
 # Run baseline tests to capture current behavior
-SPEC_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
+INGOT_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
 
 # All tests must pass before proceeding to Phase 1
 ```
@@ -1217,7 +1217,7 @@ SPEC_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
 
 **Why this step exists:** The current codebase uses `AgentPlatform.CLAUDE_DESKTOP = "claude_desktop"`. If we don't rename this early, we’ll either (a) bake the old naming into the new backend system or (b) have to churn many files later.
 
-**Primary file:** `spec/config/fetch_config.py`
+**Primary file:** `ingot/config/fetch_config.py`
 
 Required changes:
 - Rename enum member `CLAUDE_DESKTOP` → `CLAUDE`
@@ -1232,26 +1232,26 @@ Required changes:
 **Verification commands (must be clean before proceeding past Phase 1):**
 ```bash
 # After this rename, these should return 0 matches:
-grep -rn "CLAUDE_DESKTOP" --include="*.py" spec/ tests/
-grep -rn "claude_desktop" --include="*.py" spec/ tests/
+grep -rn "CLAUDE_DESKTOP" --include="*.py" ingot/ tests/
+grep -rn "claude_desktop" --include="*.py" ingot/ tests/
 
 # These should return matches:
-grep -rn "AgentPlatform.CLAUDE" --include="*.py" spec/ tests/
+grep -rn "AgentPlatform.CLAUDE" --include="*.py" ingot/ tests/
 ```
 
 #### 1.1 Create Backend Error Types
 
-**File:** `spec/integrations/backends/errors.py`
+**File:** `ingot/integrations/backends/errors.py`
 
 ```python
 """Backend-related errors.
 
 Generic error types that apply to all AI backends.
 """
-from spec.utils.errors import SpecError
+from ingot.utils.errors import IngotError
 
 
-class BackendRateLimitError(SpecError):
+class BackendRateLimitError(IngotError):
     """Raised when any backend hits a rate limit.
 
     Replaces AuggieRateLimitError for backend-agnostic handling.
@@ -1268,22 +1268,22 @@ class BackendRateLimitError(SpecError):
         self.backend_name = backend_name
 
 
-class BackendNotInstalledError(SpecError):
+class BackendNotInstalledError(IngotError):
     """Raised when backend CLI is not installed."""
     pass
 
 
-class BackendNotConfiguredError(SpecError):
+class BackendNotConfiguredError(IngotError):
     """Raised when no AI backend is configured.
 
     This error is raised when neither CLI --backend flag nor persisted
-    AI_BACKEND config is set. Users should run 'spec init' to configure
+    AI_BACKEND config is set. Users should run 'ingot init' to configure
     a backend or use --backend flag.
     """
     pass
 
 
-class BackendTimeoutError(SpecError):
+class BackendTimeoutError(IngotError):
     """Raised when backend execution times out."""
     def __init__(
         self,
@@ -1296,12 +1296,12 @@ class BackendTimeoutError(SpecError):
 
 #### 1.2 Create AIBackend Protocol
 
-**File:** `spec/integrations/backends/base.py`
+**File:** `ingot/integrations/backends/base.py`
 
 ```python
 """AI Backend protocol and base types."""
 from typing import Callable, Protocol, runtime_checkable
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.fetch_config import AgentPlatform
 
 
 @runtime_checkable
@@ -1435,7 +1435,7 @@ class AIBackend(Protocol):
 
 #### 1.3 Create BaseBackend Abstract Class
 
-**File:** `spec/integrations/backends/base.py` (same file as AIBackend Protocol)
+**File:** `ingot/integrations/backends/base.py` (same file as AIBackend Protocol)
 
 The `BaseBackend` abstract class implements shared logic to avoid code duplication across backends:
 
@@ -1446,7 +1446,7 @@ from pathlib import Path
 from typing import Callable
 import yaml
 
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.fetch_config import AgentPlatform
 
 
 @dataclass
@@ -1526,7 +1526,7 @@ class BaseBackend(ABC):
         """
         # Full implementation is in "Timeout Enforcement" section (lines 577-711)
         # This is a reference to that implementation
-        from spec.integrations.backends.errors import BackendTimeoutError
+        from ingot.integrations.backends.errors import BackendTimeoutError
         import subprocess
         import threading
 
@@ -1592,7 +1592,7 @@ class BaseBackend(ABC):
         Shared across all backends to ensure consistent parsing.
 
         Args:
-            subagent: Subagent name (e.g., "spec-planner")
+            subagent: Subagent name (e.g., "ingot-planner")
 
         Returns:
             Tuple of (metadata, prompt_body)
@@ -1717,9 +1717,9 @@ class BaseBackend(ABC):
 
 #### 1.4 Move Subagent Constants
 
-**File:** `spec/workflow/constants.py` (NEW)
+**File:** `ingot/workflow/constants.py` (NEW)
 
-Move subagent constants from `spec/integrations/auggie.py` to a neutral location:
+Move subagent constants from `ingot/integrations/auggie.py` to a neutral location:
 
 ```python
 """Workflow constants.
@@ -1729,12 +1729,12 @@ not specific to any particular AI backend.
 """
 
 # Subagent names for SPEC workflow
-SPECFLOW_AGENT_PLANNER = "spec-planner"
-SPECFLOW_AGENT_TASKLIST = "spec-tasklist"
-SPECFLOW_AGENT_TASKLIST_REFINER = "spec-tasklist-refiner"
-SPECFLOW_AGENT_IMPLEMENTER = "spec-implementer"
-SPECFLOW_AGENT_REVIEWER = "spec-reviewer"
-SPECFLOW_AGENT_DOC_UPDATER = "spec-doc-updater"
+INGOT_AGENT_PLANNER = "ingot-planner"
+INGOT_AGENT_TASKLIST = "ingot-tasklist"
+INGOT_AGENT_TASKLIST_REFINER = "ingot-tasklist-refiner"
+INGOT_AGENT_IMPLEMENTER = "ingot-implementer"
+INGOT_AGENT_REVIEWER = "ingot-reviewer"
+INGOT_AGENT_DOC_UPDATER = "ingot-doc-updater"
 
 # Default timeout values (seconds)
 DEFAULT_EXECUTION_TIMEOUT = 60
@@ -1742,43 +1742,43 @@ FIRST_RUN_TIMEOUT = 120
 ONBOARDING_SMOKE_TEST_TIMEOUT = 60
 ```
 
-**Update imports in `spec/workflow/state.py`:**
+**Update imports in `ingot/workflow/state.py`:**
 ```python
 # REMOVE:
-from spec.integrations.auggie import (
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_TASKLIST,
+from ingot.integrations.auggie import (
+    INGOT_AGENT_PLANNER,
+    INGOT_AGENT_TASKLIST,
     # ... etc
 )
 
 # ADD:
-from spec.workflow.constants import (
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_TASKLIST,
-    SPECFLOW_AGENT_TASKLIST_REFINER,
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_DOC_UPDATER,
+from ingot.workflow.constants import (
+    INGOT_AGENT_PLANNER,
+    INGOT_AGENT_TASKLIST,
+    INGOT_AGENT_TASKLIST_REFINER,
+    INGOT_AGENT_IMPLEMENTER,
+    INGOT_AGENT_REVIEWER,
+    INGOT_AGENT_DOC_UPDATER,
 )
 ```
 
-**Update `spec/integrations/auggie.py`:**
+**Update `ingot/integrations/auggie.py`:**
 ```python
-# REMOVE the constant definitions (they now live in spec/workflow/constants.py)
+# REMOVE the constant definitions (they now live in ingot/workflow/constants.py)
 # Keep only AuggieClient and related functionality
 ```
 
 #### 1.5 Create AuggieBackend
 
-**File:** `spec/integrations/backends/auggie.py`
+**File:** `ingot/integrations/backends/auggie.py`
 
 ```python
 """Auggie CLI backend implementation."""
 from typing import Callable
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import BaseBackend
-from spec.integrations.auggie import (
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import BaseBackend
+from ingot.integrations.auggie import (
     AuggieClient,
     check_auggie_installed,
     _looks_like_rate_limit,
@@ -1919,13 +1919,13 @@ class AuggieBackend(BaseBackend):
 
 #### 1.6 Create Backend Factory
 
-**File:** `spec/integrations/backends/factory.py`
+**File:** `ingot/integrations/backends/factory.py`
 
 ```python
 """Factory for creating AI backend instances."""
-from spec.config.fetch_config import AgentPlatform, parse_ai_backend
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.errors import BackendNotInstalledError
+from ingot.config.fetch_config import AgentPlatform, parse_ai_backend
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.errors import BackendNotInstalledError
 
 
 class BackendFactory:
@@ -1961,15 +1961,15 @@ class BackendFactory:
         backend: AIBackend
 
         if platform == AgentPlatform.AUGGIE:
-            from spec.integrations.backends.auggie import AuggieBackend
+            from ingot.integrations.backends.auggie import AuggieBackend
             backend = AuggieBackend(model=model)
 
         elif platform == AgentPlatform.CLAUDE:
-            from spec.integrations.backends.claude import ClaudeBackend
+            from ingot.integrations.backends.claude import ClaudeBackend
             backend = ClaudeBackend(model=model)
 
         elif platform == AgentPlatform.CURSOR:
-            from spec.integrations.backends.cursor import CursorBackend
+            from ingot.integrations.backends.cursor import CursorBackend
             backend = CursorBackend(model=model)
 
         elif platform == AgentPlatform.AIDER:
@@ -1991,13 +1991,13 @@ class BackendFactory:
 
 #### 1.7 Create Backend Platform Resolver
 
-**File:** `spec/config/backend_resolver.py`
+**File:** `ingot/config/backend_resolver.py`
 
 ```python
 """Single source of truth for backend platform resolution."""
-from spec.config.fetch_config import AgentPlatform, parse_ai_backend
-from spec.config.manager import ConfigManager
-from spec.integrations.backends.errors import BackendNotConfiguredError
+from ingot.config.fetch_config import AgentPlatform, parse_ai_backend
+from ingot.config.manager import ConfigManager
+from ingot.integrations.backends.errors import BackendNotConfiguredError
 
 
 def resolve_backend_platform(
@@ -2033,7 +2033,7 @@ def resolve_backend_platform(
 
     # 3. No backend configured - raise error
     raise BackendNotConfiguredError(
-        "No AI backend configured. Please run 'spec init' to configure a backend, "
+        "No AI backend configured. Please run 'ingot init' to configure a backend, "
         "or use the --backend flag to specify one."
     )
 ```
@@ -2047,9 +2047,9 @@ def resolve_backend_platform(
 - Test BaseBackend._parse_subagent_prompt() parses frontmatter
 - Test BaseBackend._resolve_model() precedence (explicit → frontmatter → default)
 - Test error type detection (BackendRateLimitError, BackendTimeoutError)
-- Test subagent constants are accessible from `spec/workflow/constants.py`
+- Test subagent constants are accessible from `ingot/workflow/constants.py`
 
-**Integration Tests (gated behind `SPEC_INTEGRATION_TESTS=1` environment variable):**
+**Integration Tests (gated behind `INGOT_INTEGRATION_TESTS=1` environment variable):**
 - Test check_installed() returns correct results
 - Test run_print_quiet() executes successfully
 - These tests require external CLIs to be installed
@@ -2067,18 +2067,18 @@ def resolve_backend_platform(
 
 #### 1.5.1 Update AuggieMediatedFetcher
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 ```python
 # BEFORE:
-from spec.integrations.auggie import AuggieClient
+from ingot.integrations.auggie import AuggieClient
 
 class AuggieMediatedFetcher:
     def __init__(self, auggie_client: AuggieClient | None = None):
         self._client = auggie_client or AuggieClient()
 
 # AFTER:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 class AuggieMediatedFetcher:
     """Fetcher that uses an AI backend for MCP-mediated ticket fetching.
@@ -2110,7 +2110,7 @@ class AuggieMediatedFetcher:
 
 #### 1.5.2 Update ticket_service.py
 
-**File:** `spec/integrations/ticket_service.py`
+**File:** `ingot/integrations/ticket_service.py`
 
 **Current Signature (line 293):**
 ```python
@@ -2130,8 +2130,8 @@ The function is async because it may need to perform async initialization (e.g.,
 
 **New Signature:**
 ```python
-from spec.integrations.backends.base import AIBackend
-from spec.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
 
 async def create_ticket_service(
     backend: AIBackend | None = None,
@@ -2164,15 +2164,15 @@ async def create_ticket_service(
     mediated_fetcher = None
     if backend is not None:
         if backend.platform == AgentPlatform.AUGGIE:
-            from spec.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
+            from ingot.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
             mediated_fetcher = AuggieMediatedFetcher(backend=backend)
 
         elif backend.platform == AgentPlatform.CLAUDE:
-            from spec.integrations.fetchers.claude_fetcher import ClaudeMediatedFetcher
+            from ingot.integrations.fetchers.claude_fetcher import ClaudeMediatedFetcher
             mediated_fetcher = ClaudeMediatedFetcher(backend=backend)
 
         elif backend.platform == AgentPlatform.CURSOR:
-            from spec.integrations.fetchers.cursor_fetcher import CursorMediatedFetcher
+            from ingot.integrations.fetchers.cursor_fetcher import CursorMediatedFetcher
             mediated_fetcher = CursorMediatedFetcher(backend=backend)
         # AIDER, MANUAL - no mediated fetcher
 
@@ -2202,19 +2202,19 @@ primary = AuggieMediatedFetcher(backend=backend, config_manager=config_manager)
 
 #### 1.5.3 Update CLI Entry Point for Ticket Fetching
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 Update callers to use async properly and pass AIBackend:
 
 ```python
 # BEFORE (typical call pattern):
-from spec.integrations.auggie import AuggieClient
+from ingot.integrations.auggie import AuggieClient
 auggie_client = AuggieClient()
 service = await create_ticket_service(auggie_client=auggie_client, auth_manager=auth)
 
 # AFTER:
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.integrations.backends.factory import BackendFactory
 
 async def create_ticket_service_from_config(
     config_manager: ConfigManager,
@@ -2271,14 +2271,14 @@ async def create_ticket_service_from_config(
 
 #### 2.1 Update WorkflowState
 
-**File:** `spec/workflow/state.py`
+**File:** `ingot/workflow/state.py`
 
 ```python
 from typing import TYPE_CHECKING
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.fetch_config import AgentPlatform
 
 if TYPE_CHECKING:
-    from spec.integrations.backends.base import AIBackend
+    from ingot.integrations.backends.base import AIBackend
 
 @dataclass
 class WorkflowState:
@@ -2297,7 +2297,7 @@ class WorkflowState:
 
 #### 2.2 Update CLI Entry Point
 
-**File:** `spec/cli.py`
+**File:** `ingot/cli.py`
 
 ```python
 @click.option(
@@ -2312,9 +2312,9 @@ def run_command(
     ...
 ):
     # Resolve backend platform once at entry point
-    from spec.config.backend_resolver import resolve_backend_platform
-    from spec.integrations.backends.errors import BackendNotConfiguredError
-    from spec.integrations.backends.factory import BackendFactory
+    from ingot.config.backend_resolver import resolve_backend_platform
+    from ingot.integrations.backends.errors import BackendNotConfiguredError
+    from ingot.integrations.backends.factory import BackendFactory
 
     try:
         platform = resolve_backend_platform(config, cli_backend_override=backend)
@@ -2322,7 +2322,7 @@ def run_command(
         # No backend configured - prompt user to configure one
         print_error(str(e))
         print_info("Available backends: auggie, claude, cursor")
-        print_info("Run 'spec init' to configure a backend interactively.")
+        print_info("Run 'ingot init' to configure a backend interactively.")
         return
 
     # Create backend instance
@@ -2333,7 +2333,7 @@ def run_command(
     ticket = ticket_service.fetch(ticket_id)
 
     # Pass backend to runner
-    run_spec_driven_workflow(
+    run_ingot_workflow(
         ticket=ticket,
         config=config,
         backend=ai_backend,
@@ -2341,21 +2341,21 @@ def run_command(
     )
 ```
 
-**File:** `spec/workflow/runner.py`
+**File:** `ingot/workflow/runner.py`
 
 ```python
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.factory import BackendFactory
 
-def run_spec_driven_workflow(
+def run_ingot_workflow(
     ticket: GenericTicket,
     config: ConfigManager,
     backend: AIBackend,  # Now required - created by CLI
     planning_model: str = "",
     implementation_model: str = "",
 ) -> bool:
-    """Run the SPEC-driven workflow with the provided backend.
+    """Run the INGOT-driven workflow with the provided backend.
 
     Args:
         ticket: The ticket to implement
@@ -2384,7 +2384,7 @@ def run_spec_driven_workflow(
 
 #### 2.3 Delete Legacy AuggieClientProtocol
 
-**File:** `spec/workflow/step4_update_docs.py`
+**File:** `ingot/workflow/step4_update_docs.py`
 
 **CRITICAL:** Step 4 currently defines its own `AuggieClientProtocol` for dependency injection. This must be deleted and replaced with `AIBackend`:
 
@@ -2414,7 +2414,7 @@ class AuggieClientProtocol(Protocol):
         ...
 
 # REPLACE WITH:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 # Use AIBackend type hints instead of AuggieClientProtocol
 ```
 
@@ -2422,7 +2422,7 @@ from spec.integrations.backends.base import AIBackend
 
 #### 2.4 Update Step 1 (Plan Creation) — CRITICAL: run_print() Refactoring
 
-**File:** `spec/workflow/step1_plan.py`
+**File:** `ingot/workflow/step1_plan.py`
 
 **Current instantiation points to replace:**
 - Line 92: `auggie_client = AuggieClient()` in `_generate_plan_with_tui()`
@@ -2442,7 +2442,7 @@ See the code example below for the exact transformation.
 def step_1_create_plan(state: WorkflowState, auggie: AuggieClient) -> bool:
 
 # To:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
     """Create implementation plan using the provided backend."""
@@ -2455,7 +2455,7 @@ def _generate_plan_with_tui(state: WorkflowState, backend: AIBackend) -> bool:
     success, output = backend.run_with_callback(
         prompt,
         output_callback=tui_callback,
-        subagent="spec-planner",
+        subagent="ingot-planner",
         dont_save_session=True,
     )
     ...
@@ -2475,7 +2475,7 @@ def _run_clarification(state: WorkflowState, backend: AIBackend, plan_path: Path
     )
     success, output = backend.run_streaming(
         clarification_prompt_with_input,
-        subagent="spec-planner",
+        subagent="ingot-planner",
     )
     return success
 ```
@@ -2488,7 +2488,7 @@ The function `prompt_user_for_clarification()` must be created as part of this r
 2. Prompt the user to enter their responses (text input)
 3. Return the user's response as a string
 
-**Implementation location:** `spec/workflow/step1_plan.py` (same file as `_run_clarification`)
+**Implementation location:** `ingot/workflow/step1_plan.py` (same file as `_run_clarification`)
 
 ```python
 def prompt_user_for_clarification(state: WorkflowState) -> str:
@@ -2503,8 +2503,8 @@ def prompt_user_for_clarification(state: WorkflowState) -> str:
     Returns:
         User's response text to be appended to the clarification prompt
     """
-    from spec.ui.prompts import prompt_input
-    from spec.utils.console import print_header
+    from ingot.ui.prompts import prompt_input
+    from ingot.utils.console import print_header
 
     # Display clarification questions to user
     print_header("Clarification Needed")
@@ -2519,11 +2519,11 @@ def prompt_user_for_clarification(state: WorkflowState) -> str:
     return user_response
 ```
 
-**Note:** This uses existing TUI functions from `spec/ui/prompts.py` (`prompt_input` with `multiline=True`) and `spec/utils/console.py` (`print_header`). The key requirement is that user input collection happens in SPEC's TUI layer, not inside the backend.
+**Note:** This uses existing TUI functions from `ingot/ui/prompts.py` (`prompt_input` with `multiline=True`) and `ingot/utils/console.py` (`print_header`). The key requirement is that user input collection happens in SPEC's TUI layer, not inside the backend.
 
 #### 2.5 Update Step 2 (Tasklist Creation)
 
-**File:** `spec/workflow/step2_tasklist.py`
+**File:** `ingot/workflow/step2_tasklist.py`
 
 **Current instantiation points to replace:**
 - Line 305: `auggie_client = AuggieClient()` in `_generate_tasklist()`
@@ -2534,7 +2534,7 @@ def prompt_user_for_clarification(state: WorkflowState) -> str:
 def step_2_create_tasklist(state: WorkflowState, auggie: AuggieClient) -> bool:
 
 # To:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
     ...
@@ -2552,7 +2552,7 @@ def _refine_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
 
 #### 2.6 Update Step 3 (Task Execution) - CRITICAL
 
-**File:** `spec/workflow/step3_execute.py`
+**File:** `ingot/workflow/step3_execute.py`
 
 **Current instantiation points to replace (actual function names from codebase):**
 - `_execute_task()` — single task execution
@@ -2569,9 +2569,9 @@ Step 3 runs tasks in parallel using ThreadPoolExecutor. Each parallel task needs
 If `backend.supports_parallel` is `False`, Step 3 falls back to sequential execution.
 
 ```python
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.factory import BackendFactory
-from spec.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
 
 def step_3_execute(state: WorkflowState, backend: AIBackend) -> bool:
     """Execute tasks using the provided backend.
@@ -2633,7 +2633,7 @@ def _execute_task(state: WorkflowState, task: Task, plan_path: Path, backend: AI
     success, output = backend.run_with_callback(
         prompt,
         output_callback=output_handler,
-        subagent="spec-implementer",
+        subagent="ingot-implementer",
         dont_save_session=True,
     )
     ...
@@ -2708,7 +2708,7 @@ def _execute_parallel_with_safe_callbacks(
             success, _ = task_backend.run_with_callback(
                 task.prompt,
                 output_callback=task_buffer.callback,  # Thread-safe callback
-                subagent="spec-implementer",
+                subagent="ingot-implementer",
                 dont_save_session=True,
             )
             output = task_buffer.get_output()
@@ -2731,7 +2731,7 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
 
 #### 2.7 Update Step 4 (Documentation Update)
 
-**File:** `spec/workflow/step4_update_docs.py`
+**File:** `ingot/workflow/step4_update_docs.py`
 
 Step 4 already supports dependency injection via `AuggieClientProtocol`. This must be replaced with `AIBackend`:
 
@@ -2750,7 +2750,7 @@ def step_4_update_docs(
     client = auggie_client or AuggieClient()
 
 # AFTER:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 def step_4_update_docs(
     state: WorkflowState,
@@ -2764,14 +2764,14 @@ def step_4_update_docs(
 
 #### 2.8 Update Helper Files
 
-**File:** `spec/workflow/conflict_detection.py`
+**File:** `ingot/workflow/conflict_detection.py`
 
 ```python
 # Change from:
 def detect_context_conflict(ticket, user_context, auggie: AuggieClient, state):
 
 # To:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 def detect_context_conflict(
     ticket,
@@ -2782,19 +2782,19 @@ def detect_context_conflict(
     success, output = backend.run_with_callback(
         conflict_prompt,
         output_callback=lambda _: None,  # No-op callback
-        subagent="spec-planner",
+        subagent="ingot-planner",
         dont_save_session=True,
     )
     ...
 ```
 
-**File:** `spec/workflow/autofix.py`
+**File:** `ingot/workflow/autofix.py`
 
 ```python
 # Line 62: auggie_client = AuggieClient() in run_auto_fix()
 
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.factory import BackendFactory
 
 def run_auto_fix(
     state: WorkflowState,
@@ -2813,12 +2813,12 @@ def run_auto_fix(
     ...
 ```
 
-**File:** `spec/workflow/review.py`
+**File:** `ingot/workflow/review.py`
 
 ```python
 # Line 326: auggie_client = AuggieClient() in run_phase_review()
 
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 def run_phase_review(
     state: WorkflowState,
@@ -2845,7 +2845,7 @@ def _run_rereview_after_fix(
 | # | File | Function | Replacement Strategy | Notes |
 |---|------|----------|---------------------|-------|
 | 1 | `cli.py` | `create_ticket_service_from_config()` | Use backend from CLI | See Phase 1.5 |
-| 2 | `runner.py` | `run_spec_driven_workflow()` | Receive from CLI | |
+| 2 | `runner.py` | `run_ingot_workflow()` | Receive from CLI | |
 | 3 | `step1_plan.py` | `_generate_plan_with_tui()` | Use injected backend | |
 | 4 | `step1_plan.py` | `_run_clarification()` | Use injected backend | **⚠️ run_print() → TUI + run_streaming()** |
 | 5 | `step2_tasklist.py` | `_generate_tasklist()` | Use injected backend | |
@@ -2866,23 +2866,23 @@ def _run_rereview_after_fix(
 
 #### 2.10 Rate Limit Error Migration
 
-**File:** `spec/workflow/step3_execute.py`
+**File:** `ingot/workflow/step3_execute.py`
 
 Replace `AuggieRateLimitError` with `BackendRateLimitError` throughout the file:
 
 **Import changes:**
 ```python
 # REMOVE:
-from spec.integrations.auggie import (
+from ingot.integrations.auggie import (
     AuggieClient,
     AuggieRateLimitError,
     _looks_like_rate_limit,
 )
 
 # ADD:
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.errors import BackendRateLimitError
-from spec.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.errors import BackendRateLimitError
+from ingot.integrations.backends.factory import BackendFactory
 ```
 
 **Rate limit detection changes:**
@@ -2916,7 +2916,7 @@ def _execute_task_with_retry(
             success, output = backend.run_with_callback(
                 prompt,
                 output_callback=callback,
-                subagent="spec-implementer",
+                subagent="ingot-implementer",
                 dont_save_session=True,
             )
 
@@ -2947,7 +2947,7 @@ def _execute_task_with_retry(
 - Test rate limit detection uses backend-specific method
 - Test cleanup (close) is called
 
-**Integration Tests (gated behind `SPEC_INTEGRATION_TESTS=1`):**
+**Integration Tests (gated behind `INGOT_INTEGRATION_TESTS=1`):**
 - Run full workflow with AuggieBackend
 - Verify identical behavior to current implementation
 - Verify no `AuggieClient()` direct instantiations remain
@@ -3109,15 +3109,15 @@ def check_claude_installed() -> tuple[bool, str]:
 
 #### 3.2 Create ClaudeBackend
 
-Create `spec/integrations/backends/claude.py`:
+Create `ingot/integrations/backends/claude.py`:
 
 ```python
 """Claude Code CLI backend implementation."""
 
 from typing import Callable
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.claude import ClaudeClient, check_claude_installed
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.claude import ClaudeClient, check_claude_installed
 
 # Claude-specific rate limit patterns
 CLAUDE_RATE_LIMIT_PATTERNS = [
@@ -3204,14 +3204,14 @@ class ClaudeBackend:
 
 #### 3.3 Create ClaudeMediatedFetcher
 
-Create `spec/integrations/fetchers/claude_fetcher.py`:
+Create `ingot/integrations/fetchers/claude_fetcher.py`:
 
 ```python
 """Claude-mediated ticket fetcher using MCP integrations."""
 
-from spec.integrations.claude import ClaudeClient
-from spec.integrations.fetchers.base import AgentMediatedFetcher
-from spec.integrations.providers.base import Platform
+from ingot.integrations.claude import ClaudeClient
+from ingot.integrations.fetchers.base import AgentMediatedFetcher
+from ingot.integrations.providers.base import Platform
 
 SUPPORTED_PLATFORMS = frozenset({Platform.JIRA, Platform.LINEAR, Platform.GITHUB})
 
@@ -3236,7 +3236,7 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
         )
 
     def _get_prompt_template(self, platform: Platform) -> str:
-        from spec.integrations.fetchers.auggie_fetcher import PLATFORM_PROMPT_TEMPLATES
+        from ingot.integrations.fetchers.auggie_fetcher import PLATFORM_PROMPT_TEMPLATES
         return PLATFORM_PROMPT_TEMPLATES.get(platform, "")
 ```
 
@@ -3246,7 +3246,7 @@ class ClaudeMediatedFetcher(AgentMediatedFetcher):
 
 #### 4.1 Create CursorClient
 
-Create `spec/integrations/cursor.py`:
+Create `ingot/integrations/cursor.py`:
 
 ```python
 """Cursor CLI integration for SPEC.
@@ -3456,15 +3456,15 @@ def check_cursor_installed() -> tuple[bool, str]:
 
 #### 4.2 Create CursorBackend
 
-Create `spec/integrations/backends/cursor.py`:
+Create `ingot/integrations/backends/cursor.py`:
 
 ```python
 """Cursor CLI backend implementation."""
 
 from typing import Callable
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.cursor import CursorClient, check_cursor_installed
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.cursor import CursorClient, check_cursor_installed
 
 # Cursor-specific rate limit patterns
 CURSOR_RATE_LIMIT_PATTERNS = [
@@ -3557,14 +3557,14 @@ class CursorBackend:
 
 #### 4.3 Create CursorMediatedFetcher
 
-Create `spec/integrations/fetchers/cursor_fetcher.py`:
+Create `ingot/integrations/fetchers/cursor_fetcher.py`:
 
 ```python
 """Cursor-mediated ticket fetcher using MCP integrations."""
 
-from spec.integrations.cursor import CursorClient
-from spec.integrations.fetchers.base import AgentMediatedFetcher
-from spec.integrations.providers.base import Platform
+from ingot.integrations.cursor import CursorClient
+from ingot.integrations.fetchers.base import AgentMediatedFetcher
+from ingot.integrations.providers.base import Platform
 
 SUPPORTED_PLATFORMS = frozenset({Platform.JIRA, Platform.LINEAR, Platform.GITHUB})
 
@@ -3589,7 +3589,7 @@ class CursorMediatedFetcher(AgentMediatedFetcher):
         )
 
     def _get_prompt_template(self, platform: Platform) -> str:
-        from spec.integrations.fetchers.auggie_fetcher import PLATFORM_PROMPT_TEMPLATES
+        from ingot.integrations.fetchers.auggie_fetcher import PLATFORM_PROMPT_TEMPLATES
         return PLATFORM_PROMPT_TEMPLATES.get(platform, "")
 ```
 
@@ -3597,7 +3597,7 @@ class CursorMediatedFetcher(AgentMediatedFetcher):
 
 **Context:** Community reports indicate potential race conditions when spawning multiple Cursor CLI agents simultaneously. This task implements a stability mechanism to handle these edge cases.
 
-**File:** `spec/integrations/cursor.py`
+**File:** `ingot/integrations/cursor.py`
 
 Add startup delay and retry logic to `CursorClient`:
 
@@ -3732,22 +3732,22 @@ class TestCursorStabilityMechanism:
 
 **Goal:** Implement first-run onboarding flow for backend selection and verification.
 
-**TUI Dependencies (Verified Available):** The onboarding flow should use existing TUI functions from `spec/ui/prompts.py`:
+**TUI Dependencies (Verified Available):** The onboarding flow should use existing TUI functions from `ingot/ui/prompts.py`:
 - `prompt_select()` - For backend selection (replaces raw `input()`)
 - `prompt_confirm()` - For confirmation prompts
 - `prompt_input()` - For text input with optional validation
-- `print_header()` / `print_info()` from `spec/utils/console.py` - For styled output
+- `print_header()` / `print_info()` from `ingot/utils/console.py` - For styled output
 
 These functions are already implemented and handle keyboard interrupts gracefully by raising `UserCancelledError`.
 
 #### 5.1 Create Compatibility Matrix
 
-**File:** `spec/config/compatibility.py`
+**File:** `ingot/config/compatibility.py`
 
 ```python
 """Backend-platform compatibility matrix."""
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.providers import Platform
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.providers import Platform
 
 MCP_SUPPORT: dict[AgentPlatform, frozenset[Platform]] = {
     AgentPlatform.AUGGIE: frozenset({Platform.JIRA, Platform.LINEAR, Platform.GITHUB}),
@@ -3773,13 +3773,13 @@ def get_platform_support(backend: AgentPlatform, platform: Platform) -> tuple[bo
 
 #### 5.2 Create Onboarding Module
 
-**File:** `spec/onboarding/__init__.py`
+**File:** `ingot/onboarding/__init__.py`
 
 ```python
 """First-run onboarding for SPEC."""
 from dataclasses import dataclass
-from spec.config.fetch_config import AgentPlatform
-from spec.config.manager import ConfigManager
+from ingot.config.fetch_config import AgentPlatform
+from ingot.config.manager import ConfigManager
 
 @dataclass
 class OnboardingResult:
@@ -3796,26 +3796,26 @@ def is_first_run(config: ConfigManager) -> bool:
     return not ai_backend.strip()
 
 def run_onboarding(config: ConfigManager) -> OnboardingResult:
-    from spec.onboarding.flow import OnboardingFlow
+    from ingot.onboarding.flow import OnboardingFlow
     return OnboardingFlow(config).run()
 ```
 
 #### 5.3 Create Onboarding Flow
 
-**File:** `spec/onboarding/flow.py`
+**File:** `ingot/onboarding/flow.py`
 
 ```python
 """Interactive onboarding flow implementation.
 
-Uses existing TUI functions from spec/ui/prompts.py for consistent UX.
+Uses existing TUI functions from ingot/ui/prompts.py for consistent UX.
 """
-from spec.config.fetch_config import AgentPlatform
-from spec.config.manager import ConfigManager
-from spec.integrations.backends.factory import BackendFactory
-from spec.onboarding import OnboardingResult
-from spec.ui.prompts import prompt_select, prompt_confirm
-from spec.utils.console import print_header, print_info, print_success, print_error
-from spec.utils.errors import UserCancelledError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.config.manager import ConfigManager
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.onboarding import OnboardingResult
+from ingot.ui.prompts import prompt_select, prompt_confirm
+from ingot.utils.console import print_header, print_info, print_success, print_error
+from ingot.utils.errors import UserCancelledError
 
 BACKEND_CHOICES = [
     ("Auggie (Augment Code CLI)", AgentPlatform.AUGGIE),
@@ -3916,9 +3916,9 @@ class OnboardingFlow:
 > | Cursor | `https://www.cursor.com/cli` | ☐ Verify before release |
 >
 > These URLs appear in:
-> - `spec/integrations/claude.py` (docstring)
-> - `spec/integrations/cursor.py` (docstring)
-> - `spec/onboarding/backend_setup.py` (`_show_installation_instructions`)
+> - `ingot/integrations/claude.py` (docstring)
+> - `ingot/integrations/cursor.py` (docstring)
+> - `ingot/onboarding/backend_setup.py` (`_show_installation_instructions`)
 > - `docs/getting-started.md` (user documentation)
 >
 > If URLs change, update all locations. Consider extracting URLs to a constants file for single-point maintenance.
@@ -3929,10 +3929,10 @@ class OnboardingFlow:
 
 #### 6.1 Abstract Rate Limit Error
 
-**File:** `spec/integrations/backends/errors.py` (already created in Phase 1)
+**File:** `ingot/integrations/backends/errors.py` (already created in Phase 1)
 
 ```python
-class BackendRateLimitError(SpecError):
+class BackendRateLimitError(IngotError):
     """Raised when any backend indicates a rate limit error."""
     def __init__(self, message: str, output: str = "", backend_name: str = ""):
         super().__init__(message)
@@ -3942,10 +3942,10 @@ class BackendRateLimitError(SpecError):
 
 #### 6.2 Update Retry Logic
 
-Update `spec/workflow/step3_execute.py` to use backend-specific detection:
+Update `ingot/workflow/step3_execute.py` to use backend-specific detection:
 
 ```python
-from spec.integrations.backends.errors import BackendRateLimitError
+from ingot.integrations.backends.errors import BackendRateLimitError
 
 def _execute_task_with_callback(state, task, backend: AIBackend, ...):
     success, output = backend.run_with_callback(...)
@@ -3966,13 +3966,13 @@ Update the ticket service to select the appropriate fetcher based on the configu
 
 #### 7.1 Refactor AuggieMediatedFetcher to Accept AIBackend
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 The current `AuggieMediatedFetcher` constructor expects an `AuggieClient`. This must be refactored to accept the generic `AIBackend` protocol instead, enabling all mediated fetchers to share the same interface.
 
 **Before (current implementation):**
 ```python
-from spec.integrations.auggie import AuggieClient
+from ingot.integrations.auggie import AuggieClient
 
 class AuggieMediatedFetcher(AgentMediatedFetcher):
     def __init__(
@@ -3986,7 +3986,7 @@ class AuggieMediatedFetcher(AgentMediatedFetcher):
 
 **After (refactored):**
 ```python
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 class AuggieMediatedFetcher(AgentMediatedFetcher):
     """Fetches tickets through Auggie CLI's MCP integrations."""
@@ -4033,11 +4033,11 @@ All mediated fetchers should accept `backend: AIBackend` in their constructor, n
 
 #### 7.2 Update create_ticket_service()
 
-Modify `spec/integrations/ticket_service.py`:
+Modify `ingot/integrations/ticket_service.py`:
 
 ```python
-from spec.integrations.backends.base import AIBackend
-from spec.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
 
 
 def create_ticket_service(
@@ -4059,15 +4059,15 @@ def create_ticket_service(
     """
     # Select fetcher based on backend platform (derived from backend instance)
     if backend.platform == AgentPlatform.AUGGIE:
-        from spec.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
+        from ingot.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
         mediated_fetcher = AuggieMediatedFetcher(backend=backend)
 
     elif backend.platform == AgentPlatform.CLAUDE:
-        from spec.integrations.fetchers.claude_fetcher import ClaudeMediatedFetcher
+        from ingot.integrations.fetchers.claude_fetcher import ClaudeMediatedFetcher
         mediated_fetcher = ClaudeMediatedFetcher(backend=backend)
 
     elif backend.platform == AgentPlatform.CURSOR:
-        from spec.integrations.fetchers.cursor_fetcher import CursorMediatedFetcher
+        from ingot.integrations.fetchers.cursor_fetcher import CursorMediatedFetcher
         mediated_fetcher = CursorMediatedFetcher(backend=backend)
 
     else:
@@ -4091,7 +4091,7 @@ def create_ticket_service(
 
 #### 7.3 Update Runner to Pass Backend
 
-Modify `spec/workflow/runner.py` to pass backend to ticket service:
+Modify `ingot/workflow/runner.py` to pass backend to ticket service:
 
 ```python
 # When creating ticket service, pass the backend instance
@@ -4107,7 +4107,7 @@ ticket_service = create_ticket_service(
 
 **Testing Strategy:**
 - **Unit tests** use mocks/fakes for backends (no external CLI required)
-- **Integration tests** are optional and gated behind `SPEC_INTEGRATION_TESTS=1` environment variable
+- **Integration tests** are optional and gated behind `INGOT_INTEGRATION_TESTS=1` environment variable
 - No mandatory external CLIs in CI
 
 #### 8.1 Create FakeBackend for Unit Testing
@@ -4122,8 +4122,8 @@ Create a `FakeBackend` class that implements the `AIBackend` protocol for unit t
 from collections.abc import Callable
 from typing import Generator
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend
 
 
 class FakeBackend:
@@ -4318,7 +4318,7 @@ class TestStep1CreatePlan:
         assert result is True
         assert len(backend.calls) == 1
         assert backend.calls[0][0] == "run_with_callback"
-        assert "spec-planner" in str(backend.calls[0][2])
+        assert "ingot-planner" in str(backend.calls[0][2])
 
 
 class TestStep3ExecuteWithRetry:
@@ -4339,8 +4339,8 @@ Create `tests/test_backends.py`:
 
 ```python
 import pytest
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.factory import BackendFactory
 
 
 class TestBackendFactory:
@@ -4374,19 +4374,19 @@ class TestBackendFactory:
 
 class TestRateLimitDetection:
     def test_auggie_rate_limit_detection(self):
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
         backend = AuggieBackend()
         assert backend.detect_rate_limit("Error 429: Too many requests")
         assert not backend.detect_rate_limit("Task completed successfully")
 
     def test_claude_rate_limit_detection(self):
-        from spec.integrations.backends.claude import ClaudeBackend
+        from ingot.integrations.backends.claude import ClaudeBackend
         backend = ClaudeBackend()
         assert backend.detect_rate_limit("rate limit exceeded")
         assert not backend.detect_rate_limit("Task completed successfully")
 
     def test_cursor_rate_limit_detection(self):
-        from spec.integrations.backends.cursor import CursorBackend
+        from ingot.integrations.backends.cursor import CursorBackend
         backend = CursorBackend()
         assert backend.detect_rate_limit("quota exceeded")
         assert not backend.detect_rate_limit("Task completed successfully")
@@ -4394,22 +4394,22 @@ class TestRateLimitDetection:
 
 class TestCompatibilityMatrix:
     def test_auggie_supports_jira_mcp(self):
-        from spec.config.compatibility import get_platform_support
-        from spec.integrations.providers import Platform
+        from ingot.config.compatibility import get_platform_support
+        from ingot.integrations.providers import Platform
         supported, mechanism = get_platform_support(AgentPlatform.AUGGIE, Platform.JIRA)
         assert supported
         assert mechanism == "mcp"
 
     def test_auggie_supports_trello_api(self):
-        from spec.config.compatibility import get_platform_support
-        from spec.integrations.providers import Platform
+        from ingot.config.compatibility import get_platform_support
+        from ingot.integrations.providers import Platform
         supported, mechanism = get_platform_support(AgentPlatform.AUGGIE, Platform.TRELLO)
         assert supported
         assert mechanism == "api"
 
     def test_manual_no_mcp_support(self):
-        from spec.config.compatibility import get_platform_support
-        from spec.integrations.providers import Platform
+        from ingot.config.compatibility import get_platform_support
+        from ingot.integrations.providers import Platform
         supported, mechanism = get_platform_support(AgentPlatform.MANUAL, Platform.JIRA)
         assert supported  # Has API fallback
         assert mechanism == "api"
@@ -4417,14 +4417,14 @@ class TestCompatibilityMatrix:
 
 class TestOnboarding:
     def test_is_first_run_no_config(self, tmp_path):
-        from spec.config.manager import ConfigManager
-        from spec.onboarding.setup import is_first_run
+        from ingot.config.manager import ConfigManager
+        from ingot.onboarding.setup import is_first_run
         config = ConfigManager(config_dir=tmp_path)
         assert is_first_run(config)
 
     def test_is_first_run_with_config(self, tmp_path):
-        from spec.config.manager import ConfigManager
-        from spec.onboarding.setup import is_first_run
+        from ingot.config.manager import ConfigManager
+        from ingot.onboarding.setup import is_first_run
         config = ConfigManager(config_dir=tmp_path)
         config.set("AI_BACKEND", "auggie")
         assert not is_first_run(config)
@@ -4434,19 +4434,19 @@ class TestOnboarding:
 
 Create `tests/test_backend_integration.py`:
 
-**Note:** These tests require external CLIs to be installed. They are skipped in CI unless `SPEC_INTEGRATION_TESTS=1` is set.
+**Note:** These tests require external CLIs to be installed. They are skipped in CI unless `INGOT_INTEGRATION_TESTS=1` is set.
 
 ```python
 import os
 import pytest
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.factory import BackendFactory
-from spec.integrations.backends.base import AIBackend
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.integrations.backends.base import AIBackend
 
 # Skip all integration tests unless explicitly enabled
 pytestmark = pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests disabled. Set SPEC_INTEGRATION_TESTS=1 to enable.",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests disabled. Set INGOT_INTEGRATION_TESTS=1 to enable.",
 )
 
 
@@ -4516,7 +4516,7 @@ SPEC supports multiple AI backends:
 On first run, SPEC will guide you through selecting your AI backend:
 
 ```bash
-$ spec run TICKET-123
+$ ingot run TICKET-123
 
 Welcome to SPEC! Let's set up your AI provider.
 
@@ -4532,10 +4532,10 @@ Your selection is saved and used for all future runs.
 
 Via CLI flag (temporary override):
 ```bash
-spec run TICKET-123 --backend=claude
+ingot run TICKET-123 --backend=claude
 ```
 
-Via configuration (~/.spec-config):
+Via configuration (~/.ingot-config):
 ```
 AI_BACKEND=cursor
 ```
@@ -4556,7 +4556,7 @@ SPEC will verify CLI installation on first run via version detection (`--version
 ## File Structure Summary
 
 ```
-spec/
+ingot/
 ├── onboarding/                  # NEW: First-run setup
 │   ├── __init__.py
 │   ├── setup.py                 # is_first_run(), run_onboarding()
@@ -4619,7 +4619,7 @@ This is a new system with no prior releases. There are no backward compatibility
 
 ### Backend Configuration Behavior
 
-- No default backend — users must explicitly configure one via `spec init` or `--backend` flag
+- No default backend — users must explicitly configure one via `ingot init` or `--backend` flag
 - If no backend is configured, SPEC displays an error with instructions to configure one
 - First-run onboarding triggers when `AI_BACKEND` is not set
 - Existing `AgentPlatform` enum is reused (no new enum defined)
@@ -4629,7 +4629,7 @@ This is a new system with no prior releases. There are no backward compatibility
 ## Acceptance Criteria Checklist
 
 ### Phase 1: Backend Infrastructure
-- [ ] `AIBackend` protocol defined in `spec/integrations/backends/base.py`
+- [ ] `AIBackend` protocol defined in `ingot/integrations/backends/base.py`
 - [ ] `BackendRateLimitError`, `BackendNotInstalledError`, `BackendNotConfiguredError`, `BackendTimeoutError` defined in `errors.py`
 - [ ] `AuggieBackend` wraps existing `AuggieClient` with protocol compliance
 - [ ] `BackendFactory.create()` returns correct backend for each `AgentPlatform`
@@ -4638,7 +4638,7 @@ This is a new system with no prior releases. There are no backward compatibility
 ### Phase 2: Workflow Refactoring
 - [ ] All 12+ `AuggieClient()` instantiation points replaced with backend injection
 - [ ] `WorkflowState.backend_platform` stores `AgentPlatform` enum only
-- [ ] `run_spec_driven_workflow()` accepts `backend: AIBackend` parameter
+- [ ] `run_ingot_workflow()` accepts `backend: AIBackend` parameter
 - [ ] `step_1_create_plan()` accepts and uses injected backend
 - [ ] `step_2_create_tasklist()` accepts and uses injected backend
 - [ ] `_execute_task()` and `_execute_task_with_callback()` create fresh backends via factory
@@ -4650,13 +4650,13 @@ This is a new system with no prior releases. There are no backward compatibility
 - [ ] Only `AI_BACKEND` used for backend configuration key
 
 ### Phase 3: Claude Backend
-- [ ] `ClaudeClient` implemented in `spec/integrations/claude.py`
+- [ ] `ClaudeClient` implemented in `ingot/integrations/claude.py`
 - [ ] `ClaudeBackend` implements `AIBackend` protocol
 - [ ] `ClaudeMediatedFetcher` created for ticket fetching via MCP
 - [ ] Subagent prompt loading strips YAML frontmatter
 
 ### Phase 4: Cursor Backend
-- [ ] `CursorClient` implemented in `spec/integrations/cursor.py`
+- [ ] `CursorClient` implemented in `ingot/integrations/cursor.py`
 - [ ] `CursorBackend` implements `AIBackend` protocol with `supports_parallel = True`
 - [ ] `CursorMediatedFetcher` created for ticket fetching via MCP
 - [ ] Stability mechanism implemented (startup jitter + spawn retry for concurrent invocations)
@@ -4665,7 +4665,7 @@ This is a new system with no prior releases. There are no backward compatibility
 - [ ] `is_first_run()` correctly detects missing configuration
 - [ ] Interactive backend selection works
 - [ ] Installation verification provides actionable error messages
-- [ ] Configuration persisted to `~/.spec-config`
+- [ ] Configuration persisted to `~/.ingot-config`
 
 ### Phase 6: Rate Limiting
 - [ ] Each backend implements `detect_rate_limit(output: str) -> bool`
@@ -4688,7 +4688,7 @@ This is a new system with no prior releases. There are no backward compatibility
 
 ### Phase 0: Baseline Behavior Tests (CRITICAL - Run Before Any Refactoring)
 - [ ] Create `tests/test_baseline_auggie_behavior.py` capturing current Auggie workflow behavior
-- [ ] Tests are gated behind `SPEC_INTEGRATION_TESTS=1` environment variable
+- [ ] Tests are gated behind `INGOT_INTEGRATION_TESTS=1` environment variable
 - [ ] Baseline tests verify:
   - [ ] `run_with_callback()` returns `(bool, str)` with correct semantics
   - [ ] `run_print_with_output()` returns `(bool, str)` with correct semantics
@@ -4708,10 +4708,10 @@ This is a new system with no prior releases. There are no backward compatibility
 ## Success Criteria
 
 ### Core Functionality
-1. ✅ `spec run TICKET-123` works when backend is configured (via `AI_BACKEND` config or `--backend` flag)
-2. ✅ `spec run TICKET-123` shows clear error when no backend is configured
-3. ✅ `spec run TICKET-123 --backend=claude` works with Claude Code CLI
-4. ✅ `spec run TICKET-123 --backend=cursor` works with Cursor CLI
+1. ✅ `ingot run TICKET-123` works when backend is configured (via `AI_BACKEND` config or `--backend` flag)
+2. ✅ `ingot run TICKET-123` shows clear error when no backend is configured
+3. ✅ `ingot run TICKET-123 --backend=claude` works with Claude Code CLI
+4. ✅ `ingot run TICKET-123 --backend=cursor` works with Cursor CLI
 5. ✅ All existing tests pass
 6. ✅ New backend tests pass
 
@@ -4744,7 +4744,7 @@ Phase 0: Baseline Behavior Tests (CRITICAL - DO FIRST)
     ├── Capture current run_print_with_output() semantics
     ├── Capture current rate limit detection behavior
     ├── Capture current workflow step behavior
-    └── Gate behind SPEC_INTEGRATION_TESTS=1
+    └── Gate behind INGOT_INTEGRATION_TESTS=1
           ↓
 Phase 1: Backend Infrastructure (Low Risk)
     ├── 1.1 Backend Error Types
@@ -4763,9 +4763,9 @@ Phase 1.5: Fetcher Refactoring (Medium Risk)
     └── 1.5.4 Phase 1.5 Testing
           ↓
 Phase 1.6: AI_BACKEND Removal (REQUIRED)
-    ├── Update spec/config/settings.py (remove ai_backend, add ai_backend)
-    ├── Update spec/config/manager.py (AI_BACKEND → AI_BACKEND)
-    ├── Update spec/config/fetch_config.py (context param)
+    ├── Update ingot/config/settings.py (remove ai_backend, add ai_backend)
+    ├── Update ingot/config/manager.py (AI_BACKEND → AI_BACKEND)
+    ├── Update ingot/config/fetch_config.py (context param)
     ├── Update all tests
     ├── Update documentation
     └── Add CI guard
@@ -4792,7 +4792,7 @@ Phase 5: Onboarding UX
 - Zero direct `AuggieClient()` instantiations
 - Zero `AuggieClientProtocol` usage
 - Zero `run_print()` calls (all converted to TUI + `run_streaming()`)
-- All subagent constants in `spec/workflow/constants.py`
+- All subagent constants in `ingot/workflow/constants.py`
 - Zero occurrences of `AI_BACKEND` string (verified via grep)
 - Only `AI_BACKEND` used for backend configuration
 

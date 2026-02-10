@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from spec.integrations.cache import (
+from ingot.integrations.cache import (
     CacheConfigurationError,
     CachedTicket,
     CacheKey,
@@ -20,7 +20,7 @@ from spec.integrations.cache import (
     _get_global_cache,
     _set_global_cache,
 )
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     Platform,
     TicketStatus,
@@ -508,7 +508,7 @@ class TestFileBasedTicketCache:
 
     def test_corrupted_json_file_returns_none(self, cache, sample_ticket):
         """Test that corrupted JSON files are handled gracefully."""
-        from spec.integrations.cache import CacheKey
+        from ingot.integrations.cache import CacheKey
 
         cache.set(sample_ticket)
         key = CacheKey.from_ticket(sample_ticket)
@@ -621,7 +621,7 @@ class TestFileBasedTicketCache:
 
         # Mock json.dump to raise TypeError
         with patch(
-            "spec.integrations.cache.json.dump", side_effect=TypeError("Test serialization error")
+            "ingot.integrations.cache.json.dump", side_effect=TypeError("Test serialization error")
         ):
             # This should raise TypeError (not caught by set())
             # Actually, set() catches TypeError and logs a warning
@@ -649,7 +649,7 @@ class TestFileBasedTicketCache:
         test_data = {"key": "value"}
 
         # Mock json.dump to raise TypeError
-        with patch("spec.integrations.cache.json.dump", side_effect=TypeError("Test error")):
+        with patch("ingot.integrations.cache.json.dump", side_effect=TypeError("Test error")):
             with pytest.raises(TypeError, match="Test error"):
                 cache._atomic_write(test_path, test_data)
 
@@ -767,7 +767,7 @@ class TestFileBasedTicketCache:
 
         # Disable lazy eviction by making random.random always return > 0.1
         # This ensures only force_evict() triggers eviction
-        with patch("spec.integrations.cache.random.random", return_value=0.5):
+        with patch("ingot.integrations.cache.random.random", return_value=0.5):
             # Add exactly 5 tickets (at max_size)
             for i in range(5):
                 create_and_set_ticket(i)
@@ -937,7 +937,7 @@ class TestFileBasedTicketCache:
 
         # Mock json.dump to raise TypeError to simulate non-serializable data
         with patch(
-            "spec.integrations.cache.json.dump",
+            "ingot.integrations.cache.json.dump",
             side_effect=TypeError("Object of type 'set' is not JSON serializable"),
         ):
             # set() should catch the TypeError and log a warning, not raise
@@ -1134,7 +1134,7 @@ class TestGlobalCache:
         works correctly, whereas comparing {} to None could cause confusion
         or unexpected behavior in logging/error messages.
         """
-        import spec.integrations.cache as cache_module
+        import ingot.integrations.cache as cache_module
 
         _clear_global_cache()
 

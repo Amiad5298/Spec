@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-41 - Create Platform Configuration Guide
 
-**Ticket:** [AMI-41](https://linear.app/amiadspec/issue/AMI-41/create-platform-configuration-guide)
+**Ticket:** [AMI-41](https://linear.app/amiadingot/issue/AMI-41/create-platform-configuration-guide)
 **Status:** Implemented
 **Date:** 2026-01-28
 
@@ -11,13 +11,13 @@
 This PR adds the following documentation enhancements to `docs/platform-configuration.md`:
 
 - ✅ **Added:** "Quick Start" checklist for rapid onboarding at the top of the guide
-- ✅ **Added:** "Configuration File Locations & Precedence" section documenting `.spec` local config and `~/.spec-config` global config hierarchy
+- ✅ **Added:** "Configuration File Locations & Precedence" section documenting `.ingot` local config and `~/.ingot-config` global config hierarchy
 - ✅ **Added:** Instructions for verifying configuration using `spec --config`
 - ✅ **Added:** Security warning about never committing secrets to version control
 - ✅ **Added:** Clarification of terminology (Auggie vs. Agent integration) in the Authentication Modes section
 - ✅ **Updated:** Trello instructions to use official Atlassian terminology (API Key and Token)
 - ✅ **Fixed:** Technical accuracy in config file traversal documentation (removed implementation-specific `.git` reference)
-- ✅ **Added:** Reference to the configuration template file (`spec/config/templates/fetch_config.template`)
+- ✅ **Added:** Reference to the configuration template file (`ingot/config/templates/fetch_config.template`)
 
 ---
 
@@ -105,7 +105,7 @@ The guide follows a logical structure that helps users understand:
 - **UPDATED:** Trello section to use official Atlassian terminology (API Key, Token)
 - **UPDATED:** Precedence table to clarify that Built-in Defaults apply to non-secret settings only
 
-**Template Reference:** The configuration template at `spec/config/templates/fetch_config.template` is referenced in the Troubleshooting section for users who want a complete configuration example.
+**Template Reference:** The configuration template at `ingot/config/templates/fetch_config.template` is referenced in the Troubleshooting section for users who want a complete configuration example.
 
 **Required Actions:**
 1. Add Quick Start checklist at top
@@ -114,8 +114,8 @@ The guide follows a logical structure that helps users understand:
 4. Clarify terminology (Auggie = specific agent implementation)
 5. Fix local config traversal documentation
 6. Update Trello terminology
-7. Verify credential keys match `PLATFORM_REQUIRED_CREDENTIALS` in `spec/config/fetch_config.py`
-8. Verify credential aliases match `CREDENTIAL_ALIASES` in `spec/config/fetch_config.py`
+7. Verify credential keys match `PLATFORM_REQUIRED_CREDENTIALS` in `ingot/config/fetch_config.py`
+8. Verify credential aliases match `CREDENTIAL_ALIASES` in `ingot/config/fetch_config.py`
 9. Ensure all external links are valid
 10. Test configuration examples for correctness
 
@@ -167,7 +167,7 @@ The guide follows a logical structure that helps users understand:
 
 #### Step 2.1: Cross-Reference Credential Keys with Implementation
 
-Verify credential keys in documentation match `spec/config/fetch_config.py`:
+Verify credential keys in documentation match `ingot/config/fetch_config.py`:
 
 | Platform | Doc Keys | Implementation (`PLATFORM_REQUIRED_CREDENTIALS`) | Match |
 |----------|----------|--------------------------------------------------|-------|
@@ -180,7 +180,7 @@ Verify credential keys in documentation match `spec/config/fetch_config.py`:
 
 #### Step 2.2: Verify Credential Aliases
 
-Cross-reference with `CREDENTIAL_ALIASES` in `spec/config/fetch_config.py`:
+Cross-reference with `CREDENTIAL_ALIASES` in `ingot/config/fetch_config.py`:
 
 | Platform | Documented Aliases | Implementation | Match |
 |----------|-------------------|----------------|-------|
@@ -246,7 +246,7 @@ From the Linear ticket (with validation status):
 
 ```bash
 # 1. Verify credential keys match implementation
-grep -E "PLATFORM_REQUIRED_CREDENTIALS" spec/config/fetch_config.py
+grep -E "PLATFORM_REQUIRED_CREDENTIALS" ingot/config/fetch_config.py
 
 # Expected output should match documentation:
 # jira: url, email, token
@@ -257,7 +257,7 @@ grep -E "PLATFORM_REQUIRED_CREDENTIALS" spec/config/fetch_config.py
 # monday: api_key
 
 # 2. Verify credential aliases
-grep -E "CREDENTIAL_ALIASES" spec/config/fetch_config.py
+grep -E "CREDENTIAL_ALIASES" ingot/config/fetch_config.py
 
 # Expected: azure_devops: org→organization, token→pat
 #           jira: base_url→url
@@ -299,10 +299,10 @@ Manually verify each external link is accessible and points to the correct page.
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-38](https://linear.app/amiadspec/issue/AMI-38) | Update README for Multi-Platform | Links to this guide |
-| [AMI-39](https://linear.app/amiadspec/issue/AMI-39) | Create Platform Configuration Guide | Original ticket (duplicate) |
-| [AMI-42](https://linear.app/amiadspec/issue/AMI-42) | Update spec --config Output | Shows configuration status |
-| [AMI-43](https://linear.app/amiadspec/issue/AMI-43) | Audit User-Facing Strings | Error messages referenced here |
+| [AMI-38](https://linear.app/amiadingot/issue/AMI-38) | Update README for Multi-Platform | Links to this guide |
+| [AMI-39](https://linear.app/amiadingot/issue/AMI-39) | Create Platform Configuration Guide | Original ticket (duplicate) |
+| [AMI-42](https://linear.app/amiadingot/issue/AMI-42) | Update spec --config Output | Shows configuration status |
+| [AMI-43](https://linear.app/amiadingot/issue/AMI-43) | Audit User-Facing Strings | Error messages referenced here |
 
 ---
 
@@ -366,7 +366,7 @@ SPEC uses two authentication modes to fetch tickets:
 2. **Fallback Credentials (Direct API)**
    - Platforms: **All 6** (Azure DevOps, Monday, Trello **require** this)
    - Authentication via `FALLBACK_*` configuration keys
-   - Credentials stored in `~/.spec-config` or `.spec` file
+   - Credentials stored in `~/.ingot-config` or `.ingot` file
 ```
 
 ---
@@ -411,7 +411,7 @@ spec https://trello.com/c/aBcDeFgH/123-card-title
 
 ```bash
 # Issue: "No fallback credentials configured for platform 'azure_devops'"
-# Solution: Add to ~/.spec-config:
+# Solution: Add to ~/.ingot-config:
 FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg
 FALLBACK_AZURE_DEVOPS_PAT=${AZURE_DEVOPS_PAT}
 
@@ -451,14 +451,14 @@ This section provides precise behavioral rules for the underlying code that supp
 The authoritative credential requirements per platform are defined in:
 
 ```
-spec/config/fetch_config.py:PLATFORM_REQUIRED_CREDENTIALS
+ingot/config/fetch_config.py:PLATFORM_REQUIRED_CREDENTIALS
 ```
 
 This constant is a `dict[str, frozenset[str]]` mapping lowercase platform names to their required credential keys.
 
 **Rules:**
-- Do NOT duplicate the credentials map; always import and reuse the canonical definition from `spec.config.fetch_config.PLATFORM_REQUIRED_CREDENTIALS`.
-- Credential aliases are defined in `spec.config.fetch_config.CREDENTIAL_ALIASES`.
+- Do NOT duplicate the credentials map; always import and reuse the canonical definition from `ingot.config.fetch_config.PLATFORM_REQUIRED_CREDENTIALS`.
+- Credential aliases are defined in `ingot.config.fetch_config.CREDENTIAL_ALIASES`.
 - Use `canonicalize_credentials(platform, credentials)` before validation to normalize alias keys to canonical keys.
 - Use `validate_credentials(platform, credentials, strict=True)` to validate credential completeness.
 
@@ -468,11 +468,11 @@ When using `FileBasedTicketCache` or any caching decorator, the following rules 
 
 **Cache Key Composition:**
 - Cache key MUST be composed of: `platform` (Platform enum) + `normalized_ticket_id` (string, as returned by `provider.parse_input()`).
-- Use `CacheKey(platform: Platform, ticket_id: str)` dataclass from `spec.integrations.cache`.
+- Use `CacheKey(platform: Platform, ticket_id: str)` dataclass from `ingot.integrations.cache`.
 - Fetch mode is NOT included in the cache key—cached tickets are valid regardless of how they were fetched.
 
 **TTL / Invalidation Policy:**
-- Default TTL: 1 hour (`DEFAULT_CACHE_TTL = timedelta(hours=1)` in `spec.integrations.ticket_service`).
+- Default TTL: 1 hour (`DEFAULT_CACHE_TTL = timedelta(hours=1)` in `ingot.integrations.ticket_service`).
 - Invalidation: manual only via `cache.invalidate(key)` or `cache.clear()`.
 - There is no automatic background expiration; expiration is checked at read time.
 
@@ -514,7 +514,7 @@ Error: The identifier '{input}' matches multiple platforms: {matched_platforms}.
 
 To resolve:
   1. Use --platform <platform> flag: spec {input} --platform jira
-  2. Set default_platform in ~/.spec-config or .spec:
+  2. Set default_platform in ~/.ingot-config or .ingot:
      DEFAULT_PLATFORM=jira
 
 Supported platforms: jira, linear, github, azure_devops, monday, trello
@@ -527,7 +527,7 @@ Error: Could not detect platform for '{input}'.
 To resolve:
   1. Use a full URL (e.g., https://jira.example.com/browse/PROJ-123)
   2. Use --platform <platform> flag: spec {input} --platform jira
-  3. Set default_platform in ~/.spec-config or .spec
+  3. Set default_platform in ~/.ingot-config or .ingot
 
 Supported platforms: jira, linear, github, azure_devops, monday, trello
 ```
@@ -547,7 +547,7 @@ Each provider must map platform-specific errors to these normalized exception ca
 | Validation error | `TicketIdFormatError` | Malformed ticket ID, invalid format for platform |
 | Platform API error | `PlatformApiError` | Rate limiting, server errors, unexpected API responses |
 
-All exceptions are defined in `spec.integrations.providers.exceptions` (provider-level) or `spec.integrations.fetchers.exceptions` (fetcher-level).
+All exceptions are defined in `ingot.integrations.providers.exceptions` (provider-level) or `ingot.integrations.fetchers.exceptions` (fetcher-level).
 
 #### 4.2 Output Contract
 

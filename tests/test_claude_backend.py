@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.backends.claude module - ClaudeBackend class."""
+"""Tests for ingot.integrations.backends.claude module - ClaudeBackend class."""
 
 import os
 import subprocess
@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends import AIBackend, ClaudeBackend
-from spec.integrations.backends.errors import BackendTimeoutError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends import AIBackend, ClaudeBackend
+from ingot.integrations.backends.errors import BackendTimeoutError
 
 
 class TestClaudeBackendProperties:
@@ -101,7 +101,7 @@ class TestClaudeBackendDelegation:
         """subagent is resolved to system_prompt before passing to client."""
         agents_dir = tmp_path / ".augment" / "agents"
         agents_dir.mkdir(parents=True)
-        agent_file = agents_dir / "spec-planner.md"
+        agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
 
         monkeypatch.chdir(tmp_path)
@@ -115,7 +115,7 @@ class TestClaudeBackendDelegation:
             backend.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
-                subagent="spec-planner",
+                subagent="ingot-planner",
             )
 
         call_kwargs = mock_run.call_args.kwargs
@@ -172,7 +172,7 @@ class TestClaudeBackendDelegation:
         """subagent is resolved to system_prompt in run_print_quiet."""
         agents_dir = tmp_path / ".augment" / "agents"
         agents_dir.mkdir(parents=True)
-        agent_file = agents_dir / "spec-planner.md"
+        agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
 
         monkeypatch.chdir(tmp_path)
@@ -182,7 +182,7 @@ class TestClaudeBackendDelegation:
         with patch.object(
             backend._client, "run_print_quiet", return_value="quiet output"
         ) as mock_run:
-            backend.run_print_quiet("test prompt", subagent="spec-planner")
+            backend.run_print_quiet("test prompt", subagent="ingot-planner")
 
         call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("system_prompt") == "You are a planner."
@@ -266,7 +266,7 @@ class TestClaudeBackendDelegation:
         backend = ClaudeBackend()
 
         with patch(
-            "spec.integrations.backends.claude.check_claude_installed",
+            "ingot.integrations.backends.claude.check_claude_installed",
             return_value=(True, "claude 1.0.0"),
         ) as mock_check:
             is_installed, message = backend.check_installed()
@@ -636,8 +636,8 @@ class TestClaudeDetectRateLimit:
 
 
 @pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 class TestClaudeBackendIntegration:
     """Integration tests with real Claude Code CLI."""

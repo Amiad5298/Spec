@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.backends.cursor module - CursorBackend class."""
+"""Tests for ingot.integrations.backends.cursor module - CursorBackend class."""
 
 import os
 import subprocess
@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends import AIBackend, CursorBackend
-from spec.integrations.backends.errors import BackendTimeoutError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends import AIBackend, CursorBackend
+from ingot.integrations.backends.errors import BackendTimeoutError
 
 
 class TestCursorBackendProperties:
@@ -101,7 +101,7 @@ class TestCursorBackendDelegation:
         """subagent is composed into the prompt before passing to client."""
         agents_dir = tmp_path / ".augment" / "agents"
         agents_dir.mkdir(parents=True)
-        agent_file = agents_dir / "spec-planner.md"
+        agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
 
         monkeypatch.chdir(tmp_path)
@@ -115,7 +115,7 @@ class TestCursorBackendDelegation:
             backend.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
-                subagent="spec-planner",
+                subagent="ingot-planner",
             )
 
         # The prompt should be composed (not passed as a separate system_prompt)
@@ -179,7 +179,7 @@ class TestCursorBackendDelegation:
         """subagent is composed into the prompt in run_print_quiet."""
         agents_dir = tmp_path / ".augment" / "agents"
         agents_dir.mkdir(parents=True)
-        agent_file = agents_dir / "spec-planner.md"
+        agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
 
         monkeypatch.chdir(tmp_path)
@@ -189,7 +189,7 @@ class TestCursorBackendDelegation:
         with patch.object(
             backend._client, "run_print_quiet", return_value="quiet output"
         ) as mock_run:
-            backend.run_print_quiet("test prompt", subagent="spec-planner")
+            backend.run_print_quiet("test prompt", subagent="ingot-planner")
 
         composed_prompt = mock_run.call_args[0][0]
         assert "## Agent Instructions" in composed_prompt
@@ -279,7 +279,7 @@ class TestCursorBackendDelegation:
         backend = CursorBackend()
 
         with patch(
-            "spec.integrations.backends.cursor.check_cursor_installed",
+            "ingot.integrations.backends.cursor.check_cursor_installed",
             return_value=(True, "cursor 0.1.0"),
         ) as mock_check:
             is_installed, message = backend.check_installed()
@@ -664,8 +664,8 @@ class TestCursorDetectRateLimit:
 
 
 @pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 class TestCursorBackendIntegration:
     """Integration tests with real Cursor CLI."""

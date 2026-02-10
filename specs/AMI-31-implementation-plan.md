@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-31 - Implement DirectAPIFetcher as Fallback with REST/GraphQL Clients
 
-**Ticket:** [AMI-31](https://linear.app/amiadspec/issue/AMI-31/implement-directapifetcher-as-fallback-with-restgraphql-clients)
+**Ticket:** [AMI-31](https://linear.app/amiadingot/issue/AMI-31/implement-directapifetcher-as-fallback-with-restgraphql-clients)
 **Status:** Implemented
 **PR:** [#24](https://github.com/Amiad5298/Spec/pull/24)
 **Date:** 2026-01-25
@@ -79,7 +79,7 @@ finally:
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           TicketFetcher (ABC)                                │
-│                      (spec/integrations/fetchers/base.py)                    │
+│                      (ingot/integrations/fetchers/base.py)                    │
 │                                                                             │
 │  async def fetch_raw(ticket_id, platform) → dict                            │
 │  def supports_platform(platform) → bool                                     │
@@ -142,21 +142,21 @@ finally:
 
 | File | Purpose |
 |------|---------|
-| `spec/integrations/fetchers/direct_api_fetcher.py` | `DirectAPIFetcher` class |
-| `spec/integrations/fetchers/handlers/__init__.py` | Handler package exports |
-| `spec/integrations/fetchers/handlers/base.py` | `PlatformHandler` ABC |
-| `spec/integrations/fetchers/handlers/jira.py` | `JiraHandler` - REST API |
-| `spec/integrations/fetchers/handlers/linear.py` | `LinearHandler` - GraphQL API |
-| `spec/integrations/fetchers/handlers/github.py` | `GitHubHandler` - REST API |
-| `spec/integrations/fetchers/handlers/azure_devops.py` | `AzureDevOpsHandler` - REST API |
-| `spec/integrations/fetchers/handlers/trello.py` | `TrelloHandler` - REST API |
-| `spec/integrations/fetchers/handlers/monday.py` | `MondayHandler` - GraphQL API |
+| `ingot/integrations/fetchers/direct_api_fetcher.py` | `DirectAPIFetcher` class |
+| `ingot/integrations/fetchers/handlers/__init__.py` | Handler package exports |
+| `ingot/integrations/fetchers/handlers/base.py` | `PlatformHandler` ABC |
+| `ingot/integrations/fetchers/handlers/jira.py` | `JiraHandler` - REST API |
+| `ingot/integrations/fetchers/handlers/linear.py` | `LinearHandler` - GraphQL API |
+| `ingot/integrations/fetchers/handlers/github.py` | `GitHubHandler` - REST API |
+| `ingot/integrations/fetchers/handlers/azure_devops.py` | `AzureDevOpsHandler` - REST API |
+| `ingot/integrations/fetchers/handlers/trello.py` | `TrelloHandler` - REST API |
+| `ingot/integrations/fetchers/handlers/monday.py` | `MondayHandler` - GraphQL API |
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/fetchers/__init__.py` | Export `DirectAPIFetcher` |
+| `ingot/integrations/fetchers/__init__.py` | Export `DirectAPIFetcher` |
 | `pyproject.toml` | Add `httpx` dependency |
 
 ---
@@ -169,7 +169,7 @@ finally:
 Add `httpx` as a project dependency for async HTTP requests.
 
 ### Step 2: Create Platform Handler Base Class
-**File:** `spec/integrations/fetchers/handlers/base.py`
+**File:** `ingot/integrations/fetchers/handlers/base.py`
 
 ```python
 """Base class for platform-specific API handlers."""
@@ -259,7 +259,7 @@ class PlatformHandler(ABC):
 ```
 
 ### Step 3: Implement Jira Handler (REST)
-**File:** `spec/integrations/fetchers/handlers/jira.py`
+**File:** `ingot/integrations/fetchers/handlers/jira.py`
 
 ```python
 """Jira REST API handler."""
@@ -328,7 +328,7 @@ class JiraHandler(PlatformHandler):
 ```
 
 ### Step 4: Implement Linear Handler (GraphQL)
-**File:** `spec/integrations/fetchers/handlers/linear.py`
+**File:** `ingot/integrations/fetchers/handlers/linear.py`
 
 > **Note:** Linear's GraphQL API uses `issueByIdentifier` for team-scoped identifiers
 > like "AMI-31". The `issue(id:)` query requires a UUID, which is not user-friendly.
@@ -436,7 +436,7 @@ class LinearHandler(PlatformHandler):
 ```
 
 ### Step 5: Implement GitHub Handler (REST)
-**File:** `spec/integrations/fetchers/handlers/github.py`
+**File:** `ingot/integrations/fetchers/handlers/github.py`
 
 ```python
 """GitHub REST API handler."""
@@ -513,7 +513,7 @@ class GitHubHandler(PlatformHandler):
 ```
 
 ### Step 6: Implement Azure DevOps Handler (REST)
-**File:** `spec/integrations/fetchers/handlers/azure_devops.py`
+**File:** `ingot/integrations/fetchers/handlers/azure_devops.py`
 
 ```python
 """Azure DevOps REST API handler."""
@@ -596,7 +596,7 @@ class AzureDevOpsHandler(PlatformHandler):
 ```
 
 ### Step 7: Implement Trello Handler (REST)
-**File:** `spec/integrations/fetchers/handlers/trello.py`
+**File:** `ingot/integrations/fetchers/handlers/trello.py`
 
 ```python
 """Trello REST API handler."""
@@ -659,7 +659,7 @@ class TrelloHandler(PlatformHandler):
 ```
 
 ### Step 8: Implement Monday Handler (GraphQL)
-**File:** `spec/integrations/fetchers/handlers/monday.py`
+**File:** `ingot/integrations/fetchers/handlers/monday.py`
 
 ```python
 """Monday.com GraphQL API handler."""
@@ -758,18 +758,18 @@ class MondayHandler(PlatformHandler):
 ```
 
 ### Step 9: Create Handler Package Init
-**File:** `spec/integrations/fetchers/handlers/__init__.py`
+**File:** `ingot/integrations/fetchers/handlers/__init__.py`
 
 ```python
 """Platform-specific API handlers for DirectAPIFetcher."""
 
-from spec.integrations.fetchers.handlers.azure_devops import AzureDevOpsHandler
-from spec.integrations.fetchers.handlers.base import PlatformHandler
-from spec.integrations.fetchers.handlers.github import GitHubHandler
-from spec.integrations.fetchers.handlers.jira import JiraHandler
-from spec.integrations.fetchers.handlers.linear import LinearHandler
-from spec.integrations.fetchers.handlers.monday import MondayHandler
-from spec.integrations.fetchers.handlers.trello import TrelloHandler
+from ingot.integrations.fetchers.handlers.azure_devops import AzureDevOpsHandler
+from ingot.integrations.fetchers.handlers.base import PlatformHandler
+from ingot.integrations.fetchers.handlers.github import GitHubHandler
+from ingot.integrations.fetchers.handlers.jira import JiraHandler
+from ingot.integrations.fetchers.handlers.linear import LinearHandler
+from ingot.integrations.fetchers.handlers.monday import MondayHandler
+from ingot.integrations.fetchers.handlers.trello import TrelloHandler
 
 __all__ = [
     "PlatformHandler",
@@ -783,7 +783,7 @@ __all__ = [
 ```
 
 ### Step 10: Implement DirectAPIFetcher Class
-**File:** `spec/integrations/fetchers/direct_api_fetcher.py`
+**File:** `ingot/integrations/fetchers/direct_api_fetcher.py`
 
 ```python
 """Direct API ticket fetcher using REST/GraphQL clients.
@@ -807,14 +807,14 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from spec.config.fetch_config import FetchPerformanceConfig
-from spec.integrations.fetchers.base import TicketFetcher
-from spec.integrations.fetchers.exceptions import (
+from ingot.config.fetch_config import FetchPerformanceConfig
+from ingot.integrations.fetchers.base import TicketFetcher
+from ingot.integrations.fetchers.exceptions import (
     AgentFetchError,
     AgentIntegrationError,
     AgentResponseParseError,
 )
-from spec.integrations.fetchers.handlers import (
+from ingot.integrations.fetchers.handlers import (
     AzureDevOpsHandler,
     GitHubHandler,
     JiraHandler,
@@ -823,11 +823,11 @@ from spec.integrations.fetchers.handlers import (
     PlatformHandler,
     TrelloHandler,
 )
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 if TYPE_CHECKING:
-    from spec.config import ConfigManager
-    from spec.integrations.auth import AuthenticationManager
+    from ingot.config import ConfigManager
+    from ingot.integrations.auth import AuthenticationManager
 
 logger = logging.getLogger(__name__)
 
@@ -1076,12 +1076,12 @@ class DirectAPIFetcher(TicketFetcher):
 ```
 
 ### Step 11: Update Package Exports
-**File:** `spec/integrations/fetchers/__init__.py`
+**File:** `ingot/integrations/fetchers/__init__.py`
 
 Add export for `DirectAPIFetcher`:
 
 ```python
-from spec.integrations.fetchers.direct_api_fetcher import DirectAPIFetcher
+from ingot.integrations.fetchers.direct_api_fetcher import DirectAPIFetcher
 
 __all__ = [
     # ... existing exports ...
@@ -1097,12 +1097,12 @@ __all__ = [
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| `TicketFetcher` ABC | ✅ Implemented (AMI-29) | `spec/integrations/fetchers/base.py` |
-| `AuthenticationManager` | ✅ Implemented (AMI-22) | `spec/integrations/auth.py` |
-| `PlatformCredentials` | ✅ Implemented (AMI-22) | `spec/integrations/auth.py` |
-| `FetchPerformanceConfig` | ✅ Implemented (AMI-33) | `spec/config/fetch_config.py` |
-| `Platform` enum | ✅ Implemented (AMI-16) | `spec/integrations/providers/base.py` |
-| Exception hierarchy | ✅ Implemented (AMI-30) | `spec/integrations/fetchers/exceptions.py` |
+| `TicketFetcher` ABC | ✅ Implemented (AMI-29) | `ingot/integrations/fetchers/base.py` |
+| `AuthenticationManager` | ✅ Implemented (AMI-22) | `ingot/integrations/auth.py` |
+| `PlatformCredentials` | ✅ Implemented (AMI-22) | `ingot/integrations/auth.py` |
+| `FetchPerformanceConfig` | ✅ Implemented (AMI-33) | `ingot/config/fetch_config.py` |
+| `Platform` enum | ✅ Implemented (AMI-16) | `ingot/integrations/providers/base.py` |
+| Exception hierarchy | ✅ Implemented (AMI-30) | `ingot/integrations/fetchers/exceptions.py` |
 
 ### External Dependencies (New)
 
@@ -1205,9 +1205,9 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 import httpx
 
-from spec.integrations.auth import AuthenticationManager, PlatformCredentials
-from spec.integrations.fetchers import DirectAPIFetcher
-from spec.integrations.providers.base import Platform
+from ingot.integrations.auth import AuthenticationManager, PlatformCredentials
+from ingot.integrations.fetchers import DirectAPIFetcher
+from ingot.integrations.providers.base import Platform
 
 
 @pytest.fixture
@@ -1295,10 +1295,10 @@ Required environment variables per platform - see test docstrings.
 import os
 import pytest
 
-from spec.config import ConfigManager
-from spec.integrations.auth import AuthenticationManager
-from spec.integrations.fetchers import DirectAPIFetcher
-from spec.integrations.providers.base import Platform
+from ingot.config import ConfigManager
+from ingot.integrations.auth import AuthenticationManager
+from ingot.integrations.fetchers import DirectAPIFetcher
+from ingot.integrations.providers.base import Platform
 
 
 # Skip all tests if --live flag not provided
@@ -1423,9 +1423,9 @@ From the Linear ticket:
 ### Basic Usage with String-Based Interface (Recommended)
 
 ```python
-from spec.config import ConfigManager
-from spec.integrations.auth import AuthenticationManager
-from spec.integrations.fetchers import (
+from ingot.config import ConfigManager
+from ingot.integrations.auth import AuthenticationManager
+from ingot.integrations.fetchers import (
     DirectAPIFetcher,
     AgentIntegrationError,
     AgentFetchError,
@@ -1462,7 +1462,7 @@ except AgentResponseParseError as e:
 ### Using Platform Enum Interface
 
 ```python
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 # Check platform support before fetching
 if fetcher.supports_platform(Platform.AZURE_DEVOPS):
@@ -1473,7 +1473,7 @@ if fetcher.supports_platform(Platform.AZURE_DEVOPS):
 ### With TicketService (AMI-32) - Fallback Pattern
 
 ```python
-from spec.integrations.fetchers import (
+from ingot.integrations.fetchers import (
     AuggieMediatedFetcher,
     DirectAPIFetcher,
     AgentIntegrationError,
@@ -1548,7 +1548,7 @@ raw_data = await fetcher.fetch("1234567890", "monday")
 ### Example Configuration
 
 ```bash
-# ~/.spec-config or .spec
+# ~/.ingot-config or .ingot
 
 # Fallback credentials for platforms without Auggie MCP support
 FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg

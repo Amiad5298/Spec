@@ -10,12 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.ui.plan_tui import (
+from ingot.ui.plan_tui import (
     DEFAULT_VERBOSE_LINES,
     MAX_LIVENESS_WIDTH,
     REFRESH_RATE,
 )
-from spec.ui.tui import TaskRunnerUI
+from ingot.ui.tui import TaskRunnerUI
 
 
 class TestTaskRunnerUISingleOperationMode:
@@ -192,7 +192,7 @@ class TestTaskRunnerUIQuitRequest:
 class TestTaskRunnerUIContextManager:
     """Tests for context manager protocol in single-operation mode."""
 
-    @patch("spec.ui.tui.Live")
+    @patch("ingot.ui.tui.Live")
     @patch.object(TaskRunnerUI, "_input_loop")
     def test_context_manager_starts_and_stops(
         self, mock_input_loop, mock_live_class, tmp_path: Path
@@ -211,7 +211,7 @@ class TestTaskRunnerUIContextManager:
         # Live should have been stopped
         mock_live.stop.assert_called_once()
 
-    @patch("spec.ui.tui.Live")
+    @patch("ingot.ui.tui.Live")
     @patch.object(TaskRunnerUI, "_input_loop")
     def test_context_manager_closes_log_buffer(
         self, mock_input_loop, mock_live_class, tmp_path: Path
@@ -236,7 +236,7 @@ class TestTaskRunnerUIContextManager:
         # After context, buffer should be closed (file handle closed)
         assert log_buffer._file_handle is None
 
-    @patch("spec.ui.tui.Live")
+    @patch("ingot.ui.tui.Live")
     @patch.object(TaskRunnerUI, "_input_loop")
     def test_context_manager_returns_self(self, mock_input_loop, mock_live_class):
         """Context manager returns self on entry."""
@@ -336,7 +336,7 @@ class TestTaskRunnerUIKeyboardHandling:
 
     def test_handle_key_v_toggles_verbose(self):
         """Pressing 'v' toggles verbose mode."""
-        from spec.ui.keyboard import Key
+        from ingot.ui.keyboard import Key
 
         ui = TaskRunnerUI(single_operation_mode=True)
         assert ui.verbose_mode is False
@@ -346,7 +346,7 @@ class TestTaskRunnerUIKeyboardHandling:
 
     def test_handle_key_q_sets_quit(self):
         """Pressing 'q' sets quit_requested."""
-        from spec.ui.keyboard import Key
+        from ingot.ui.keyboard import Key
 
         ui = TaskRunnerUI(single_operation_mode=True)
         assert ui.check_quit_requested() is False
@@ -382,8 +382,8 @@ class TestStep1TUIIntegration:
     @pytest.fixture
     def workflow_state(self, tmp_path: Path):
         """Create a workflow state for testing."""
-        from spec.integrations.providers import GenericTicket, Platform
-        from spec.workflow.state import WorkflowState
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
 
         ticket = GenericTicket(
             id="TEST-456",
@@ -402,7 +402,7 @@ class TestStep1TUIIntegration:
 
         return state
 
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_uses_tui_when_enabled(
         self,
         mock_ui_class,
@@ -412,9 +412,9 @@ class TestStep1TUIIntegration:
         monkeypatch,
     ):
         """Step 1 uses TUI when _should_use_tui returns True."""
-        from spec.workflow.step1_plan import _generate_plan_with_tui
+        from ingot.workflow.step1_plan import _generate_plan_with_tui
 
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         # Setup
         mock_ui = MagicMock()
@@ -434,7 +434,7 @@ class TestStep1TUIIntegration:
         mock_ui_class.assert_called_once()
         mock_backend.run_with_callback.assert_called_once()
 
-    @patch("spec.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.tui.TaskRunnerUI")
     def test_tui_quit_returns_false(
         self,
         mock_ui_class,
@@ -444,9 +444,9 @@ class TestStep1TUIIntegration:
         monkeypatch,
     ):
         """TUI returns False when user requests quit."""
-        from spec.workflow.step1_plan import _generate_plan_with_tui
+        from ingot.workflow.step1_plan import _generate_plan_with_tui
 
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         # Setup
         mock_ui = MagicMock()
@@ -466,10 +466,10 @@ class TestStep1TUIIntegration:
 
     def test_creates_log_directory(self, tmp_path: Path, monkeypatch):
         """Log directory is created for plan generation."""
-        from spec.workflow.step1_plan import _create_plan_log_dir
+        from ingot.workflow.step1_plan import _create_plan_log_dir
 
         # Set log base dir to tmp_path
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(tmp_path))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         # Act
         log_dir = _create_plan_log_dir("TEST-789")
@@ -480,20 +480,20 @@ class TestStep1TUIIntegration:
         assert "plan_generation" in str(log_dir)
 
     def test_get_log_base_dir_uses_env_var(self, tmp_path: Path, monkeypatch):
-        """Log base dir uses SPECFLOW_LOG_DIR env var."""
-        from spec.workflow.step1_plan import _get_log_base_dir
+        """Log base dir uses INGOT_LOG_DIR env var."""
+        from ingot.workflow.step1_plan import _get_log_base_dir
 
         custom_dir = tmp_path / "custom_logs"
-        monkeypatch.setenv("SPECFLOW_LOG_DIR", str(custom_dir))
+        monkeypatch.setenv("INGOT_LOG_DIR", str(custom_dir))
 
         result = _get_log_base_dir()
         assert result == custom_dir
 
     def test_get_log_base_dir_default(self, monkeypatch):
-        """Log base dir defaults to .spec/runs."""
-        from spec.workflow.step1_plan import _get_log_base_dir
+        """Log base dir defaults to .ingot/runs."""
+        from ingot.workflow.step1_plan import _get_log_base_dir
 
-        monkeypatch.delenv("SPECFLOW_LOG_DIR", raising=False)
+        monkeypatch.delenv("INGOT_LOG_DIR", raising=False)
 
         result = _get_log_base_dir()
-        assert result == Path(".spec/runs")
+        assert result == Path(".ingot/runs")

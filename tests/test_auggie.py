@@ -1,9 +1,9 @@
-"""Tests for spec.integrations.auggie module."""
+"""Tests for ingot.integrations.auggie module."""
 
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from spec.integrations.auggie import (
+from ingot.integrations.auggie import (
     AgentDefinition,
     AuggieClient,
     AuggieRateLimitError,
@@ -15,15 +15,15 @@ from spec.integrations.auggie import (
     looks_like_rate_limit,
     version_gte,
 )
-from spec.workflow.constants import (
+from ingot.workflow.constants import (
     DEFAULT_EXECUTION_TIMEOUT,
     FIRST_RUN_TIMEOUT,
+    INGOT_AGENT_IMPLEMENTER,
+    INGOT_AGENT_PLANNER,
+    INGOT_AGENT_REVIEWER,
+    INGOT_AGENT_TASKLIST,
+    INGOT_AGENT_TASKLIST_REFINER,
     ONBOARDING_SMOKE_TEST_TIMEOUT,
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_TASKLIST,
-    SPECFLOW_AGENT_TASKLIST_REFINER,
 )
 
 
@@ -117,10 +117,10 @@ class TestGetNodeVersion:
 class TestCheckAuggieInstalled:
     """Tests for check_auggie_installed function."""
 
-    @patch("spec.integrations.auggie.get_auggie_version")
-    @patch("spec.integrations.auggie.print_step")
-    @patch("spec.integrations.auggie.print_info")
-    @patch("spec.integrations.auggie.print_success")
+    @patch("ingot.integrations.auggie.get_auggie_version")
+    @patch("ingot.integrations.auggie.print_step")
+    @patch("ingot.integrations.auggie.print_info")
+    @patch("ingot.integrations.auggie.print_success")
     def test_returns_true_when_valid(self, mock_success, mock_info, mock_step, mock_version):
         """Returns True when version meets requirements."""
         mock_version.return_value = "0.13.0"
@@ -130,8 +130,8 @@ class TestCheckAuggieInstalled:
         assert is_valid is True
         assert message == ""
 
-    @patch("spec.integrations.auggie.get_auggie_version")
-    @patch("spec.integrations.auggie.print_step")
+    @patch("ingot.integrations.auggie.get_auggie_version")
+    @patch("ingot.integrations.auggie.print_step")
     def test_returns_false_when_not_installed(self, mock_step, mock_version):
         """Returns False when not installed."""
         mock_version.return_value = None
@@ -141,9 +141,9 @@ class TestCheckAuggieInstalled:
         assert is_valid is False
         assert "not installed" in message
 
-    @patch("spec.integrations.auggie.get_auggie_version")
-    @patch("spec.integrations.auggie.print_step")
-    @patch("spec.integrations.auggie.print_info")
+    @patch("ingot.integrations.auggie.get_auggie_version")
+    @patch("ingot.integrations.auggie.print_step")
+    @patch("ingot.integrations.auggie.print_info")
     def test_returns_false_when_old_version(self, mock_info, mock_step, mock_version):
         """Returns False when version is too old."""
         mock_version.return_value = "0.10.0"
@@ -330,16 +330,16 @@ class TestBuildCommand:
         assert "--dont-save-session" in cmd
         assert cmd[-1] == "test prompt"
 
-    @patch("spec.integrations.auggie._parse_agent_definition")
+    @patch("ingot.integrations.auggie._parse_agent_definition")
     def test_with_agent(self, mock_parse_agent):
         """Uses model from agent definition when agent is provided."""
         mock_parse_agent.return_value = AgentDefinition(
-            name="spec-planner",
+            name="ingot-planner",
             model="claude-sonnet-4-5",
             prompt="You are a planner agent.",
         )
         client = AuggieClient()
-        cmd = client._build_command("test prompt", agent="spec-planner")
+        cmd = client._build_command("test prompt", agent="ingot-planner")
 
         # Should use --model from agent definition, not --agent flag
         assert "--model" in cmd
@@ -349,34 +349,34 @@ class TestBuildCommand:
         assert "You are a planner agent." in cmd[-1]
         assert "test prompt" in cmd[-1]
 
-    @patch("spec.integrations.auggie._parse_agent_definition")
+    @patch("ingot.integrations.auggie._parse_agent_definition")
     def test_agent_overrides_model(self, mock_parse_agent):
         """Agent's model takes precedence over client model."""
         mock_parse_agent.return_value = AgentDefinition(
-            name="spec-implementer",
+            name="ingot-implementer",
             model="agent-model",
             prompt="Agent instructions.",
         )
         client = AuggieClient(model="claude-3")
-        cmd = client._build_command("test prompt", agent="spec-implementer")
+        cmd = client._build_command("test prompt", agent="ingot-implementer")
 
         # Should use agent's model, not client's model
         assert "--model" in cmd
         assert "agent-model" in cmd
         assert "claude-3" not in cmd
 
-    @patch("spec.integrations.auggie._parse_agent_definition")
+    @patch("ingot.integrations.auggie._parse_agent_definition")
     def test_agent_with_all_flags(self, mock_parse_agent):
         """Agent works with all other flags."""
         mock_parse_agent.return_value = AgentDefinition(
-            name="spec-reviewer",
+            name="ingot-reviewer",
             model="reviewer-model",
             prompt="Review instructions.",
         )
         client = AuggieClient()
         cmd = client._build_command(
             "test prompt",
-            agent="spec-reviewer",
+            agent="ingot-reviewer",
             print_mode=True,
             quiet=True,
             dont_save_session=True,
@@ -390,7 +390,7 @@ class TestBuildCommand:
         # Prompt should contain agent instructions
         assert "## Agent Instructions" in cmd[-1]
 
-    @patch("spec.integrations.auggie._parse_agent_definition")
+    @patch("ingot.integrations.auggie._parse_agent_definition")
     def test_agent_not_found_falls_back_to_default_model(self, mock_parse_agent):
         """Falls back to default model when agent definition not found."""
         mock_parse_agent.return_value = None
@@ -506,12 +506,12 @@ class TestRunWithCallback:
         assert "--model" in cmd
         assert "claude-3" in cmd
 
-    @patch("spec.integrations.auggie._parse_agent_definition")
+    @patch("ingot.integrations.auggie._parse_agent_definition")
     @patch("subprocess.Popen")
     def test_passes_agent_to_command(self, mock_popen, mock_parse_agent):
         """Agent model and prompt are included in command when provided."""
         mock_parse_agent.return_value = AgentDefinition(
-            name="spec-planner",
+            name="ingot-planner",
             model="claude-sonnet-4-5",
             prompt="You are a planner agent.",
         )
@@ -526,7 +526,7 @@ class TestRunWithCallback:
         client.run_with_callback(
             "test prompt",
             output_callback=lambda line: None,
-            agent="spec-planner",
+            agent="ingot-planner",
         )
 
         cmd = mock_popen.call_args[0][0]
@@ -664,24 +664,24 @@ class TestSubagentConstants:
     """Tests for subagent constants."""
 
     def test_planner_constant(self):
-        """SPECFLOW_AGENT_PLANNER has correct value."""
-        assert SPECFLOW_AGENT_PLANNER == "spec-planner"
+        """INGOT_AGENT_PLANNER has correct value."""
+        assert INGOT_AGENT_PLANNER == "ingot-planner"
 
     def test_tasklist_constant(self):
-        """SPECFLOW_AGENT_TASKLIST has correct value."""
-        assert SPECFLOW_AGENT_TASKLIST == "spec-tasklist"
+        """INGOT_AGENT_TASKLIST has correct value."""
+        assert INGOT_AGENT_TASKLIST == "ingot-tasklist"
 
     def test_tasklist_refiner_constant(self):
-        """SPECFLOW_AGENT_TASKLIST_REFINER has correct value."""
-        assert SPECFLOW_AGENT_TASKLIST_REFINER == "spec-tasklist-refiner"
+        """INGOT_AGENT_TASKLIST_REFINER has correct value."""
+        assert INGOT_AGENT_TASKLIST_REFINER == "ingot-tasklist-refiner"
 
     def test_implementer_constant(self):
-        """SPECFLOW_AGENT_IMPLEMENTER has correct value."""
-        assert SPECFLOW_AGENT_IMPLEMENTER == "spec-implementer"
+        """INGOT_AGENT_IMPLEMENTER has correct value."""
+        assert INGOT_AGENT_IMPLEMENTER == "ingot-implementer"
 
     def test_reviewer_constant(self):
-        """SPECFLOW_AGENT_REVIEWER has correct value."""
-        assert SPECFLOW_AGENT_REVIEWER == "spec-reviewer"
+        """INGOT_AGENT_REVIEWER has correct value."""
+        assert INGOT_AGENT_REVIEWER == "ingot-reviewer"
 
 
 class TestTimeoutConstants:

@@ -4,7 +4,7 @@ These tests capture the current behavior of AuggieClient and workflow steps
 BEFORE the multi-backend refactoring. They serve as regression tests to ensure
 the new AIBackend abstraction maintains identical semantics.
 
-Run with: SPEC_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
+Run with: INGOT_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v
 
 IMPORTANT: All tests in this file must pass with the current codebase
 before proceeding to Phase 1 of the multi-backend refactoring.
@@ -18,8 +18,8 @@ import pytest
 
 # Marker for tests that require running the Auggie CLI (integration/CLI tests)
 requires_integration = pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 
 
@@ -38,7 +38,7 @@ class TestImportability:
         If this fails, the function may have been renamed or made truly private.
         """
         try:
-            from spec.integrations.auggie import looks_like_rate_limit
+            from ingot.integrations.auggie import looks_like_rate_limit
 
             assert callable(looks_like_rate_limit), "Must be callable"
         except ImportError as e:
@@ -50,36 +50,36 @@ class TestImportability:
     def test_auggie_client_is_importable(self):
         """Verify AuggieClient can be imported."""
         try:
-            from spec.integrations.auggie import AuggieClient
+            from ingot.integrations.auggie import AuggieClient
 
             assert AuggieClient is not None
         except ImportError as e:
             pytest.fail(f"Cannot import AuggieClient: {e}")
 
-    def test_specflow_agent_constants_are_importable(self):
-        """Verify SPECFLOW_AGENT_* constants can be imported."""
+    def test_ingot_agent_constants_are_importable(self):
+        """Verify INGOT_AGENT_* constants can be imported."""
         try:
-            from spec.workflow.constants import (
-                SPECFLOW_AGENT_DOC_UPDATER,
-                SPECFLOW_AGENT_IMPLEMENTER,
-                SPECFLOW_AGENT_PLANNER,
-                SPECFLOW_AGENT_REVIEWER,
-                SPECFLOW_AGENT_TASKLIST,
-                SPECFLOW_AGENT_TASKLIST_REFINER,
+            from ingot.workflow.constants import (
+                INGOT_AGENT_DOC_UPDATER,
+                INGOT_AGENT_IMPLEMENTER,
+                INGOT_AGENT_PLANNER,
+                INGOT_AGENT_REVIEWER,
+                INGOT_AGENT_TASKLIST,
+                INGOT_AGENT_TASKLIST_REFINER,
             )
 
             # Verify they are strings
             for const in [
-                SPECFLOW_AGENT_PLANNER,
-                SPECFLOW_AGENT_TASKLIST,
-                SPECFLOW_AGENT_TASKLIST_REFINER,
-                SPECFLOW_AGENT_IMPLEMENTER,
-                SPECFLOW_AGENT_REVIEWER,
-                SPECFLOW_AGENT_DOC_UPDATER,
+                INGOT_AGENT_PLANNER,
+                INGOT_AGENT_TASKLIST,
+                INGOT_AGENT_TASKLIST_REFINER,
+                INGOT_AGENT_IMPLEMENTER,
+                INGOT_AGENT_REVIEWER,
+                INGOT_AGENT_DOC_UPDATER,
             ]:
                 assert isinstance(const, str), f"Constant must be str: {const}"
         except ImportError as e:
-            pytest.fail(f"Cannot import SPECFLOW_AGENT_* constants: {e}")
+            pytest.fail(f"Cannot import INGOT_AGENT_* constants: {e}")
 
 
 @requires_integration
@@ -90,7 +90,7 @@ class TestAuggieClientSemantics:
     methods. Any new backend implementation MUST match these semantics.
 
     NOTE: These tests require the Auggie CLI and are skipped unless
-    SPEC_INTEGRATION_TESTS=1 is set.
+    INGOT_INTEGRATION_TESTS=1 is set.
     """
 
     def test_run_with_callback_returns_tuple_bool_str(self):
@@ -102,7 +102,7 @@ class TestAuggieClientSemantics:
         - Second element is full output (all lines concatenated)
         - Callback is invoked for each line (stripped of newline) when successful
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         output_lines = []
@@ -122,7 +122,7 @@ class TestAuggieClientSemantics:
 
     def test_run_with_callback_tuple_length_is_two(self):
         """Verify run_with_callback always returns a 2-tuple (bool, str)."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         result = client.run_with_callback(
@@ -142,7 +142,7 @@ class TestAuggieClientSemantics:
         - Wraps run_with_callback internally
         - Prints output to terminal in real-time
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         success, output = client.run_print_with_output(
@@ -161,7 +161,7 @@ class TestAuggieClientSemantics:
         - No success indicator (caller must check content)
         - Uses --print --quiet flags
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         output = client.run_print_quiet(
@@ -179,7 +179,7 @@ class TestAuggieClientSemantics:
         - Interactive mode - streams output to terminal
         - Used in clarification flow (step1_plan.py:296)
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         success = client.run_print(
@@ -197,7 +197,7 @@ class TestAuggieClientSemantics:
         - Has returncode attribute (0 = success)
         - Low-level method used by other run_* methods
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         result = client.run(
@@ -215,7 +215,7 @@ class TestAuggieClientSemantics:
         - Each line passed to callback has trailing newline removed
         - Full output in return value preserves newlines
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         callback_lines = []
@@ -238,7 +238,7 @@ class TestAuggieClientSemantics:
         - Full output in return tuple PRESERVES newlines
         - Relationship: output contains lines joined with newlines
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         callback_lines = []
@@ -274,7 +274,7 @@ class TestAuggieClientSemantics:
         The "--invalid-flag-xyz" is passed directly as a CLI flag to auggie,
         causing the CLI parser to reject it with a non-zero exit code.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
 
@@ -301,7 +301,7 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_http_429(self):
         """Verify HTTP 429 status code is detected."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         assert looks_like_rate_limit("Error 429: Too many requests")
         assert looks_like_rate_limit("HTTP/1.1 429")
@@ -309,7 +309,7 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_explicit_messages(self):
         """Verify explicit rate limit messages are detected."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         rate_limit_outputs = [
             "rate limit exceeded",
@@ -325,7 +325,7 @@ class TestRateLimitDetection:
 
         Contract: Only "quota exceeded" pattern is matched, not just "quota".
         """
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         assert looks_like_rate_limit("quota exceeded for today")
         assert looks_like_rate_limit("Monthly quota exceeded")
@@ -334,14 +334,14 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_capacity_messages(self):
         """Verify capacity-related messages are detected."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         assert looks_like_rate_limit("System at capacity")
         assert looks_like_rate_limit("Capacity limit reached")
 
     def testlooks_like_rate_limit_throttle_variants(self):
         """Verify throttle message variants are detected."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         assert looks_like_rate_limit("Request throttled")
         assert looks_like_rate_limit("Throttling in effect")
@@ -349,7 +349,7 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_server_errors(self):
         """Verify server error codes (often rate-limit related) are detected."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         assert looks_like_rate_limit("502 Bad Gateway")
         assert looks_like_rate_limit("503 Service Unavailable")
@@ -357,7 +357,7 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_normal_success(self):
         """Verify normal success messages are NOT detected as rate limits."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         normal_outputs = [
             "Task completed successfully",
@@ -380,7 +380,7 @@ class TestRateLimitDetection:
         Remaining known limitation: standalone "429" in non-HTTP context
         (e.g., "line 429") is inherently ambiguous and still matches.
         """
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         # Fixed: 502/503 are no longer detected as rate limits
         fixed_false_positives = [
@@ -399,7 +399,7 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_true_negatives(self):
         """Verify messages without rate-limit patterns are NOT detected."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         # These should NOT be detected (no rate-limit patterns)
         true_negatives = [
@@ -415,7 +415,7 @@ class TestRateLimitDetection:
 
     def testlooks_like_rate_limit_case_insensitive(self):
         """Verify detection is case-insensitive."""
-        from spec.integrations.auggie import looks_like_rate_limit
+        from ingot.integrations.auggie import looks_like_rate_limit
 
         assert looks_like_rate_limit("RATE LIMIT EXCEEDED")
         assert looks_like_rate_limit("Rate Limit")
@@ -433,8 +433,8 @@ class TestWorkflowStepBehavior:
     @pytest.fixture
     def mock_state(self):
         """Create a minimal WorkflowState for testing."""
-        from spec.integrations.providers import GenericTicket, Platform
-        from spec.workflow.state import WorkflowState
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
 
         ticket = GenericTicket(
             id="TEST-123",
@@ -450,65 +450,65 @@ class TestWorkflowStepBehavior:
     def test_step1_uses_spec_planner_subagent(self, mock_state):
         """Verify the default planner subagent name.
 
-        Contract: Step 1 (plan creation) uses 'spec-planner' subagent.
+        Contract: Step 1 (plan creation) uses 'ingot-planner' subagent.
         """
-        assert mock_state.subagent_names["planner"] == "spec-planner"
+        assert mock_state.subagent_names["planner"] == "ingot-planner"
 
     def test_step2_uses_spec_tasklist_subagent(self, mock_state):
         """Verify the default tasklist subagent name.
 
-        Contract: Step 2 (tasklist creation) uses 'spec-tasklist' subagent.
+        Contract: Step 2 (tasklist creation) uses 'ingot-tasklist' subagent.
         """
-        assert mock_state.subagent_names["tasklist"] == "spec-tasklist"
+        assert mock_state.subagent_names["tasklist"] == "ingot-tasklist"
 
     def test_step2_refiner_uses_spec_tasklist_refiner(self, mock_state):
         """Verify the tasklist refiner subagent name.
 
-        Contract: Tasklist refinement uses 'spec-tasklist-refiner' subagent.
+        Contract: Tasklist refinement uses 'ingot-tasklist-refiner' subagent.
         """
-        assert mock_state.subagent_names["tasklist_refiner"] == "spec-tasklist-refiner"
+        assert mock_state.subagent_names["tasklist_refiner"] == "ingot-tasklist-refiner"
 
     def test_step3_uses_spec_implementer_subagent(self, mock_state):
         """Verify the default implementer subagent name.
 
-        Contract: Step 3 (task execution) uses 'spec-implementer' subagent.
+        Contract: Step 3 (task execution) uses 'ingot-implementer' subagent.
         """
-        assert mock_state.subagent_names["implementer"] == "spec-implementer"
+        assert mock_state.subagent_names["implementer"] == "ingot-implementer"
 
     def test_step3_uses_spec_reviewer_subagent(self, mock_state):
         """Verify the reviewer subagent name.
 
-        Contract: Task review uses 'spec-reviewer' subagent.
+        Contract: Task review uses 'ingot-reviewer' subagent.
         """
-        assert mock_state.subagent_names["reviewer"] == "spec-reviewer"
+        assert mock_state.subagent_names["reviewer"] == "ingot-reviewer"
 
     def test_step4_uses_spec_doc_updater_subagent(self, mock_state):
         """Verify the doc updater subagent name.
 
-        Contract: Step 4 (documentation) uses 'spec-doc-updater' subagent.
+        Contract: Step 4 (documentation) uses 'ingot-doc-updater' subagent.
         """
-        assert mock_state.subagent_names["doc_updater"] == "spec-doc-updater"
+        assert mock_state.subagent_names["doc_updater"] == "ingot-doc-updater"
 
     def test_subagent_names_match_constants(self, mock_state):
-        """Verify subagent names match the constants in spec.workflow.constants.
+        """Verify subagent names match the constants in ingot.workflow.constants.
 
-        Contract: WorkflowState defaults must match SPECFLOW_AGENT_* constants.
+        Contract: WorkflowState defaults must match INGOT_AGENT_* constants.
         """
-        from spec.workflow.constants import (
-            SPECFLOW_AGENT_DOC_UPDATER,
-            SPECFLOW_AGENT_IMPLEMENTER,
-            SPECFLOW_AGENT_PLANNER,
-            SPECFLOW_AGENT_REVIEWER,
-            SPECFLOW_AGENT_TASKLIST,
-            SPECFLOW_AGENT_TASKLIST_REFINER,
+        from ingot.workflow.constants import (
+            INGOT_AGENT_DOC_UPDATER,
+            INGOT_AGENT_IMPLEMENTER,
+            INGOT_AGENT_PLANNER,
+            INGOT_AGENT_REVIEWER,
+            INGOT_AGENT_TASKLIST,
+            INGOT_AGENT_TASKLIST_REFINER,
         )
 
-        assert mock_state.subagent_names["planner"] == SPECFLOW_AGENT_PLANNER
-        assert mock_state.subagent_names["tasklist"] == SPECFLOW_AGENT_TASKLIST
-        assert mock_state.subagent_names["tasklist_refiner"] == SPECFLOW_AGENT_TASKLIST_REFINER
-        assert mock_state.subagent_names["implementer"] == SPECFLOW_AGENT_IMPLEMENTER
-        assert mock_state.subagent_names["reviewer"] == SPECFLOW_AGENT_REVIEWER
-        assert mock_state.subagent_names["doc_updater"] == SPECFLOW_AGENT_DOC_UPDATER
+        assert mock_state.subagent_names["planner"] == INGOT_AGENT_PLANNER
+        assert mock_state.subagent_names["tasklist"] == INGOT_AGENT_TASKLIST
+        assert mock_state.subagent_names["tasklist_refiner"] == INGOT_AGENT_TASKLIST_REFINER
+        assert mock_state.subagent_names["implementer"] == INGOT_AGENT_IMPLEMENTER
+        assert mock_state.subagent_names["reviewer"] == INGOT_AGENT_REVIEWER
+        assert mock_state.subagent_names["doc_updater"] == INGOT_AGENT_DOC_UPDATER
 
     def test_all_subagent_keys_present(self, mock_state):
         """Verify all expected subagent keys are present.
@@ -539,7 +539,7 @@ class TestParallelExecutionSemantics:
 
         Contract: Each parallel task creates its own client instance.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         # Create two independent clients (simulating parallel execution)
         client1 = AuggieClient()
@@ -553,7 +553,7 @@ class TestParallelExecutionSemantics:
 
         Contract: run_with_callback must accept dont_save_session parameter.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         sig = inspect.signature(client.run_with_callback)
@@ -568,7 +568,7 @@ class TestParallelExecutionSemantics:
         Contract: By default, sessions are saved (for interactive use).
         Parallel execution explicitly sets dont_save_session=True.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         sig = inspect.signature(client.run_with_callback)
@@ -581,7 +581,7 @@ class TestParallelExecutionSemantics:
 
         Contract: Model settings are instance-specific, not shared.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client1 = AuggieClient(model="model-a")
         client2 = AuggieClient(model="model-b")
@@ -595,7 +595,7 @@ class TestParallelExecutionSemantics:
 
         Contract: All run methods must accept agent parameter for subagent dispatch.
         """
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
 
@@ -621,7 +621,7 @@ class TestParallelExecutionSemantics:
         """
         import concurrent.futures
 
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         calls: list[tuple[int, str, bool]] = []
 

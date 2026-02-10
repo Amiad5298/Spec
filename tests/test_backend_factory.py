@@ -1,13 +1,13 @@
-"""Tests for spec.integrations.backends.factory module."""
+"""Tests for ingot.integrations.backends.factory module."""
 
 import threading
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform, ConfigValidationError
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.backends.errors import BackendNotInstalledError
-from spec.integrations.backends.factory import BackendFactory
+from ingot.config.fetch_config import AgentPlatform, ConfigValidationError
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.backends.errors import BackendNotInstalledError
+from ingot.integrations.backends.factory import BackendFactory
 
 
 class TestBackendFactoryCreate:
@@ -76,7 +76,7 @@ class TestBackendFactoryVerifyInstalled:
     def test_verify_installed_true_with_installed_cli(self, mocker):
         """verify_installed=True succeeds when CLI is installed."""
         mock_check = mocker.patch(
-            "spec.integrations.backends.auggie.AuggieBackend.check_installed",
+            "ingot.integrations.backends.auggie.AuggieBackend.check_installed",
             return_value=(True, "Auggie CLI v1.0.0"),
         )
         backend = BackendFactory.create(AgentPlatform.AUGGIE, verify_installed=True)
@@ -86,7 +86,7 @@ class TestBackendFactoryVerifyInstalled:
     def test_verify_installed_true_raises_when_cli_missing(self, mocker):
         """verify_installed=True raises BackendNotInstalledError when CLI missing."""
         mock_check = mocker.patch(
-            "spec.integrations.backends.auggie.AuggieBackend.check_installed",
+            "ingot.integrations.backends.auggie.AuggieBackend.check_installed",
             return_value=(False, "Auggie CLI not found. Install from https://..."),
         )
         with pytest.raises(BackendNotInstalledError):
@@ -96,7 +96,7 @@ class TestBackendFactoryVerifyInstalled:
     def test_verify_installed_false_skips_check(self, mocker):
         """verify_installed=False (default) does not call check_installed."""
         mock_check = mocker.patch(
-            "spec.integrations.backends.auggie.AuggieBackend.check_installed",
+            "ingot.integrations.backends.auggie.AuggieBackend.check_installed",
         )
         BackendFactory.create(AgentPlatform.AUGGIE, verify_installed=False)
         mock_check.assert_not_called()
@@ -178,8 +178,8 @@ class TestBackendFactoryExport:
     """Tests for package export (AC6)."""
 
     def test_backend_factory_exported_from_package(self):
-        """BackendFactory is exported via spec.integrations.backends."""
-        from spec.integrations.backends import BackendFactory as ExportedFactory
+        """BackendFactory is exported via ingot.integrations.backends."""
+        from ingot.integrations.backends import BackendFactory as ExportedFactory
 
         assert ExportedFactory is not None
         assert hasattr(ExportedFactory, "create")
@@ -207,7 +207,7 @@ class TestBackendFactoryLazyImports:
         import ast
         from pathlib import Path
 
-        factory_path = Path("spec/integrations/backends/factory.py")
+        factory_path = Path("ingot/integrations/backends/factory.py")
         if not factory_path.exists():
             pytest.skip("factory.py not yet created")
 
@@ -226,9 +226,9 @@ class TestBackendFactoryLazyImports:
 
         # Backend modules should NOT be in top-level imports
         backend_modules = [
-            "spec.integrations.backends.auggie",
-            "spec.integrations.backends.claude",
-            "spec.integrations.backends.cursor",
+            "ingot.integrations.backends.auggie",
+            "ingot.integrations.backends.claude",
+            "ingot.integrations.backends.cursor",
         ]
         for backend_module in backend_modules:
             assert backend_module not in toplevel_imports, (

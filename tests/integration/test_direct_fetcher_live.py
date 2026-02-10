@@ -29,11 +29,11 @@ import os
 
 import pytest
 
-from spec.config import ConfigManager
-from spec.integrations.auth import AuthenticationManager
-from spec.integrations.fetchers import DirectAPIFetcher
-from spec.integrations.fetchers.exceptions import AgentIntegrationError
-from spec.integrations.providers.base import Platform
+from ingot.config import ConfigManager
+from ingot.integrations.auth import AuthenticationManager
+from ingot.integrations.fetchers import DirectAPIFetcher
+from ingot.integrations.fetchers.exceptions import AgentIntegrationError
+from ingot.integrations.providers.base import Platform
 
 from .conftest import (
     has_azure_devops_credentials,

@@ -1,10 +1,10 @@
 # Implementation Plan: AMI-54 - Phase 1.8: Phase 1 Testing & Validation
 
-**Ticket:** [AMI-54](https://linear.app/amiadspec/issue/AMI-54/phase-18-phase-1-testing-and-validation)
+**Ticket:** [AMI-54](https://linear.app/amiadingot/issue/AMI-54/phase-18-phase-1-testing-and-validation)
 **Status:** In Progress
 **Date:** 2026-02-02
 **Labels:** MultiAgent
-**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadspec/issue/AMI-45)
+**Parent:** [AMI-45: Pluggable Multi-Agent Support](https://linear.app/amiadingot/issue/AMI-45)
 
 ---
 
@@ -54,15 +54,15 @@ This is **Phase 1.8** of the Backend Infrastructure work (AMI-45), the final val
 > ```bash
 > python -c "
 > # Verify module-level imports
-> from spec.integrations.backends.errors import BackendNotConfiguredError, BackendNotInstalledError, BackendRateLimitError, BackendTimeoutError
-> from spec.integrations.backends.base import AIBackend, BaseBackend, SubagentMetadata
-> from spec.integrations.backends.auggie import AuggieBackend
-> from spec.integrations.backends.factory import BackendFactory
-> from spec.config.backend_resolver import resolve_backend_platform
-> from spec.workflow.constants import SPECFLOW_AGENT_PLANNER, DEFAULT_EXECUTION_TIMEOUT
+> from ingot.integrations.backends.errors import BackendNotConfiguredError, BackendNotInstalledError, BackendRateLimitError, BackendTimeoutError
+> from ingot.integrations.backends.base import AIBackend, BaseBackend, SubagentMetadata
+> from ingot.integrations.backends.auggie import AuggieBackend
+> from ingot.integrations.backends.factory import BackendFactory
+> from ingot.config.backend_resolver import resolve_backend_platform
+> from ingot.workflow.constants import INGOT_AGENT_PLANNER, DEFAULT_EXECUTION_TIMEOUT
 >
 > # Verify package-level exports (all public symbols accessible from __init__.py)
-> from spec.integrations.backends import (
+> from ingot.integrations.backends import (
 >     AIBackend, BaseBackend, SubagentMetadata, AuggieBackend, BackendFactory,
 >     BackendNotConfiguredError, BackendNotInstalledError, BackendRateLimitError, BackendTimeoutError
 > )
@@ -108,7 +108,7 @@ This is **Phase 1.8** of the Backend Infrastructure work (AMI-45), the final val
 │                                    ▼                                        │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │ AMI-50: Subagent Constants                                          │   │
-│   │   └── Moved to spec/workflow/constants.py                           │   │
+│   │   └── Moved to ingot/workflow/constants.py                           │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                                    ▼                                        │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
@@ -172,8 +172,8 @@ This phase validates Phase 1 through three categories of tests:
 | Category | Purpose | Test Type | Gating |
 |----------|---------|-----------|--------|
 | Unit Tests | Test individual components in isolation | Mocked dependencies | None (always run) |
-| Integration Tests | Test component interactions | Real backends, real imports | `SPEC_INTEGRATION_TESTS=1` |
-| Regression Tests | Ensure no behavioral changes | Compare to baseline | `SPEC_INTEGRATION_TESTS=1` |
+| Integration Tests | Test component interactions | Real backends, real imports | `INGOT_INTEGRATION_TESTS=1` |
+| Regression Tests | Ensure no behavioral changes | Compare to baseline | `INGOT_INTEGRATION_TESTS=1` |
 
 ### Integration Test File Structure
 
@@ -222,9 +222,9 @@ pytest tests/test_backend_errors.py \
        tests/test_auggie_backend.py \
        tests/test_backend_factory.py \
        tests/test_backend_resolver.py \
-       --cov=spec.integrations.backends \
-       --cov=spec.config.backend_resolver \
-       --cov=spec.workflow.constants \
+       --cov=ingot.integrations.backends \
+       --cov=ingot.config.backend_resolver \
+       --cov=ingot.workflow.constants \
        --cov-report=term-missing
 
 # Target: ≥80% coverage for all Phase 1 modules (global minimum threshold)
@@ -238,12 +238,12 @@ Review coverage report and document any gaps:
 
 | Module | Current Coverage | Gap Analysis |
 |--------|-----------------|--------------|
-| `spec/integrations/backends/errors.py` | TBD% | Document gaps |
-| `spec/integrations/backends/base.py` | TBD% | Document gaps |
-| `spec/integrations/backends/auggie.py` | TBD% | Document gaps |
-| `spec/integrations/backends/factory.py` | TBD% | Document gaps |
-| `spec/config/backend_resolver.py` | TBD% | Document gaps |
-| `spec/workflow/constants.py` | TBD% | Document gaps |
+| `ingot/integrations/backends/errors.py` | TBD% | Document gaps |
+| `ingot/integrations/backends/base.py` | TBD% | Document gaps |
+| `ingot/integrations/backends/auggie.py` | TBD% | Document gaps |
+| `ingot/integrations/backends/factory.py` | TBD% | Document gaps |
+| `ingot/config/backend_resolver.py` | TBD% | Document gaps |
+| `ingot/workflow/constants.py` | TBD% | Document gaps |
 
 ### Phase 2: Create Integration Test File (~0.5 days)
 
@@ -266,30 +266,30 @@ Test Categories:
 4. "No Default Backend" Policy - Enforced at all entry points
 5. Regression Validation - Baseline tests still pass
 
-These tests are gated behind SPEC_INTEGRATION_TESTS=1 for real CLI execution.
+These tests are gated behind INGOT_INTEGRATION_TESTS=1 for real CLI execution.
 """
 
 import os
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend, BaseBackend
-from spec.integrations.backends.errors import (
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend, BaseBackend
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
     BackendTimeoutError,
 )
-from spec.integrations.backends.factory import BackendFactory
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.workflow.constants import (
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_TASKLIST,
-    SPECFLOW_AGENT_TASKLIST_REFINER,
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_DOC_UPDATER,
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.workflow.constants import (
+    INGOT_AGENT_PLANNER,
+    INGOT_AGENT_TASKLIST,
+    INGOT_AGENT_TASKLIST_REFINER,
+    INGOT_AGENT_IMPLEMENTER,
+    INGOT_AGENT_REVIEWER,
+    INGOT_AGENT_DOC_UPDATER,
     DEFAULT_EXECUTION_TIMEOUT,
     FIRST_RUN_TIMEOUT,
     ONBOARDING_SMOKE_TEST_TIMEOUT,
@@ -301,7 +301,7 @@ class TestPhase1ImportChain:
 
     def test_errors_import_standalone(self):
         """Error types can be imported without other Phase 1 modules."""
-        from spec.integrations.backends.errors import (
+        from ingot.integrations.backends.errors import (
             BackendNotConfiguredError,
             BackendNotInstalledError,
             BackendRateLimitError,
@@ -311,27 +311,27 @@ class TestPhase1ImportChain:
 
     def test_base_imports_after_errors(self):
         """BaseBackend can be imported after errors."""
-        from spec.integrations.backends.base import AIBackend, BaseBackend
+        from ingot.integrations.backends.base import AIBackend, BaseBackend
         assert BaseBackend is not None
 
     def test_auggie_imports_after_base(self):
         """AuggieBackend can be imported after base."""
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
         assert AuggieBackend is not None
 
     def test_factory_imports_after_auggie(self):
         """Factory can be imported after all backends."""
-        from spec.integrations.backends.factory import BackendFactory
+        from ingot.integrations.backends.factory import BackendFactory
         assert BackendFactory is not None
 
     def test_resolver_imports_after_factory(self):
         """Resolver can be imported after factory."""
-        from spec.config.backend_resolver import resolve_backend_platform
+        from ingot.config.backend_resolver import resolve_backend_platform
         assert resolve_backend_platform is not None
 
     def test_package_init_exports_all(self):
         """Package __init__.py exports all public symbols."""
-        from spec.integrations.backends import (
+        from ingot.integrations.backends import (
             AIBackend,
             AuggieBackend,
             BackendFactory,
@@ -426,8 +426,8 @@ class TestNoDefaultBackendPolicy:
         with pytest.raises(BackendNotConfiguredError) as exc_info:
             resolve_backend_platform(config, cli_backend_override=None)
 
-        # Error message guides user to spec init
-        assert "spec init" in str(exc_info.value)
+        # Error message guides user to ingot init
+        assert "ingot init" in str(exc_info.value)
 
     def test_factory_defaults_to_auggie_for_empty_string(self):
         """Factory defaults to AUGGIE for empty string (via parse_ai_backend).
@@ -450,8 +450,8 @@ class TestNoDefaultBackendPolicy:
             resolve_backend_platform(config)
 
         error_msg = str(exc_info.value)
-        # Should mention BOTH spec init AND --backend flag for complete guidance
-        assert "spec init" in error_msg, "Error should mention 'spec init' command"
+        # Should mention BOTH ingot init AND --backend flag for complete guidance
+        assert "ingot init" in error_msg, "Error should mention 'ingot init' command"
         assert "--backend" in error_msg, "Error should mention '--backend' flag option"
 ```
 
@@ -481,16 +481,16 @@ class TestErrorPropagation:
             assert False, "Should have raised"
         except BackendNotConfiguredError as e:
             assert isinstance(e, Exception)
-            # Verify it's a SpecError subclass
-            from spec.utils.errors import SpecError
-            assert isinstance(e, SpecError)
+            # Verify it's a IngotError subclass
+            from ingot.utils.errors import IngotError
+            assert isinstance(e, IngotError)
 
     def test_backend_not_installed_from_factory(self, mocker):
         """BackendNotInstalledError raised by factory is catchable."""
         # Mock the underlying check_auggie_installed function that AuggieBackend.check_installed() calls
-        # IMPORTANT: Patch in the backends.auggie module where it's imported, not spec.integrations.auggie
+        # IMPORTANT: Patch in the backends.auggie module where it's imported, not ingot.integrations.auggie
         mocker.patch(
-            "spec.integrations.backends.auggie.check_auggie_installed",
+            "ingot.integrations.backends.auggie.check_auggie_installed",
             return_value=(False, "Auggie CLI not found"),
         )
 
@@ -520,8 +520,8 @@ class TestErrorPropagation:
         assert error.timeout_seconds == 300.0
 
     def test_all_errors_extend_spec_error(self):
-        """All backend errors extend SpecError."""
-        from spec.utils.errors import SpecError
+        """All backend errors extend IngotError."""
+        from ingot.utils.errors import IngotError
 
         # Note: BackendNotInstalledError takes a single message parameter (not two)
         errors = [
@@ -531,20 +531,20 @@ class TestErrorPropagation:
             BackendTimeoutError("Execution timed out"),
         ]
         for error in errors:
-            assert isinstance(error, SpecError), f"{type(error)} should extend SpecError"
+            assert isinstance(error, IngotError), f"{type(error)} should extend IngotError"
 
 
 class TestSubagentConstantsAccessibility:
-    """Verify subagent constants are accessible from spec.workflow.constants."""
+    """Verify subagent constants are accessible from ingot.workflow.constants."""
 
     def test_all_subagent_constants_importable(self):
         """All 6 subagent constants are importable."""
-        assert SPECFLOW_AGENT_PLANNER is not None
-        assert SPECFLOW_AGENT_TASKLIST is not None
-        assert SPECFLOW_AGENT_TASKLIST_REFINER is not None
-        assert SPECFLOW_AGENT_IMPLEMENTER is not None
-        assert SPECFLOW_AGENT_REVIEWER is not None
-        assert SPECFLOW_AGENT_DOC_UPDATER is not None
+        assert INGOT_AGENT_PLANNER is not None
+        assert INGOT_AGENT_TASKLIST is not None
+        assert INGOT_AGENT_TASKLIST_REFINER is not None
+        assert INGOT_AGENT_IMPLEMENTER is not None
+        assert INGOT_AGENT_REVIEWER is not None
+        assert INGOT_AGENT_DOC_UPDATER is not None
 
     def test_all_timeout_constants_importable(self):
         """All 3 timeout constants are importable."""
@@ -554,9 +554,9 @@ class TestSubagentConstantsAccessibility:
 
     def test_subagent_constants_are_strings(self):
         """Subagent constants are strings (agent names)."""
-        assert isinstance(SPECFLOW_AGENT_PLANNER, str)
-        assert isinstance(SPECFLOW_AGENT_TASKLIST, str)
-        assert isinstance(SPECFLOW_AGENT_IMPLEMENTER, str)
+        assert isinstance(INGOT_AGENT_PLANNER, str)
+        assert isinstance(INGOT_AGENT_TASKLIST, str)
+        assert isinstance(INGOT_AGENT_IMPLEMENTER, str)
 
     def test_timeout_constants_are_numeric(self):
         """Timeout constants are numeric (seconds)."""
@@ -574,11 +574,11 @@ Verify that Phase 0 baseline tests (AMI-44) still pass.
 #### Step 5.1: Run Baseline Tests
 
 ```bash
-# Run baseline tests (may require SPEC_INTEGRATION_TESTS=1 for some)
+# Run baseline tests (may require INGOT_INTEGRATION_TESTS=1 for some)
 pytest tests/test_baseline_auggie_behavior.py -v --tb=short
 
 # For full baseline (integration mode)
-SPEC_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v --tb=short
+INGOT_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v --tb=short
 ```
 
 #### Step 5.2: Baseline Regression Checks
@@ -592,8 +592,8 @@ class TestBaselineRegressionChecks:
     def test_auggie_backend_run_with_callback_signature_matches_baseline(self):
         """AuggieBackend.run_with_callback() has same signature as AuggieClient."""
         import inspect
-        from spec.integrations.backends.auggie import AuggieBackend
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.auggie import AuggieClient
 
         backend_sig = inspect.signature(AuggieBackend.run_with_callback)
         client_sig = inspect.signature(AuggieClient.run_with_callback)
@@ -609,7 +609,7 @@ class TestBaselineRegressionChecks:
 
     def test_auggie_backend_run_print_with_output_return_type(self):
         """run_print_with_output returns (bool, str) tuple."""
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
         from typing import get_type_hints, get_origin, get_args
 
         backend = AuggieBackend()
@@ -628,7 +628,7 @@ class TestBaselineRegressionChecks:
     def test_auggie_backend_rate_limit_detection_matches_baseline(self):
         """Rate limit detection uses same patterns as baseline AuggieClient."""
         # Import the actual rate limit detection function used by AuggieBackend
-        from spec.integrations.auggie import _looks_like_rate_limit
+        from ingot.integrations.auggie import _looks_like_rate_limit
 
         # Test known rate limit patterns from baseline
         rate_limit_outputs = [
@@ -645,19 +645,19 @@ class TestBaselineRegressionChecks:
     def test_subagent_names_match_baseline(self):
         """Subagent constant values match baseline expectations."""
         # These values should not change during refactoring
-        assert "planner" in SPECFLOW_AGENT_PLANNER.lower()
-        assert "tasklist" in SPECFLOW_AGENT_TASKLIST.lower()
-        assert "refiner" in SPECFLOW_AGENT_TASKLIST_REFINER.lower()
-        assert "implementer" in SPECFLOW_AGENT_IMPLEMENTER.lower()
-        assert "review" in SPECFLOW_AGENT_REVIEWER.lower()
-        assert "doc" in SPECFLOW_AGENT_DOC_UPDATER.lower()
+        assert "planner" in INGOT_AGENT_PLANNER.lower()
+        assert "tasklist" in INGOT_AGENT_TASKLIST.lower()
+        assert "refiner" in INGOT_AGENT_TASKLIST_REFINER.lower()
+        assert "implementer" in INGOT_AGENT_IMPLEMENTER.lower()
+        assert "review" in INGOT_AGENT_REVIEWER.lower()
+        assert "doc" in INGOT_AGENT_DOC_UPDATER.lower()
 ```
 
 ---
 
 ### Phase 6: Integration Tests (Gated) (~0.25 days)
 
-Tests requiring actual CLI installation are gated behind `SPEC_INTEGRATION_TESTS=1`.
+Tests requiring actual CLI installation are gated behind `INGOT_INTEGRATION_TESTS=1`.
 
 #### Step 6.1: Gated Integration Tests
 
@@ -665,12 +665,12 @@ Add to `tests/test_phase1_integration.py`:
 
 ```python
 # Integration tests requiring real CLI
-integration_tests_enabled = os.environ.get("SPEC_INTEGRATION_TESTS") == "1"
+integration_tests_enabled = os.environ.get("INGOT_INTEGRATION_TESTS") == "1"
 
 
 @pytest.mark.skipif(
     not integration_tests_enabled,
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 class TestPhase1IntegrationWithRealCLI:
     """Integration tests with real CLI (gated)."""
@@ -681,7 +681,7 @@ class TestPhase1IntegrationWithRealCLI:
         Note: check_auggie_installed() returns (True, "") on success - the message
         is empty when installed. This is the actual contract per auggie.py:296-297.
         """
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         backend = AuggieBackend()
         installed, message = backend.check_installed()
@@ -736,7 +736,7 @@ class TestPhase1IntegrationWithRealCLI:
         Note: run_print_quiet() returns str (NOT tuple[bool, str]).
         See AIBackend protocol in base.py:170-192.
         """
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         backend = AuggieBackend()
         installed, _ = backend.check_installed()
@@ -773,7 +773,7 @@ Test Categories:
 4. "No Default Backend" Policy - Enforced at all entry points
 5. Regression Validation - Baseline tests still pass
 
-These tests are gated behind SPEC_INTEGRATION_TESTS=1 for real CLI execution.
+These tests are gated behind INGOT_INTEGRATION_TESTS=1 for real CLI execution.
 """
 
 import os
@@ -782,26 +782,26 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import AIBackend, BaseBackend
-from spec.integrations.backends.errors import (
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import AIBackend, BaseBackend
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
     BackendTimeoutError,
 )
-from spec.integrations.backends.factory import BackendFactory
-from spec.workflow.constants import (
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.workflow.constants import (
     DEFAULT_EXECUTION_TIMEOUT,
     FIRST_RUN_TIMEOUT,
     ONBOARDING_SMOKE_TEST_TIMEOUT,
-    SPECFLOW_AGENT_DOC_UPDATER,
-    SPECFLOW_AGENT_IMPLEMENTER,
-    SPECFLOW_AGENT_PLANNER,
-    SPECFLOW_AGENT_REVIEWER,
-    SPECFLOW_AGENT_TASKLIST,
-    SPECFLOW_AGENT_TASKLIST_REFINER,
+    INGOT_AGENT_DOC_UPDATER,
+    INGOT_AGENT_IMPLEMENTER,
+    INGOT_AGENT_PLANNER,
+    INGOT_AGENT_REVIEWER,
+    INGOT_AGENT_TASKLIST,
+    INGOT_AGENT_TASKLIST_REFINER,
 )
 
 
@@ -810,7 +810,7 @@ class TestPhase1ImportChain:
 
     def test_errors_import_standalone(self):
         """Error types can be imported without other Phase 1 modules."""
-        from spec.integrations.backends.errors import (
+        from ingot.integrations.backends.errors import (
             BackendNotConfiguredError,
             BackendNotInstalledError,
             BackendRateLimitError,
@@ -821,31 +821,31 @@ class TestPhase1ImportChain:
 
     def test_base_imports_after_errors(self):
         """BaseBackend can be imported after errors."""
-        from spec.integrations.backends.base import AIBackend, BaseBackend
+        from ingot.integrations.backends.base import AIBackend, BaseBackend
 
         assert BaseBackend is not None
 
     def test_auggie_imports_after_base(self):
         """AuggieBackend can be imported after base."""
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         assert AuggieBackend is not None
 
     def test_factory_imports_after_auggie(self):
         """Factory can be imported after all backends."""
-        from spec.integrations.backends.factory import BackendFactory
+        from ingot.integrations.backends.factory import BackendFactory
 
         assert BackendFactory is not None
 
     def test_resolver_imports_after_factory(self):
         """Resolver can be imported after factory."""
-        from spec.config.backend_resolver import resolve_backend_platform
+        from ingot.config.backend_resolver import resolve_backend_platform
 
         assert resolve_backend_platform is not None
 
     def test_package_init_exports_all(self):
         """Package __init__.py exports all public symbols."""
-        from spec.integrations.backends import (
+        from ingot.integrations.backends import (
             AIBackend,
             AuggieBackend,
             BackendFactory,
@@ -923,8 +923,8 @@ class TestNoDefaultBackendPolicy:
         with pytest.raises(BackendNotConfiguredError) as exc_info:
             resolve_backend_platform(config, cli_backend_override=None)
 
-        # Error message guides user to spec init
-        assert "spec init" in str(exc_info.value)
+        # Error message guides user to ingot init
+        assert "ingot init" in str(exc_info.value)
 
     def test_factory_defaults_to_auggie_for_empty_string(self):
         """Factory defaults to AUGGIE for empty string (via parse_ai_backend).
@@ -945,8 +945,8 @@ class TestNoDefaultBackendPolicy:
             resolve_backend_platform(config)
 
         error_msg = str(exc_info.value)
-        # Should mention BOTH spec init AND --backend flag for complete guidance
-        assert "spec init" in error_msg, "Error should mention 'spec init' command"
+        # Should mention BOTH ingot init AND --backend flag for complete guidance
+        assert "ingot init" in error_msg, "Error should mention 'ingot init' command"
         assert "--backend" in error_msg, "Error should mention '--backend' flag option"
 
 
@@ -963,17 +963,17 @@ class TestErrorPropagation:
             assert False, "Should have raised"
         except BackendNotConfiguredError as e:
             assert isinstance(e, Exception)
-            # Verify it's a SpecError subclass
-            from spec.utils.errors import SpecError
+            # Verify it's a IngotError subclass
+            from ingot.utils.errors import IngotError
 
-            assert isinstance(e, SpecError)
+            assert isinstance(e, IngotError)
 
     def test_backend_not_installed_from_factory(self, mocker):
         """BackendNotInstalledError raised by factory is catchable."""
         # Mock the underlying check_auggie_installed function
-        # IMPORTANT: Patch in the backends.auggie module where it's imported, not spec.integrations.auggie
+        # IMPORTANT: Patch in the backends.auggie module where it's imported, not ingot.integrations.auggie
         mocker.patch(
-            "spec.integrations.backends.auggie.check_auggie_installed",
+            "ingot.integrations.backends.auggie.check_auggie_installed",
             return_value=(False, "Auggie CLI not found"),
         )
 
@@ -1003,8 +1003,8 @@ class TestErrorPropagation:
         assert error.timeout_seconds == 300.0
 
     def test_all_errors_extend_spec_error(self):
-        """All backend errors extend SpecError."""
-        from spec.utils.errors import SpecError
+        """All backend errors extend IngotError."""
+        from ingot.utils.errors import IngotError
 
         # Note: BackendNotInstalledError takes a single message parameter
         errors = [
@@ -1014,20 +1014,20 @@ class TestErrorPropagation:
             BackendTimeoutError("Execution timed out"),
         ]
         for error in errors:
-            assert isinstance(error, SpecError), f"{type(error)} should extend SpecError"
+            assert isinstance(error, IngotError), f"{type(error)} should extend IngotError"
 
 
 class TestSubagentConstantsAccessibility:
-    """Verify subagent constants are accessible from spec.workflow.constants."""
+    """Verify subagent constants are accessible from ingot.workflow.constants."""
 
     def test_all_subagent_constants_importable(self):
         """All 6 subagent constants are importable."""
-        assert SPECFLOW_AGENT_PLANNER is not None
-        assert SPECFLOW_AGENT_TASKLIST is not None
-        assert SPECFLOW_AGENT_TASKLIST_REFINER is not None
-        assert SPECFLOW_AGENT_IMPLEMENTER is not None
-        assert SPECFLOW_AGENT_REVIEWER is not None
-        assert SPECFLOW_AGENT_DOC_UPDATER is not None
+        assert INGOT_AGENT_PLANNER is not None
+        assert INGOT_AGENT_TASKLIST is not None
+        assert INGOT_AGENT_TASKLIST_REFINER is not None
+        assert INGOT_AGENT_IMPLEMENTER is not None
+        assert INGOT_AGENT_REVIEWER is not None
+        assert INGOT_AGENT_DOC_UPDATER is not None
 
     def test_all_timeout_constants_importable(self):
         """All 3 timeout constants are importable."""
@@ -1037,9 +1037,9 @@ class TestSubagentConstantsAccessibility:
 
     def test_subagent_constants_are_strings(self):
         """Subagent constants are strings (agent names)."""
-        assert isinstance(SPECFLOW_AGENT_PLANNER, str)
-        assert isinstance(SPECFLOW_AGENT_TASKLIST, str)
-        assert isinstance(SPECFLOW_AGENT_IMPLEMENTER, str)
+        assert isinstance(INGOT_AGENT_PLANNER, str)
+        assert isinstance(INGOT_AGENT_TASKLIST, str)
+        assert isinstance(INGOT_AGENT_IMPLEMENTER, str)
 
     def test_timeout_constants_are_numeric(self):
         """Timeout constants are numeric (seconds)."""
@@ -1055,8 +1055,8 @@ class TestBaselineRegressionChecks:
         """AuggieBackend.run_with_callback() has same signature as AuggieClient."""
         import inspect
 
-        from spec.integrations.auggie import AuggieClient
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.auggie import AuggieClient
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         backend_sig = inspect.signature(AuggieBackend.run_with_callback)
         client_sig = inspect.signature(AuggieClient.run_with_callback)
@@ -1072,7 +1072,7 @@ class TestBaselineRegressionChecks:
 
     def test_auggie_backend_run_print_with_output_return_type(self):
         """run_print_with_output returns (bool, str) tuple."""
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         backend = AuggieBackend()
         # Method exists and is callable
@@ -1090,7 +1090,7 @@ class TestBaselineRegressionChecks:
     def test_auggie_backend_rate_limit_detection_matches_baseline(self):
         """Rate limit detection uses same patterns as baseline AuggieClient."""
         # Import the actual rate limit detection function used by AuggieBackend
-        from spec.integrations.auggie import _looks_like_rate_limit
+        from ingot.integrations.auggie import _looks_like_rate_limit
 
         # Test known rate limit patterns from baseline
         rate_limit_outputs = [
@@ -1107,21 +1107,21 @@ class TestBaselineRegressionChecks:
     def test_subagent_names_match_baseline(self):
         """Subagent constant values match baseline expectations."""
         # These values should not change during refactoring
-        assert "planner" in SPECFLOW_AGENT_PLANNER.lower()
-        assert "tasklist" in SPECFLOW_AGENT_TASKLIST.lower()
-        assert "refiner" in SPECFLOW_AGENT_TASKLIST_REFINER.lower()
-        assert "implementer" in SPECFLOW_AGENT_IMPLEMENTER.lower()
-        assert "review" in SPECFLOW_AGENT_REVIEWER.lower()
-        assert "doc" in SPECFLOW_AGENT_DOC_UPDATER.lower()
+        assert "planner" in INGOT_AGENT_PLANNER.lower()
+        assert "tasklist" in INGOT_AGENT_TASKLIST.lower()
+        assert "refiner" in INGOT_AGENT_TASKLIST_REFINER.lower()
+        assert "implementer" in INGOT_AGENT_IMPLEMENTER.lower()
+        assert "review" in INGOT_AGENT_REVIEWER.lower()
+        assert "doc" in INGOT_AGENT_DOC_UPDATER.lower()
 
 
 # Integration tests requiring real CLI
-integration_tests_enabled = os.environ.get("SPEC_INTEGRATION_TESTS") == "1"
+integration_tests_enabled = os.environ.get("INGOT_INTEGRATION_TESTS") == "1"
 
 
 @pytest.mark.skipif(
     not integration_tests_enabled,
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 class TestPhase1IntegrationWithRealCLI:
     """Integration tests with real CLI (gated)."""
@@ -1132,7 +1132,7 @@ class TestPhase1IntegrationWithRealCLI:
         Note: check_auggie_installed() returns (True, "") on success - the message
         is empty when installed. This is the actual contract per auggie.py:296-297.
         """
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         backend = AuggieBackend()
         installed, message = backend.check_installed()
@@ -1185,7 +1185,7 @@ class TestPhase1IntegrationWithRealCLI:
         Note: run_print_quiet() returns str (NOT tuple[bool, str]).
         See AIBackend protocol in base.py:170-192.
         """
-        from spec.integrations.backends.auggie import AuggieBackend
+        from ingot.integrations.backends.auggie import AuggieBackend
 
         backend = AuggieBackend()
         installed, _ = backend.check_installed()
@@ -1227,12 +1227,12 @@ class TestPhase1IntegrationWithRealCLI:
 
 | Module | Target Coverage | Notes |
 |--------|-----------------|-------|
-| `spec/integrations/backends/errors.py` | ≥80% | Simple error classes |
-| `spec/integrations/backends/base.py` | ≥80% | Protocol + abstract class |
-| `spec/integrations/backends/auggie.py` | ≥80% | Concrete implementation |
-| `spec/integrations/backends/factory.py` | ≥80% | Factory pattern |
-| `spec/config/backend_resolver.py` | ≥80% | Resolution logic |
-| `spec/workflow/constants.py` | ≥80% | Constants (mostly imports) |
+| `ingot/integrations/backends/errors.py` | ≥80% | Simple error classes |
+| `ingot/integrations/backends/base.py` | ≥80% | Protocol + abstract class |
+| `ingot/integrations/backends/auggie.py` | ≥80% | Concrete implementation |
+| `ingot/integrations/backends/factory.py` | ≥80% | Factory pattern |
+| `ingot/config/backend_resolver.py` | ≥80% | Resolution logic |
+| `ingot/workflow/constants.py` | ≥80% | Constants (mostly imports) |
 
 ---
 
@@ -1274,7 +1274,7 @@ None - this ticket only adds tests, no production code changes.
 > **Phase 2 Integration Points:**
 > These Phase 1.8 tests establish guarantees that Phase 2 will rely on:
 > - **Workflow runner** must call `resolve_backend_platform()` before `BackendFactory.create()` to enforce "no default backend" policy
-> - **CLI entry points** must catch `BackendNotConfiguredError` and print actionable guidance (`spec init` or `--backend` flag)
+> - **CLI entry points** must catch `BackendNotConfiguredError` and print actionable guidance (`ingot init` or `--backend` flag)
 > - **Subagent execution** relies on `run_print_quiet()` returning `str` (not tuple) - validated by integration tests
 > - **Error recovery** in workflows depends on catching typed exceptions (`BackendRateLimitError`, `BackendTimeoutError`)
 
@@ -1286,7 +1286,7 @@ None - this ticket only adds tests, no production code changes.
 |-----------|-------------------|-------------------|
 | `BackendFactory` ↔ `AuggieBackend` | `create(AUGGIE)` returns `AuggieBackend` | Unit test |
 | `resolve_backend_platform()` ↔ `BackendFactory` | Resolver output is valid factory input | Integration test |
-| `BackendNotConfiguredError` ↔ CLI | Error guides to `spec init` | Message content check |
+| `BackendNotConfiguredError` ↔ CLI | Error guides to `ingot init` | Message content check |
 | `BaseBackend` ↔ `AuggieBackend` | AuggieBackend extends BaseBackend | isinstance() check |
 | `AIBackend` ↔ all backends | Protocol compliance | @runtime_checkable isinstance() |
 
@@ -1306,7 +1306,7 @@ None - this ticket only adds tests, no production code changes.
 | Test BaseBackend._parse_subagent_prompt() parses frontmatter | `tests/test_base_backend.py` | `TestParseSubagentPrompt` |
 | Test BaseBackend._resolve_model() precedence | `tests/test_base_backend.py` | `TestResolveModel` |
 | Test error type detection (BackendRateLimitError, etc.) | `tests/test_backend_errors.py` | `TestBackendErrorTypes` |
-| Test subagent constants accessible from `spec/workflow/constants.py` | `tests/test_phase1_integration.py` | `TestSubagentConstantsAccessible` |
+| Test subagent constants accessible from `ingot/workflow/constants.py` | `tests/test_phase1_integration.py` | `TestSubagentConstantsAccessible` |
 
 ### Integration Tests (Parent Spec Lines 2052-2055)
 
@@ -1365,7 +1365,7 @@ pytest tests/test_phase1_integration.py -v --tb=short
 pytest tests/test_baseline_auggie_behavior.py -v --tb=short
 
 # Full baseline with integration tests
-SPEC_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v --tb=short
+INGOT_INTEGRATION_TESTS=1 pytest tests/test_baseline_auggie_behavior.py -v --tb=short
 ```
 
 ### 4. Generate Coverage Report
@@ -1378,9 +1378,9 @@ pytest tests/test_backend_errors.py \
        tests/test_backend_factory.py \
        tests/test_backend_resolver.py \
        tests/test_phase1_integration.py \
-       --cov=spec.integrations.backends \
-       --cov=spec.config.backend_resolver \
-       --cov=spec.workflow.constants \
+       --cov=ingot.integrations.backends \
+       --cov=ingot.config.backend_resolver \
+       --cov=ingot.workflow.constants \
        --cov-report=term-missing \
        --cov-report=html
 ```
@@ -1389,12 +1389,12 @@ pytest tests/test_backend_errors.py \
 
 ```bash
 python -c "
-from spec.integrations.backends.errors import BackendNotConfiguredError
-from spec.integrations.backends.base import AIBackend, BaseBackend
-from spec.integrations.backends.auggie import AuggieBackend
-from spec.integrations.backends.factory import BackendFactory
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.workflow.constants import SPECFLOW_AGENT_PLANNER, DEFAULT_EXECUTION_TIMEOUT
+from ingot.integrations.backends.errors import BackendNotConfiguredError
+from ingot.integrations.backends.base import AIBackend, BaseBackend
+from ingot.integrations.backends.auggie import AuggieBackend
+from ingot.integrations.backends.factory import BackendFactory
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.workflow.constants import INGOT_AGENT_PLANNER, DEFAULT_EXECUTION_TIMEOUT
 print('✅ All Phase 1 imports successful - no circular dependencies')
 "
 ```
@@ -1404,8 +1404,8 @@ print('✅ All Phase 1 imports successful - no circular dependencies')
 ```bash
 python -c "
 from unittest.mock import MagicMock
-from spec.config.backend_resolver import resolve_backend_platform
-from spec.integrations.backends.errors import BackendNotConfiguredError
+from ingot.config.backend_resolver import resolve_backend_platform
+from ingot.integrations.backends.errors import BackendNotConfiguredError
 
 config = MagicMock()
 config.get.return_value = ''
@@ -1440,9 +1440,9 @@ pytest tests/test_baseline_auggie_behavior.py -v --tb=short
 
 echo "\n--- Coverage Report ---"
 pytest tests/test_backend_*.py tests/test_base_backend.py tests/test_auggie_backend.py tests/test_phase1_integration.py \
-       --cov=spec.integrations.backends \
-       --cov=spec.config.backend_resolver \
-       --cov=spec.workflow.constants \
+       --cov=ingot.integrations.backends \
+       --cov=ingot.config.backend_resolver \
+       --cov=ingot.workflow.constants \
        --cov-report=term-missing
 
 echo "\n=== Validation Complete ==="
@@ -1505,12 +1505,12 @@ echo "\n=== Validation Complete ==="
 
 | File | Description |
 |------|-------------|
-| `spec/integrations/backends/errors.py` | Backend error types (AMI-47) |
-| `spec/integrations/backends/base.py` | AIBackend protocol and BaseBackend (AMI-48, AMI-49) |
-| `spec/integrations/backends/auggie.py` | AuggieBackend implementation (AMI-51) |
-| `spec/integrations/backends/factory.py` | BackendFactory (AMI-52) |
-| `spec/config/backend_resolver.py` | Backend platform resolver (AMI-53) |
-| `spec/workflow/constants.py` | Subagent and timeout constants (AMI-50) |
+| `ingot/integrations/backends/errors.py` | Backend error types (AMI-47) |
+| `ingot/integrations/backends/base.py` | AIBackend protocol and BaseBackend (AMI-48, AMI-49) |
+| `ingot/integrations/backends/auggie.py` | AuggieBackend implementation (AMI-51) |
+| `ingot/integrations/backends/factory.py` | BackendFactory (AMI-52) |
+| `ingot/config/backend_resolver.py` | Backend platform resolver (AMI-53) |
+| `ingot/workflow/constants.py` | Subagent and timeout constants (AMI-50) |
 
 ---
 
@@ -1519,4 +1519,4 @@ echo "\n=== Validation Complete ==="
 | Date | Author | Changes |
 |------|--------|---------|
 | 2026-02-02 | AI Assistant | Initial draft created |
-| 2026-02-02 | AI Assistant | Gap analysis fixes: Fixed BackendNotInstalledError constructor usage (single message param), added run_print_quiet() integration test per parent spec line 2054, fixed detect_rate_limit test to use _looks_like_rate_limit(), added robust type hint checking with get_origin/get_args, strengthened error message assertions to check both 'spec init' AND '--backend', added spec.workflow.constants to coverage tracking, added complete unified test file section, enhanced pre-implementation verification with package-level imports |
+| 2026-02-02 | AI Assistant | Gap analysis fixes: Fixed BackendNotInstalledError constructor usage (single message param), added run_print_quiet() integration test per parent spec line 2054, fixed detect_rate_limit test to use _looks_like_rate_limit(), added robust type hint checking with get_origin/get_args, strengthened error message assertions to check both 'ingot init' AND '--backend', added ingot.workflow.constants to coverage tracking, added complete unified test file section, enhanced pre-implementation verification with package-level imports |

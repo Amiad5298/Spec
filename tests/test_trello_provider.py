@@ -1,4 +1,4 @@
-"""Tests for TrelloProvider in spec.integrations.providers.trello module.
+"""Tests for TrelloProvider in ingot.integrations.providers.trello module.
 
 Tests cover:
 - Provider registration with ProviderRegistry
@@ -16,13 +16,13 @@ from datetime import UTC
 
 import pytest
 
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     Platform,
     TicketStatus,
     TicketType,
 )
-from spec.integrations.providers.registry import ProviderRegistry
-from spec.integrations.providers.trello import (
+from ingot.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.trello import (
     TrelloProvider,
 )
 

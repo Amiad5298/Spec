@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.base import matches_common_rate_limit
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.base import matches_common_rate_limit
 
 
 class FakeBackend:

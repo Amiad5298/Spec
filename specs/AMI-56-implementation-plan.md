@@ -1,10 +1,10 @@
 # Implementation Plan: AMI-56 - Phase 1.5.1: Update AuggieMediatedFetcher
 
-**Ticket:** [AMI-56](https://linear.app/amiadspec/issue/AMI-56/phase-151-update-auggiemediatedfetcher)
+**Ticket:** [AMI-56](https://linear.app/amiadingot/issue/AMI-56/phase-151-update-auggiemediatedfetcher)
 **Status:** Draft
 **Date:** 2026-02-02
 **Labels:** MultiAgent
-**Parent:** [AMI-55: Phase 1.5 - Fetcher Refactoring](https://linear.app/amiadspec/issue/AMI-55)
+**Parent:** [AMI-55: Phase 1.5 - Fetcher Refactoring](https://linear.app/amiadingot/issue/AMI-55)
 
 ---
 
@@ -19,7 +19,7 @@ This ticket updates the `AuggieMediatedFetcher` class to accept an `AIBackend` i
 - Parameter names are standardized to match the `AIBackend` protocol (`dont_save_session` instead of `no_session`)
 
 **Scope:**
-- Update `spec/integrations/fetchers/auggie_fetcher.py`:
+- Update `ingot/integrations/fetchers/auggie_fetcher.py`:
   - Change constructor signature: `AuggieClient` → `AIBackend`
   - Update internal attribute: `self._auggie` → `self._backend`
   - Update `_execute_fetch_prompt()` to use `self._backend.run_print_quiet()`
@@ -30,7 +30,7 @@ This ticket updates the `AuggieMediatedFetcher` class to accept an `AIBackend` i
 
 **Reference:** `specs/Pluggable Multi-Agent Support.md` - Phase 1.5.1 (lines 2067-2109)
 
-> **⚠️ Parent Spec Discrepancy:** The parent specification shows `run_print_quiet()` returning `tuple[bool, str]`, but the actual `AIBackend` protocol returns `str` only. This implementation plan follows the **actual protocol definition** in `spec/integrations/backends/base.py`.
+> **⚠️ Parent Spec Discrepancy:** The parent specification shows `run_print_quiet()` returning `tuple[bool, str]`, but the actual `AIBackend` protocol returns `str` only. This implementation plan follows the **actual protocol definition** in `ingot/integrations/backends/base.py`.
 
 ---
 
@@ -54,7 +54,7 @@ This is **Phase 1.5.1** of the Fetcher Refactoring work (AMI-55), which is part 
 
 > **⚠️ Pre-Implementation Verification Required:** Before starting this ticket, verify that `AIBackend` protocol and `AuggieBackend` exist. Run:
 > ```bash
-> python -c "from spec.integrations.backends import AIBackend, AuggieBackend; print('Dependencies available')"
+> python -c "from ingot.integrations.backends import AIBackend, AuggieBackend; print('Dependencies available')"
 > ```
 
 ### Position in Architecture
@@ -62,7 +62,7 @@ This is **Phase 1.5.1** of the Fetcher Refactoring work (AMI-55), which is part 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                       AuggieMediatedFetcher (BEFORE)                         │
-│   spec/integrations/fetchers/auggie_fetcher.py                               │
+│   ingot/integrations/fetchers/auggie_fetcher.py                               │
 │                                                                              │
 │   def __init__(self, auggie_client: AuggieClient, ...):                     │
 │       self._auggie = auggie_client                                           │
@@ -75,7 +75,7 @@ This is **Phase 1.5.1** of the Fetcher Refactoring work (AMI-55), which is part 
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                       AuggieMediatedFetcher (AFTER)                          │
-│   spec/integrations/fetchers/auggie_fetcher.py                               │
+│   ingot/integrations/fetchers/auggie_fetcher.py                               │
 │                                                                              │
 │   def __init__(self, backend: AIBackend, ...):                              │
 │       self._backend = backend                                                │
@@ -100,7 +100,7 @@ The `AIBackend.run_print_quiet()` signature is a **superset** of the current usa
 
 ## Current State Analysis
 
-### Existing Implementation (`spec/integrations/fetchers/auggie_fetcher.py`)
+### Existing Implementation (`ingot/integrations/fetchers/auggie_fetcher.py`)
 
 **Constructor (lines 138-153):**
 ```python
@@ -138,8 +138,8 @@ async def _execute_fetch_prompt(
 **TYPE_CHECKING imports (lines 38-40):**
 ```python
 if TYPE_CHECKING:
-    from spec.config import ConfigManager
-    from spec.integrations.auggie import AuggieClient
+    from ingot.config import ConfigManager
+    from ingot.integrations.auggie import AuggieClient
 ```
 
 > **✅ Important Note:** The current implementation already uses `dont_save_session=True` (line 292), **not** `no_session=True` as shown in some parent spec snippets (lines 4012). This means **no parameter name change is needed** - only the variable name changes from `self._auggie` to `self._backend`. The Linear ticket description mentioning `no_session` → `dont_save_session` is outdated.
@@ -178,28 +178,28 @@ if TYPE_CHECKING:
 
 ### Phase 1: Update Imports (~5 minutes)
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 Update the TYPE_CHECKING block and add runtime import for AIBackend:
 
 ```python
 # BEFORE (lines 38-40):
 if TYPE_CHECKING:
-    from spec.config import ConfigManager
-    from spec.integrations.auggie import AuggieClient
+    from ingot.config import ConfigManager
+    from ingot.integrations.auggie import AuggieClient
 
 # AFTER:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 if TYPE_CHECKING:
-    from spec.config import ConfigManager
+    from ingot.config import ConfigManager
 ```
 
 **Note:** The `AuggieClient` import is completely removed since we now accept `AIBackend`.
 
 ### Phase 2: Update Constructor (~5 minutes)
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 Update constructor signature and attribute:
 
@@ -243,7 +243,7 @@ def __init__(
 
 ### Phase 3: Update _execute_fetch_prompt (~10 minutes)
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 #### 3a. Update the method to use `self._backend`:
 
@@ -359,7 +359,7 @@ async def _execute_fetch_prompt(
 
 ### Phase 4: Update Docstrings (~10 minutes)
 
-**File:** `spec/integrations/fetchers/auggie_fetcher.py`
+**File:** `ingot/integrations/fetchers/auggie_fetcher.py`
 
 #### 4a. Update module docstring (lines 1-21):
 
@@ -456,10 +456,10 @@ class AuggieMediatedFetcher(AgentMediatedFetcher):
 
 ```python
 # BEFORE:
-from spec.integrations.auggie import AuggieClient
+from ingot.integrations.auggie import AuggieClient
 
 # AFTER:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 ```
 
 **Note:** Remove the `AuggieClient` import entirely - it is no longer needed.
@@ -490,7 +490,7 @@ def mock_backend():
 
 ```python
 # BEFORE:
-"""Tests for spec.integrations.fetchers.auggie_fetcher module.
+"""Tests for ingot.integrations.fetchers.auggie_fetcher module.
 
 Tests cover:
 - AuggieMediatedFetcher instantiation
@@ -504,7 +504,7 @@ Tests cover:
 """
 
 # AFTER:
-"""Tests for spec.integrations.fetchers.auggie_fetcher module.
+"""Tests for ingot.integrations.fetchers.auggie_fetcher module.
 
 Tests cover:
 - AuggieMediatedFetcher instantiation
@@ -607,23 +607,23 @@ assert "Backend invocation failed" in str(exc_info.value)
 
 ## File Changes Detail
 
-### File: `spec/integrations/fetchers/auggie_fetcher.py`
+### File: `ingot/integrations/fetchers/auggie_fetcher.py`
 
 #### Change 1: Imports (lines 38-40)
 
 **Before:**
 ```python
 if TYPE_CHECKING:
-    from spec.config import ConfigManager
-    from spec.integrations.auggie import AuggieClient
+    from ingot.config import ConfigManager
+    from ingot.integrations.auggie import AuggieClient
 ```
 
 **After:**
 ```python
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 
 if TYPE_CHECKING:
-    from spec.config import ConfigManager
+    from ingot.config import ConfigManager
 ```
 
 #### Change 2: Class Docstring (lines 121-136)
@@ -785,7 +785,7 @@ raise AgentFetchError(
 | Ticket | Description | How This Ticket Affects It |
 |--------|-------------|---------------------------|
 | AMI-57 | Update ticket_service.py | Needs updated fetcher to accept `AIBackend` |
-| AMI-57 | Update `spec/cli.py` (line 240) | Uses `AuggieClient()` directly; will be updated in Phase 1.5.3 |
+| AMI-57 | Update `ingot/cli.py` (line 240) | Uses `AuggieClient()` directly; will be updated in Phase 1.5.3 |
 | AMI-58+ | Additional fetcher updates | Pattern established by this ticket |
 
 ### Breaking Change Coordination
@@ -794,7 +794,7 @@ raise AgentFetchError(
 
 **Affected Callers:**
 
-1. **`spec/integrations/ticket_service.py` (lines 356-359):**
+1. **`ingot/integrations/ticket_service.py` (lines 356-359):**
    ```python
    # CURRENT (will break after AMI-56):
    primary = AuggieMediatedFetcher(
@@ -803,7 +803,7 @@ raise AgentFetchError(
    )
    ```
 
-2. **`spec/cli.py` (line 240):**
+2. **`ingot/cli.py` (line 240):**
    ```python
    # CURRENT (uses AuggieClient directly):
    auggie_client = AuggieClient()
@@ -847,10 +847,10 @@ All existing tests should be updated to use `AIBackend` mock instead of `AuggieC
 #### Import Changes (line 22)
 ```python
 # BEFORE:
-from spec.integrations.auggie import AuggieClient
+from ingot.integrations.auggie import AuggieClient
 
 # AFTER:
-from spec.integrations.backends.base import AIBackend
+from ingot.integrations.backends.base import AIBackend
 ```
 
 #### Fixture Changes (lines 39-45)
@@ -893,15 +893,15 @@ assert fetcher._backend is mock_backend
 
 ```bash
 # Pre-implementation: Verify dependencies are available
-python -c "from spec.integrations.backends import AIBackend, AuggieBackend; print('Dependencies available')"
+python -c "from ingot.integrations.backends import AIBackend, AuggieBackend; print('Dependencies available')"
 
 # Verify imports work without cycles
-python -c "from spec.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher; print('Import OK')"
+python -c "from ingot.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher; print('Import OK')"
 
 # Verify AIBackend is properly type-checked
 python -c "
-from spec.integrations.backends import AuggieBackend
-from spec.integrations.fetchers import AuggieMediatedFetcher
+from ingot.integrations.backends import AuggieBackend
+from ingot.integrations.fetchers import AuggieMediatedFetcher
 backend = AuggieBackend()
 fetcher = AuggieMediatedFetcher(backend)
 print('Integration OK')
@@ -911,7 +911,7 @@ print('Integration OK')
 pytest tests/test_auggie_fetcher.py -v
 
 # Run mypy type checking on source file
-mypy spec/integrations/fetchers/auggie_fetcher.py
+mypy ingot/integrations/fetchers/auggie_fetcher.py
 
 # Run mypy type checking on test file
 mypy tests/test_auggie_fetcher.py
@@ -921,15 +921,15 @@ pytest tests/ -v
 
 # Verify no import cycles with full integration
 python -c "
-from spec.integrations.backends import AIBackend, AuggieBackend
-from spec.integrations.fetchers import AuggieMediatedFetcher
-from spec.integrations.providers.base import Platform
+from ingot.integrations.backends import AIBackend, AuggieBackend
+from ingot.integrations.fetchers import AuggieMediatedFetcher
+from ingot.integrations.providers.base import Platform
 print('Full integration OK')
 "
 
 # Verify all "Auggie" references in error messages have been updated
 # (Should find 0 occurrences of "Auggie CLI" or "Auggie returned" in source)
-grep -c "Auggie CLI\|Auggie returned" spec/integrations/fetchers/auggie_fetcher.py || echo "✅ No Auggie-specific error messages found"
+grep -c "Auggie CLI\|Auggie returned" ingot/integrations/fetchers/auggie_fetcher.py || echo "✅ No Auggie-specific error messages found"
 
 # Verify test assertions have been updated to match new error messages
 # (Should find 0 occurrences of "CLI invocation failed" in tests)
@@ -942,7 +942,7 @@ grep -c "CLI invocation failed" tests/test_auggie_fetcher.py || echo "✅ Test a
 
 ### Implementation Checklist
 
-#### Source File (`spec/integrations/fetchers/auggie_fetcher.py`)
+#### Source File (`ingot/integrations/fetchers/auggie_fetcher.py`)
 
 - [ ] Constructor accepts `backend: AIBackend` instead of `auggie_client: AuggieClient`
 - [ ] Internal attribute changed from `self._auggie` to `self._backend`
@@ -970,7 +970,7 @@ grep -c "CLI invocation failed" tests/test_auggie_fetcher.py || echo "✅ Test a
 
 ### Quality Checklist
 
-- [ ] `mypy spec/integrations/fetchers/auggie_fetcher.py` reports no type errors
+- [ ] `mypy ingot/integrations/fetchers/auggie_fetcher.py` reports no type errors
 - [ ] `mypy tests/test_auggie_fetcher.py` reports no type errors
 - [ ] No import cycles introduced
 - [ ] Unit tests updated and passing
@@ -1018,9 +1018,9 @@ grep -c "CLI invocation failed" tests/test_auggie_fetcher.py || echo "✅ Test a
 
 | File | Description |
 |------|-------------|
-| `spec/integrations/fetchers/auggie_fetcher.py` | Current AuggieMediatedFetcher implementation |
-| `spec/integrations/backends/base.py` | AIBackend protocol definition |
-| `spec/integrations/backends/auggie.py` | AuggieBackend implementation |
+| `ingot/integrations/fetchers/auggie_fetcher.py` | Current AuggieMediatedFetcher implementation |
+| `ingot/integrations/backends/base.py` | AIBackend protocol definition |
+| `ingot/integrations/backends/auggie.py` | AuggieBackend implementation |
 | `tests/test_auggie_fetcher.py` | Existing tests to update |
 
 ### Related Implementation Plans
@@ -1060,4 +1060,4 @@ grep -c "CLI invocation failed" tests/test_auggie_fetcher.py || echo "✅ Test a
 |------|--------|---------|
 | 2026-02-02 | AI Assistant | Initial draft created following AMI-53 template |
 | 2026-02-02 | AI Assistant | Updated after review: added error message updates, module docstring updates, comprehensive test changes, mypy verification for test file |
-| 2026-02-02 | AI Assistant | Review updates: (1) Added Phase 5g for test error message assertion update (line 251); (2) Expanded Dependencies section with breaking change coordination and migration strategy; (3) Added `spec/cli.py` to downstream dependencies; (4) Added Phase 3b for debug log message update; (5) Added note in Current State Analysis that `dont_save_session` is already used (no parameter name change needed); (6) Updated Acceptance Criteria with explicit AC3 verification note; (7) Added verification commands to check for remaining Auggie-specific strings |
+| 2026-02-02 | AI Assistant | Review updates: (1) Added Phase 5g for test error message assertion update (line 251); (2) Expanded Dependencies section with breaking change coordination and migration strategy; (3) Added `ingot/cli.py` to downstream dependencies; (4) Added Phase 3b for debug log message update; (5) Added note in Current State Analysis that `dont_save_session` is already used (no parameter name change needed); (6) Updated Acceptance Criteria with explicit AC3 verification note; (7) Added verification commands to check for remaining Auggie-specific strings |

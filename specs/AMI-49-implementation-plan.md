@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-49 - Phase 1.3: Create BaseBackend Abstract Class
 
-**Ticket:** [AMI-49](https://linear.app/amiadspec/issue/AMI-49/phase-13-create-basebackend-abstract-class)
+**Ticket:** [AMI-49](https://linear.app/amiadingot/issue/AMI-49/phase-13-create-basebackend-abstract-class)
 **Status:** Draft
 **Date:** 2026-02-01
 **Labels:** MultiAgent
@@ -18,13 +18,13 @@ This ticket creates the `BaseBackend` abstract base class that implements shared
 - Without a shared base class, this logic would be duplicated 3+ times (Auggie, Claude, Cursor, Aider)
 
 **Scope:**
-- Extend `spec/integrations/backends/base.py` to include:
+- Extend `ingot/integrations/backends/base.py` to include:
   - `SubagentMetadata` dataclass for parsed frontmatter
   - `BaseBackend` abstract class implementing `AIBackend` protocol
   - Shared methods: `_parse_subagent_prompt()`, `_resolve_model()`, `_run_streaming_with_timeout()`
   - Default implementations: `supports_parallel_execution()`, `close()`
   - Abstract methods that subclasses must implement
-- Update `spec/integrations/backends/__init__.py` to export `BaseBackend` and `SubagentMetadata`
+- Update `ingot/integrations/backends/__init__.py` to export `BaseBackend` and `SubagentMetadata`
 
 **Reference:** `specs/Pluggable Multi-Agent Support.md` - Phase 1.3 (lines 1436-1716)
 
@@ -51,7 +51,7 @@ The [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) spec
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     spec/integrations/backends/base.py                       │
+│                     ingot/integrations/backends/base.py                       │
 │                                                                              │
 │   AIBackend (Protocol) ← Phase 1.2 (AMI-48) ✅ Done                          │
 │       ├── name: str (property)                                              │
@@ -153,8 +153,8 @@ The `AIBackend` protocol (created in AMI-48) defines the **contract** that all b
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `spec/integrations/backends/base.py` | **MODIFY** | Add `SubagentMetadata` dataclass and `BaseBackend` ABC |
-| `spec/integrations/backends/__init__.py` | **MODIFY** | Export `BaseBackend` and `SubagentMetadata` |
+| `ingot/integrations/backends/base.py` | **MODIFY** | Add `SubagentMetadata` dataclass and `BaseBackend` ABC |
+| `ingot/integrations/backends/__init__.py` | **MODIFY** | Export `BaseBackend` and `SubagentMetadata` |
 
 ---
 
@@ -164,7 +164,7 @@ The `AIBackend` protocol (created in AMI-48) defines the **contract** that all b
 
 #### Step 1.1: Add SubagentMetadata to base.py
 
-**File:** `spec/integrations/backends/base.py`
+**File:** `ingot/integrations/backends/base.py`
 
 Add the dataclass after the imports, before the `AIBackend` protocol:
 
@@ -180,8 +180,8 @@ import threading
 
 import yaml
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.errors import BackendTimeoutError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.errors import BackendTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class SubagentMetadata:
 
 #### Step 2.1: Add BaseBackend Class with Core Structure
 
-**File:** `spec/integrations/backends/base.py`
+**File:** `ingot/integrations/backends/base.py`
 
 Add after the `AIBackend` protocol definition:
 
@@ -307,7 +307,7 @@ class BaseBackend(ABC):
 
 #### Step 2.2: Add Protected Helper Methods
 
-Continue in `spec/integrations/backends/base.py`:
+Continue in `ingot/integrations/backends/base.py`:
 
 ```python
     def _parse_subagent_prompt(self, subagent: str) -> tuple[SubagentMetadata, str]:
@@ -320,7 +320,7 @@ Continue in `spec/integrations/backends/base.py`:
         If the file starts with `---`, it parses the YAML frontmatter.
 
         Args:
-            subagent: Subagent name (e.g., "spec-planner")
+            subagent: Subagent name (e.g., "ingot-planner")
 
         Returns:
             Tuple of (metadata, prompt_body) where:
@@ -328,7 +328,7 @@ Continue in `spec/integrations/backends/base.py`:
             - prompt_body: The prompt content without frontmatter
 
         Example:
-            >>> metadata, body = backend._parse_subagent_prompt("spec-planner")
+            >>> metadata, body = backend._parse_subagent_prompt("ingot-planner")
             >>> if metadata.model:
             ...     print(f"Using model: {metadata.model}")
         """
@@ -404,7 +404,7 @@ Continue in `spec/integrations/backends/base.py`:
 
 #### Step 2.3: Add Streaming Timeout Method
 
-Continue in `spec/integrations/backends/base.py`:
+Continue in `ingot/integrations/backends/base.py`:
 
 ```python
     def _run_streaming_with_timeout(
@@ -512,7 +512,7 @@ Continue in `spec/integrations/backends/base.py`:
 
 #### Step 3.1: Declare Abstract Methods
 
-Continue in `spec/integrations/backends/base.py`:
+Continue in `ingot/integrations/backends/base.py`:
 
 ```python
     # Abstract methods that each backend must implement
@@ -590,7 +590,7 @@ Continue in `spec/integrations/backends/base.py`:
 
 #### Step 4.1: Update __init__.py
 
-**File:** `spec/integrations/backends/__init__.py`
+**File:** `ingot/integrations/backends/__init__.py`
 
 ```python
 """Backend infrastructure for AI agent integrations.
@@ -607,12 +607,12 @@ Modules:
 - factory: Backend factory for instantiation (Phase 1.6+)
 """
 
-from spec.integrations.backends.base import (
+from ingot.integrations.backends.base import (
     AIBackend,
     BaseBackend,
     SubagentMetadata,
 )
-from spec.integrations.backends.errors import (
+from ingot.integrations.backends.errors import (
     BackendNotConfiguredError,
     BackendNotInstalledError,
     BackendRateLimitError,
@@ -670,12 +670,12 @@ __all__ = [
 
 ### Integration Testing Note
 
-The unit tests in this plan use mocked subprocesses for `_run_streaming_with_timeout()`. For full integration testing with real subprocess execution, tests can be gated behind `SPEC_INTEGRATION_TESTS=1` (following the pattern established in AMI-44):
+The unit tests in this plan use mocked subprocesses for `_run_streaming_with_timeout()`. For full integration testing with real subprocess execution, tests can be gated behind `INGOT_INTEGRATION_TESTS=1` (following the pattern established in AMI-44):
 
 ```python
 @pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 def test_run_streaming_with_timeout_real_subprocess():
     """Integration test: verify timeout with real subprocess."""
@@ -873,7 +873,7 @@ def test_run_streaming_with_timeout_success(mocker):
 def test_run_streaming_with_timeout_exceeds(mocker):
     """Process killed when timeout exceeded - raises BackendTimeoutError."""
     import threading
-    from spec.integrations.backends.errors import BackendTimeoutError
+    from ingot.integrations.backends.errors import BackendTimeoutError
 
     # Create a process that hangs (stdout blocks indefinitely)
     mock_process = mocker.MagicMock()
@@ -1078,7 +1078,7 @@ class ConcreteTestBackend(BaseBackend):
 
 ### Risk 4: Import Cycles
 
-**Risk:** Importing from `spec.integrations.backends.errors` in `base.py` could create cycles.
+**Risk:** Importing from `ingot.integrations.backends.errors` in `base.py` could create cycles.
 
 **Mitigation:**
 - Keep imports at module level (already done in AMI-48)
@@ -1131,25 +1131,25 @@ The Linear ticket (AMI-49) description mentions:
 
 ```bash
 # Check that BaseBackend and SubagentMetadata exist in base.py
-grep -n "class BaseBackend" spec/integrations/backends/base.py
-grep -n "class SubagentMetadata" spec/integrations/backends/base.py
+grep -n "class BaseBackend" ingot/integrations/backends/base.py
+grep -n "class SubagentMetadata" ingot/integrations/backends/base.py
 ```
 
 ### 2. Verify Imports
 
 ```bash
 # Test imports work correctly
-python -c "from spec.integrations.backends import BaseBackend, SubagentMetadata; print('OK')"
+python -c "from ingot.integrations.backends import BaseBackend, SubagentMetadata; print('OK')"
 
 # Test all exports
-python -c "from spec.integrations.backends import AIBackend, BaseBackend, SubagentMetadata, BackendTimeoutError; print('All imports OK')"
+python -c "from ingot.integrations.backends import AIBackend, BaseBackend, SubagentMetadata, BackendTimeoutError; print('All imports OK')"
 ```
 
 ### 3. Verify Abstract Class Behavior
 
 ```bash
 # This should raise TypeError because BaseBackend is abstract
-python -c "from spec.integrations.backends.base import BaseBackend; BaseBackend()" 2>&1 | grep -q "TypeError" && echo "Abstract enforcement works"
+python -c "from ingot.integrations.backends.base import BaseBackend; BaseBackend()" 2>&1 | grep -q "TypeError" && echo "Abstract enforcement works"
 ```
 
 ### 4. Run Type Checking
@@ -1159,13 +1159,13 @@ python -c "from spec.integrations.backends.base import BaseBackend; BaseBackend(
 pip install types-PyYAML
 
 # Run mypy on the backends module
-mypy spec/integrations/backends/base.py --strict
+mypy ingot/integrations/backends/base.py --strict
 
 # Or run full type check
-mypy spec/ --strict
+mypy ingot/ --strict
 
 # Alternative if types-PyYAML is not installed:
-mypy spec/integrations/backends/base.py --strict --ignore-missing-imports
+mypy ingot/integrations/backends/base.py --strict --ignore-missing-imports
 ```
 
 ### 5. Run Tests
@@ -1184,8 +1184,8 @@ pytest tests/test_*backend*.py -v
 
 ### Code Changes
 
-- [ ] `SubagentMetadata` dataclass added to `spec/integrations/backends/base.py`
-- [ ] `BaseBackend` abstract class added to `spec/integrations/backends/base.py`
+- [ ] `SubagentMetadata` dataclass added to `ingot/integrations/backends/base.py`
+- [ ] `BaseBackend` abstract class added to `ingot/integrations/backends/base.py`
 - [ ] Protected helper methods implemented:
   - [ ] `_parse_subagent_prompt()` - YAML frontmatter parsing
   - [ ] `_resolve_model()` - Model precedence resolution
@@ -1203,7 +1203,7 @@ pytest tests/test_*backend*.py -v
   - [ ] `run_streaming()`
   - [ ] `check_installed()`
   - [ ] `detect_rate_limit()`
-- [ ] `spec/integrations/backends/__init__.py` exports `BaseBackend` and `SubagentMetadata`
+- [ ] `ingot/integrations/backends/__init__.py` exports `BaseBackend` and `SubagentMetadata`
 
 ### Testing
 
@@ -1229,7 +1229,7 @@ pytest tests/test_*backend*.py -v
 ### Type Checking
 
 - [ ] `types-PyYAML` installed for type stubs
-- [ ] No mypy errors: `mypy spec/integrations/backends/base.py --strict`
+- [ ] No mypy errors: `mypy ingot/integrations/backends/base.py --strict`
 
 ### Documentation
 
@@ -1269,10 +1269,10 @@ pytest tests/test_*backend*.py -v
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `spec/integrations/backends/base.py` | 1-248 | Current AIBackend Protocol (AMI-48) |
-| `spec/integrations/backends/errors.py` | 1-118 | Backend error types including BackendTimeoutError |
-| `spec/integrations/backends/__init__.py` | 1-34 | Current package exports |
-| `spec/config/fetch_config.py` | 49-64 | AgentPlatform enum definition |
+| `ingot/integrations/backends/base.py` | 1-248 | Current AIBackend Protocol (AMI-48) |
+| `ingot/integrations/backends/errors.py` | 1-118 | Backend error types including BackendTimeoutError |
+| `ingot/integrations/backends/__init__.py` | 1-34 | Current package exports |
+| `ingot/config/fetch_config.py` | 49-64 | AgentPlatform enum definition |
 
 ### Specification References
 
@@ -1295,7 +1295,7 @@ pytest tests/test_*backend*.py -v
 ## Appendix: Full BaseBackend Class Structure
 
 ```python
-# spec/integrations/backends/base.py (after AMI-49 implementation)
+# ingot/integrations/backends/base.py (after AMI-49 implementation)
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -1308,8 +1308,8 @@ import threading
 
 import yaml
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends.errors import BackendTimeoutError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends.errors import BackendTimeoutError
 
 logger = logging.getLogger(__name__)
 

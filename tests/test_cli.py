@@ -1,12 +1,12 @@
-"""Tests for spec.cli module."""
+"""Tests for ingot.cli module."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
-from spec.cli import app
-from spec.utils.errors import ExitCode
+from ingot.cli import app
+from ingot.utils.errors import ExitCode
 
 runner = CliRunner()
 
@@ -32,8 +32,8 @@ class TestCLIVersion:
 class TestCLIConfig:
     """Tests for --config flag."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
     def test_config_flag_shows_config(self, mock_config_class, mock_banner):
         """--config shows configuration and exits."""
         mock_config = MagicMock()
@@ -47,9 +47,9 @@ class TestCLIConfig:
 class TestCLIPrerequisites:
     """Tests for prerequisite checking."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli.is_git_repo")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli.is_git_repo")
     def test_fails_outside_git_repo(self, mock_git, mock_config_class, mock_banner):
         """Fails when not in a git repository."""
         mock_git.return_value = False
@@ -60,11 +60,11 @@ class TestCLIPrerequisites:
 
         assert result.exit_code == ExitCode.GENERAL_ERROR
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli.is_git_repo")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.run_onboarding")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli.is_git_repo")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.run_onboarding")
     def test_onboarding_failure_exits(
         self, mock_onboard, mock_first_run, mock_git, mock_config_class, mock_banner
     ):
@@ -83,10 +83,10 @@ class TestCLIPrerequisites:
 class TestCLIWorkflow:
     """Tests for workflow execution."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_runs_workflow_with_ticket(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """Runs workflow when ticket is provided."""
         mock_prereq.return_value = True
@@ -97,10 +97,10 @@ class TestCLIWorkflow:
 
         mock_run.assert_called_once()
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_main_menu")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_main_menu")
     def test_shows_menu_without_ticket(
         self, mock_menu, mock_prereq, mock_config_class, mock_banner
     ):
@@ -117,10 +117,10 @@ class TestCLIWorkflow:
 class TestCLIFlags:
     """Tests for CLI flags."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_model_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--model flag is passed to workflow."""
         mock_prereq.return_value = True
@@ -132,10 +132,10 @@ class TestCLIFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["model"] == "claude-3"
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_skip_clarification_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--skip-clarification flag is passed to workflow."""
         mock_prereq.return_value = True
@@ -147,10 +147,10 @@ class TestCLIFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["skip_clarification"] is True
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_no_squash_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--no-squash flag is passed to workflow."""
         mock_prereq.return_value = True
@@ -166,10 +166,10 @@ class TestCLIFlags:
 class TestParallelFlags:
     """Tests for parallel execution CLI flags."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_parallel_flag_enables_parallel(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -183,10 +183,10 @@ class TestParallelFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parallel"] is True
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_no_parallel_flag_disables(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--no-parallel flag disables parallel execution."""
         mock_prereq.return_value = True
@@ -198,10 +198,10 @@ class TestParallelFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parallel"] is False
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_max_parallel_sets_value(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--max-parallel sets the maximum parallel tasks."""
         mock_prereq.return_value = True
@@ -213,7 +213,7 @@ class TestParallelFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_parallel"] == 4
 
-    @patch("spec.cli.show_banner")
+    @patch("ingot.cli.show_banner")
     def test_max_parallel_validates_range(self, mock_banner):
         """--max-parallel validates range (1-5)."""
         # Test value too low
@@ -224,10 +224,10 @@ class TestParallelFlags:
         result = runner.invoke(app, ["--max-parallel", "10", "TEST-123"])
         assert result.exit_code != 0
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_fail_fast_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--fail-fast flag is passed to workflow."""
         mock_prereq.return_value = True
@@ -239,10 +239,10 @@ class TestParallelFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["fail_fast"] is True
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_no_fail_fast_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--no-fail-fast flag is passed to workflow."""
         mock_prereq.return_value = True
@@ -254,10 +254,10 @@ class TestParallelFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["fail_fast"] is False
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_max_parallel_none_uses_config(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -271,10 +271,10 @@ class TestParallelFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_parallel"] is None
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_fail_fast_none_uses_config(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -292,10 +292,10 @@ class TestParallelFlags:
 class TestRetryFlags:
     """Tests for retry CLI flags."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_max_retries_sets_value(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--max-retries sets the maximum retry count."""
         mock_prereq.return_value = True
@@ -307,10 +307,10 @@ class TestRetryFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_retries"] == 10
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_max_retries_zero_disables(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """--max-retries 0 disables retries."""
         mock_prereq.return_value = True
@@ -322,10 +322,10 @@ class TestRetryFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["max_retries"] == 0
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_retry_base_delay_sets_value(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -343,10 +343,10 @@ class TestRetryFlags:
 class TestAutoUpdateDocsFlags:
     """Tests for --auto-update-docs CLI flag."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_auto_update_docs_flag_enables(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -360,10 +360,10 @@ class TestAutoUpdateDocsFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["auto_update_docs"] is True
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_no_auto_update_docs_flag_disables(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -377,10 +377,10 @@ class TestAutoUpdateDocsFlags:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["auto_update_docs"] is False
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_auto_update_docs_none_uses_config(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -400,26 +400,26 @@ class TestShowHelp:
 
     def test_show_help_displays_usage(self, capsys):
         """show_help displays usage information."""
-        from spec.cli import show_help
+        from ingot.cli import show_help
 
         show_help()
 
         captured = capsys.readouterr()
-        assert "SPEC Help" in captured.out or "Usage:" in captured.out
+        assert "INGOT Help" in captured.out or "Usage:" in captured.out
 
 
 class TestExceptionHandlers:
     """Tests for exception handling in main command."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_user_cancelled_error_handled(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
         """UserCancelledError is handled gracefully."""
-        from spec.utils.errors import UserCancelledError
+        from ingot.utils.errors import UserCancelledError
 
         mock_prereq.return_value = True
         mock_config = MagicMock()
@@ -430,18 +430,18 @@ class TestExceptionHandlers:
 
         assert result.exit_code == ExitCode.USER_CANCELLED
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_spec_error_handled(self, mock_run, mock_prereq, mock_config_class, mock_banner):
-        """SpecError is handled gracefully."""
-        from spec.utils.errors import SpecError
+        """IngotError is handled gracefully."""
+        from ingot.utils.errors import IngotError
 
         mock_prereq.return_value = True
         mock_config = MagicMock()
         mock_config_class.return_value = mock_config
-        mock_run.side_effect = SpecError("Something went wrong", ExitCode.GENERAL_ERROR)
+        mock_run.side_effect = IngotError("Something went wrong", ExitCode.GENERAL_ERROR)
 
         result = runner.invoke(app, ["TEST-123"])
 
@@ -451,15 +451,15 @@ class TestExceptionHandlers:
 class TestDirtyTreePolicy:
     """Tests for dirty tree policy parsing."""
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_dirty_tree_policy_fail_fast(
         self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """--dirty-tree-policy fail-fast sets FAIL_FAST policy."""
-        from spec.cli import _run_workflow
-        from spec.workflow.state import DirtyTreePolicy
+        from ingot.cli import _run_workflow
+        from ingot.workflow.state import DirtyTreePolicy
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -482,13 +482,13 @@ class TestDirtyTreePolicy:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["dirty_tree_policy"] == DirtyTreePolicy.FAIL_FAST
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_dirty_tree_policy_warn(self, mock_run_async, mock_run_workflow, mock_is_ambiguous):
         """--dirty-tree-policy warn sets WARN_AND_CONTINUE policy."""
-        from spec.cli import _run_workflow
-        from spec.workflow.state import DirtyTreePolicy
+        from ingot.cli import _run_workflow
+        from ingot.workflow.state import DirtyTreePolicy
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -511,13 +511,13 @@ class TestDirtyTreePolicy:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["dirty_tree_policy"] == DirtyTreePolicy.WARN_AND_CONTINUE
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.cli.run_async")
     def test_dirty_tree_policy_invalid_rejected(self, mock_run_async, mock_is_ambiguous):
         """Invalid --dirty-tree-policy value is rejected."""
         import click
 
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -543,11 +543,11 @@ class TestDirtyTreePolicy:
 class TestOnboardingFlow:
     """Tests for onboarding flow triggered from CLI."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli.is_git_repo")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.run_onboarding")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli.is_git_repo")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.run_onboarding")
     def test_onboarding_triggered_on_first_run(
         self, mock_onboard, mock_first_run, mock_git, mock_config_class, mock_banner
     ):
@@ -567,14 +567,14 @@ class TestOnboardingFlow:
 class TestEffectiveValueOverrides:
     """Tests for effective value computation and override semantics in _run_workflow."""
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_max_parallel_override_cli_beats_config(
         self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --max-parallel 3 overrides config max_parallel_tasks=5."""
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -597,14 +597,14 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["max_parallel_tasks"] == 3  # CLI wins over config=5
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_max_parallel_none_uses_config(
         self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """When CLI max_parallel is None, uses config.settings.max_parallel_tasks."""
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -627,14 +627,14 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["max_parallel_tasks"] == 5  # Uses config value
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_no_fail_fast_overrides_config_true(
         self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --no-fail-fast (False) overrides config fail_fast=True."""
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -657,12 +657,12 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["fail_fast"] is False  # CLI wins
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_fail_fast_none_uses_config(self, mock_run_async, mock_run_workflow, mock_is_ambiguous):
         """When CLI fail_fast is None, uses config.settings.fail_fast."""
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -685,14 +685,14 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["fail_fast"] is True  # Uses config value
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.cli.run_async")
     def test_invalid_config_max_parallel_rejected(self, mock_run_async, mock_is_ambiguous):
         """Invalid config max_parallel_tasks (e.g., 10) is rejected via effective validation."""
         import click
 
-        from spec.cli import _run_workflow
-        from spec.utils.errors import ExitCode
+        from ingot.cli import _run_workflow
+        from ingot.utils.errors import ExitCode
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -714,14 +714,14 @@ class TestEffectiveValueOverrides:
             )
         assert exc_info.value.exit_code == ExitCode.GENERAL_ERROR
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_auto_update_docs_override_cli_beats_config(
         self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """CLI --no-auto-update-docs overrides config auto_update_docs=True."""
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -744,14 +744,14 @@ class TestEffectiveValueOverrides:
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["auto_update_docs"] is False  # CLI wins
 
-    @patch("spec.cli._is_ambiguous_ticket_id", return_value=False)
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
-    @patch("spec.cli.run_async")
+    @patch("ingot.cli._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.run_async")
     def test_auto_update_docs_none_uses_config(
         self, mock_run_async, mock_run_workflow, mock_is_ambiguous
     ):
         """When CLI auto_update_docs is None, uses config.settings.auto_update_docs."""
-        from spec.cli import _run_workflow
+        from ingot.cli import _run_workflow
 
         mock_run_async.return_value = (MagicMock(), MagicMock())
         mock_config = MagicMock()
@@ -780,8 +780,8 @@ class TestValidatePlatform:
 
     def test_validate_platform_valid_jira(self):
         """Valid Jira platform string returns Platform.JIRA."""
-        from spec.cli import _validate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _validate_platform
+        from ingot.integrations.providers import Platform
 
         assert _validate_platform("jira") == Platform.JIRA
         assert _validate_platform("JIRA") == Platform.JIRA
@@ -789,22 +789,22 @@ class TestValidatePlatform:
 
     def test_validate_platform_valid_linear(self):
         """Valid Linear platform string returns Platform.LINEAR."""
-        from spec.cli import _validate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _validate_platform
+        from ingot.integrations.providers import Platform
 
         assert _validate_platform("linear") == Platform.LINEAR
         assert _validate_platform("LINEAR") == Platform.LINEAR
 
     def test_validate_platform_valid_github(self):
         """Valid GitHub platform string returns Platform.GITHUB."""
-        from spec.cli import _validate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _validate_platform
+        from ingot.integrations.providers import Platform
 
         assert _validate_platform("github") == Platform.GITHUB
 
     def test_validate_platform_none(self):
         """None input returns None."""
-        from spec.cli import _validate_platform
+        from ingot.cli import _validate_platform
 
         assert _validate_platform(None) is None
 
@@ -812,7 +812,7 @@ class TestValidatePlatform:
         """Invalid platform raises BadParameter."""
         import typer
 
-        from spec.cli import _validate_platform
+        from ingot.cli import _validate_platform
 
         with pytest.raises(typer.BadParameter) as exc_info:
             _validate_platform("invalid")
@@ -821,8 +821,8 @@ class TestValidatePlatform:
 
     def test_validate_platform_hyphen_normalization(self):
         """Platform names with hyphens are normalized to underscores."""
-        from spec.cli import _validate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _validate_platform
+        from ingot.integrations.providers import Platform
 
         # azure-devops should be normalized to AZURE_DEVOPS
         assert _validate_platform("azure-devops") == Platform.AZURE_DEVOPS
@@ -831,8 +831,8 @@ class TestValidatePlatform:
 
     def test_validate_platform_underscore_format(self):
         """Platform names with underscores also work."""
-        from spec.cli import _validate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _validate_platform
+        from ingot.integrations.providers import Platform
 
         assert _validate_platform("azure_devops") == Platform.AZURE_DEVOPS
 
@@ -842,7 +842,7 @@ class TestIsAmbiguousTicketId:
 
     def test_bare_project_id_is_ambiguous(self):
         """Bare PROJECT-123 format is ambiguous."""
-        from spec.cli import _is_ambiguous_ticket_id
+        from ingot.cli import _is_ambiguous_ticket_id
 
         assert _is_ambiguous_ticket_id("PROJ-123") is True
         assert _is_ambiguous_ticket_id("ENG-456") is True
@@ -851,7 +851,7 @@ class TestIsAmbiguousTicketId:
 
     def test_url_is_not_ambiguous(self):
         """URLs are not ambiguous."""
-        from spec.cli import _is_ambiguous_ticket_id
+        from ingot.cli import _is_ambiguous_ticket_id
 
         assert _is_ambiguous_ticket_id("https://jira.example.com/browse/PROJ-123") is False
         assert _is_ambiguous_ticket_id("https://linear.app/team/issue/ENG-456") is False
@@ -859,14 +859,14 @@ class TestIsAmbiguousTicketId:
 
     def test_github_format_is_not_ambiguous(self):
         """GitHub format (owner/repo#123) is not ambiguous."""
-        from spec.cli import _is_ambiguous_ticket_id
+        from ingot.cli import _is_ambiguous_ticket_id
 
         assert _is_ambiguous_ticket_id("owner/repo#42") is False
         assert _is_ambiguous_ticket_id("my-org/my-repo#123") is False
 
     def test_invalid_formats_are_not_ambiguous(self):
         """Invalid formats are not considered ambiguous."""
-        from spec.cli import _is_ambiguous_ticket_id
+        from ingot.cli import _is_ambiguous_ticket_id
 
         assert _is_ambiguous_ticket_id("123") is False
         assert _is_ambiguous_ticket_id("just-text") is False
@@ -874,7 +874,7 @@ class TestIsAmbiguousTicketId:
 
     def test_underscore_in_project_key_is_ambiguous(self):
         """Project keys with underscores (Jira-style) are ambiguous."""
-        from spec.cli import _is_ambiguous_ticket_id
+        from ingot.cli import _is_ambiguous_ticket_id
 
         # Jira supports underscores in project keys
         assert _is_ambiguous_ticket_id("MY_PROJ-123") is True
@@ -887,32 +887,32 @@ class TestResolveWithPlatformHint:
 
     def test_jira_keeps_bare_id(self):
         """Jira keeps bare ID as-is."""
-        from spec.cli import _resolve_with_platform_hint
-        from spec.integrations.providers import Platform
+        from ingot.cli import _resolve_with_platform_hint
+        from ingot.integrations.providers import Platform
 
         result = _resolve_with_platform_hint("PROJ-123", Platform.JIRA)
         assert result == "PROJ-123"
 
     def test_linear_converts_to_url(self):
         """Linear converts to URL format."""
-        from spec.cli import _resolve_with_platform_hint
-        from spec.integrations.providers import Platform
+        from ingot.cli import _resolve_with_platform_hint
+        from ingot.integrations.providers import Platform
 
         result = _resolve_with_platform_hint("ENG-456", Platform.LINEAR)
         assert result == "https://linear.app/team/issue/ENG-456"
 
     def test_github_keeps_bare_id(self):
         """GitHub keeps bare ID as-is (fallback behavior)."""
-        from spec.cli import _resolve_with_platform_hint
-        from spec.integrations.providers import Platform
+        from ingot.cli import _resolve_with_platform_hint
+        from ingot.integrations.providers import Platform
 
         result = _resolve_with_platform_hint("owner/repo#42", Platform.GITHUB)
         assert result == "owner/repo#42"
 
     def test_other_platforms_keep_bare_id(self):
         """Other platforms keep bare ID as-is."""
-        from spec.cli import _resolve_with_platform_hint
-        from spec.integrations.providers import Platform
+        from ingot.cli import _resolve_with_platform_hint
+        from ingot.integrations.providers import Platform
 
         result = _resolve_with_platform_hint("PROJ-123", Platform.AZURE_DEVOPS)
         assert result == "PROJ-123"
@@ -921,12 +921,12 @@ class TestResolveWithPlatformHint:
 class TestDisambiguatePlatform:
     """Tests for _disambiguate_platform helper function."""
 
-    @patch("spec.ui.prompts.prompt_select")
-    @patch("spec.cli.print_info")
+    @patch("ingot.ui.prompts.prompt_select")
+    @patch("ingot.cli.print_info")
     def test_uses_config_default_when_set(self, mock_print, mock_prompt):
         """Uses config default_platform when set."""
-        from spec.cli import _disambiguate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _disambiguate_platform
+        from ingot.integrations.providers import Platform
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = Platform.LINEAR
@@ -936,12 +936,12 @@ class TestDisambiguatePlatform:
         assert result == Platform.LINEAR
         mock_prompt.assert_not_called()
 
-    @patch("spec.ui.prompts.prompt_select")
-    @patch("spec.cli.print_info")
+    @patch("ingot.ui.prompts.prompt_select")
+    @patch("ingot.cli.print_info")
     def test_prompts_when_no_default(self, mock_print, mock_prompt):
         """Prompts user when no default_platform configured."""
-        from spec.cli import _disambiguate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _disambiguate_platform
+        from ingot.integrations.providers import Platform
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
@@ -954,12 +954,12 @@ class TestDisambiguatePlatform:
         mock_prompt.assert_called_once()
         mock_print.assert_called_once()
 
-    @patch("spec.ui.prompts.prompt_select")
-    @patch("spec.cli.print_info")
+    @patch("ingot.ui.prompts.prompt_select")
+    @patch("ingot.cli.print_info")
     def test_prompt_linear_selection(self, mock_print, mock_prompt):
         """User selecting Linear from prompt returns Platform.LINEAR."""
-        from spec.cli import _disambiguate_platform
-        from spec.integrations.providers import Platform
+        from ingot.cli import _disambiguate_platform
+        from ingot.integrations.providers import Platform
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
@@ -970,8 +970,8 @@ class TestDisambiguatePlatform:
 
         assert result == Platform.LINEAR
 
-    @patch("spec.ui.prompts.prompt_select")
-    @patch("spec.cli.print_info")
+    @patch("ingot.ui.prompts.prompt_select")
+    @patch("ingot.cli.print_info")
     def test_uses_explicit_mapping_not_string_parsing(self, mock_print, mock_prompt):
         """Verifies _disambiguate_platform uses explicit dict mapping end-to-end.
 
@@ -983,7 +983,7 @@ class TestDisambiguatePlatform:
         it would fail for enums with underscores (e.g., "azure-devops".upper() gives
         "AZURE-DEVOPS", but the enum is AZURE_DEVOPS). Our mapping avoids this.
         """
-        from spec.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
+        from ingot.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
@@ -1006,15 +1006,15 @@ class TestDisambiguatePlatform:
             choices = call_kwargs["choices"]
             assert choice_key in choices, f"Choice '{choice_key}' not in {choices}"
 
-    @patch("spec.ui.prompts.prompt_select")
-    @patch("spec.cli.print_info")
+    @patch("ingot.ui.prompts.prompt_select")
+    @patch("ingot.cli.print_info")
     def test_prompt_choices_ordering_is_stable(self, mock_print, mock_prompt):
         """Prompt choices maintain stable ordering matching AMBIGUOUS_PLATFORMS.
 
         This ensures future changes (e.g., dict iteration order, set usage) don't
         accidentally alter the user-facing choice order.
         """
-        from spec.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
+        from ingot.cli import AMBIGUOUS_PLATFORMS, _disambiguate_platform, _platform_display_name
 
         mock_config = MagicMock()
         mock_config.settings.get_default_platform.return_value = None
@@ -1039,8 +1039,8 @@ class TestFetchTicketAsyncIntegration:
     async def test_fetch_ticket_async_calls_ticket_service(self):
         """_fetch_ticket_async properly calls TicketService.get_ticket."""
 
-        from spec.cli import _fetch_ticket_async
-        from spec.integrations.providers import GenericTicket, Platform
+        from ingot.cli import _fetch_ticket_async
+        from ingot.integrations.providers import GenericTicket, Platform
 
         # Create mock ticket
         mock_ticket = GenericTicket(
@@ -1066,7 +1066,7 @@ class TestFetchTicketAsyncIntegration:
             return mock_service, mock_backend
 
         with patch(
-            "spec.cli.create_ticket_service_from_config",
+            "ingot.cli.create_ticket_service_from_config",
             side_effect=mock_create_service_from_config,
         ):
             result = await _fetch_ticket_async(
@@ -1084,8 +1084,8 @@ class TestFetchTicketAsyncIntegration:
     async def test_fetch_ticket_async_with_platform_hint_linear(self):
         """_fetch_ticket_async converts ambiguous ID to Linear URL when hint provided."""
 
-        from spec.cli import _fetch_ticket_async
-        from spec.integrations.providers import GenericTicket, Platform
+        from ingot.cli import _fetch_ticket_async
+        from ingot.integrations.providers import GenericTicket, Platform
 
         mock_ticket = GenericTicket(
             id="ENG-456",
@@ -1107,7 +1107,7 @@ class TestFetchTicketAsyncIntegration:
             return mock_service, mock_backend
 
         with patch(
-            "spec.cli.create_ticket_service_from_config",
+            "ingot.cli.create_ticket_service_from_config",
             side_effect=mock_create_service_from_config,
         ):
             result = await _fetch_ticket_async(
@@ -1126,8 +1126,8 @@ class TestFetchTicketAsyncIntegration:
     async def test_fetch_ticket_async_url_not_modified(self):
         """_fetch_ticket_async does not modify URL inputs even with platform hint."""
 
-        from spec.cli import _fetch_ticket_async
-        from spec.integrations.providers import GenericTicket, Platform
+        from ingot.cli import _fetch_ticket_async
+        from ingot.integrations.providers import GenericTicket, Platform
 
         mock_ticket = GenericTicket(
             id="PROJ-123",
@@ -1150,7 +1150,7 @@ class TestFetchTicketAsyncIntegration:
             return mock_service, mock_backend
 
         with patch(
-            "spec.cli.create_ticket_service_from_config",
+            "ingot.cli.create_ticket_service_from_config",
             side_effect=mock_create_service_from_config,
         ):
             result = await _fetch_ticket_async(
@@ -1171,7 +1171,7 @@ class TestRunAsync:
 
     def test_run_async_executes_coroutine_factory(self):
         """run_async executes a coroutine factory and returns its result."""
-        from spec.cli import run_async
+        from ingot.cli import run_async
 
         async def sample_coro():
             return "test_result"
@@ -1188,7 +1188,7 @@ class TestRunAsync:
         """
         import asyncio
 
-        from spec.cli import AsyncLoopAlreadyRunningError, run_async
+        from ingot.cli import AsyncLoopAlreadyRunningError, run_async
 
         factory_called = False
 
@@ -1213,7 +1213,7 @@ class TestRunAsync:
 
     def test_run_async_calls_factory_when_no_loop(self):
         """run_async calls the factory when no event loop is running."""
-        from spec.cli import run_async
+        from ingot.cli import run_async
 
         factory_call_count = 0
 
@@ -1233,11 +1233,11 @@ class TestRunAsync:
 class TestAmbiguousIdWithPlatformFlag:
     """Tests verifying ambiguous IDs with --platform flag do not trigger prompts."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
-    @patch("spec.ui.prompts.prompt_select")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
+    @patch("ingot.ui.prompts.prompt_select")
     def test_ambiguous_id_with_platform_flag_no_prompt(
         self, mock_prompt, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -1255,7 +1255,7 @@ class TestAmbiguousIdWithPlatformFlag:
         # Verify _run_workflow was called with correct platform
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args[1]
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         assert call_kwargs["platform"] == Platform.LINEAR
 
@@ -1267,7 +1267,7 @@ class TestInvalidDefaultPlatformWarning:
         """Invalid default_platform value logs a warning."""
         import logging
 
-        from spec.config.settings import Settings
+        from ingot.config.settings import Settings
 
         settings = Settings(default_platform="invalid_platform")
 
@@ -1282,14 +1282,14 @@ class TestInvalidDefaultPlatformWarning:
         """Valid default_platform does not log a warning."""
         import logging
 
-        from spec.config.settings import Settings
+        from ingot.config.settings import Settings
 
         settings = Settings(default_platform="jira")
 
         with caplog.at_level(logging.WARNING):
             result = settings.get_default_platform()
 
-        from spec.integrations.providers import Platform
+        from ingot.integrations.providers import Platform
 
         assert result == Platform.JIRA
         assert "Invalid DEFAULT_PLATFORM value" not in caplog.text
@@ -1298,14 +1298,14 @@ class TestInvalidDefaultPlatformWarning:
 class TestForceIntegrationCheckWarning:
     """Tests for force_integration_check flag warning."""
 
-    @patch("spec.cli.is_git_repo")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.print_warning")
+    @patch("ingot.cli.is_git_repo")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.print_warning")
     def test_force_integration_check_prints_warning(
         self, mock_print_warning, mock_is_first_run, mock_is_git_repo
     ):
         """force_integration_check=True prints a warning about no effect."""
-        from spec.cli import _check_prerequisites
+        from ingot.cli import _check_prerequisites
 
         mock_is_git_repo.return_value = True
         mock_is_first_run.return_value = False
@@ -1318,14 +1318,14 @@ class TestForceIntegrationCheckWarning:
         warning_msg = mock_print_warning.call_args[0][0]
         assert "no effect" in warning_msg.lower() or "currently has no effect" in warning_msg
 
-    @patch("spec.cli.is_git_repo")
-    @patch("spec.cli.is_first_run")
-    @patch("spec.cli.print_warning")
+    @patch("ingot.cli.is_git_repo")
+    @patch("ingot.cli.is_first_run")
+    @patch("ingot.cli.print_warning")
     def test_force_integration_check_false_no_warning(
         self, mock_print_warning, mock_is_first_run, mock_is_git_repo
     ):
         """force_integration_check=False does not print warning."""
-        from spec.cli import _check_prerequisites
+        from ingot.cli import _check_prerequisites
 
         mock_is_git_repo.return_value = True
         mock_is_first_run.return_value = False
@@ -1342,20 +1342,20 @@ class TestCLIProviderRegistryReset:
 
     def setup_method(self):
         """Reset ProviderRegistry before each test."""
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         ProviderRegistry.reset_instances()
 
     def teardown_method(self):
         """Reset ProviderRegistry after each test."""
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         ProviderRegistry.reset_instances()
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_main_menu")
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_main_menu")
+    @patch("ingot.cli.ConfigManager")
     def test_multi_run_clears_stale_config(
         self, mock_config_class, mock_menu, mock_prereq, mock_banner
     ):
@@ -1365,7 +1365,7 @@ class TestCLIProviderRegistryReset:
         (first with a default Jira project set, then without) does not
         keep the old default - the key acceptance criteria for Task 1.
         """
-        from spec.integrations.providers.registry import ProviderRegistry
+        from ingot.integrations.providers.registry import ProviderRegistry
 
         mock_prereq.return_value = True
 
@@ -1404,7 +1404,7 @@ class TestCreateTicketServiceFromConfig:
     async def test_calls_resolve_backend_platform(self):
         """create_ticket_service_from_config calls resolve_backend_platform with correct args."""
 
-        from spec.cli import create_ticket_service_from_config
+        from ingot.cli import create_ticket_service_from_config
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
@@ -1413,11 +1413,11 @@ class TestCreateTicketServiceFromConfig:
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ) as mock_resolve,
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             patch(
-                "spec.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
+                "ingot.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
             ),
         ):
             mock_factory_class.create.return_value = mock_backend
@@ -1433,7 +1433,7 @@ class TestCreateTicketServiceFromConfig:
     async def test_calls_backend_factory_create(self):
         """create_ticket_service_from_config calls BackendFactory.create with resolved platform."""
 
-        from spec.cli import create_ticket_service_from_config
+        from ingot.cli import create_ticket_service_from_config
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
@@ -1442,11 +1442,11 @@ class TestCreateTicketServiceFromConfig:
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ),
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             patch(
-                "spec.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
+                "ingot.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
             ),
         ):
             mock_factory_class.create.return_value = mock_backend
@@ -1461,7 +1461,7 @@ class TestCreateTicketServiceFromConfig:
     async def test_returns_service_and_backend_tuple(self):
         """create_ticket_service_from_config returns (TicketService, AIBackend) tuple."""
 
-        from spec.cli import create_ticket_service_from_config
+        from ingot.cli import create_ticket_service_from_config
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
@@ -1470,11 +1470,11 @@ class TestCreateTicketServiceFromConfig:
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ),
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             patch(
-                "spec.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
+                "ingot.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
             ),
         ):
             mock_factory_class.create.return_value = mock_backend
@@ -1492,7 +1492,7 @@ class TestCreateTicketServiceFromConfig:
     async def test_cli_backend_override_passed_to_resolver(self):
         """cli_backend_override is forwarded to resolve_backend_platform."""
 
-        from spec.cli import create_ticket_service_from_config
+        from ingot.cli import create_ticket_service_from_config
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
@@ -1501,11 +1501,11 @@ class TestCreateTicketServiceFromConfig:
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ) as mock_resolve,
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             patch(
-                "spec.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
+                "ingot.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
             ),
         ):
             mock_factory_class.create.return_value = mock_backend
@@ -1520,14 +1520,14 @@ class TestCreateTicketServiceFromConfig:
     @pytest.mark.asyncio
     async def test_backend_not_configured_error_propagates(self):
         """BackendNotConfiguredError propagates from resolve_backend_platform."""
-        from spec.cli import create_ticket_service_from_config
-        from spec.integrations.backends.errors import BackendNotConfiguredError
+        from ingot.cli import create_ticket_service_from_config
+        from ingot.integrations.backends.errors import BackendNotConfiguredError
 
         mock_config = MagicMock()
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform",
+                "ingot.config.backend_resolver.resolve_backend_platform",
                 side_effect=BackendNotConfiguredError("No backend configured"),
             ),
             pytest.raises(BackendNotConfiguredError, match="No backend configured"),
@@ -1537,17 +1537,17 @@ class TestCreateTicketServiceFromConfig:
     @pytest.mark.asyncio
     async def test_backend_not_installed_error_propagates(self):
         """BackendNotInstalledError propagates from BackendFactory.create."""
-        from spec.cli import create_ticket_service_from_config
-        from spec.integrations.backends.errors import BackendNotInstalledError
+        from ingot.cli import create_ticket_service_from_config
+        from ingot.integrations.backends.errors import BackendNotInstalledError
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ),
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             pytest.raises(BackendNotInstalledError, match="CLI not installed"),
         ):
             mock_factory_class.create.side_effect = BackendNotInstalledError("CLI not installed")
@@ -1557,7 +1557,7 @@ class TestCreateTicketServiceFromConfig:
     async def test_default_auth_manager_created_when_none(self):
         """AuthenticationManager is created from config when not provided."""
 
-        from spec.cli import create_ticket_service_from_config
+        from ingot.cli import create_ticket_service_from_config
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
@@ -1566,13 +1566,13 @@ class TestCreateTicketServiceFromConfig:
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ),
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             patch(
-                "spec.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
+                "ingot.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
             ),
-            patch("spec.cli.AuthenticationManager") as mock_auth_class,
+            patch("ingot.cli.AuthenticationManager") as mock_auth_class,
         ):
             mock_factory_class.create.return_value = mock_backend
 
@@ -1584,7 +1584,7 @@ class TestCreateTicketServiceFromConfig:
     async def test_provided_auth_manager_used(self):
         """Provided auth_manager is used instead of creating a new one."""
 
-        from spec.cli import create_ticket_service_from_config
+        from ingot.cli import create_ticket_service_from_config
 
         mock_config = MagicMock()
         mock_platform = MagicMock()
@@ -1594,13 +1594,13 @@ class TestCreateTicketServiceFromConfig:
 
         with (
             patch(
-                "spec.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
+                "ingot.config.backend_resolver.resolve_backend_platform", return_value=mock_platform
             ),
-            patch("spec.integrations.backends.factory.BackendFactory") as mock_factory_class,
+            patch("ingot.integrations.backends.factory.BackendFactory") as mock_factory_class,
             patch(
-                "spec.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
+                "ingot.cli.create_ticket_service", new_callable=AsyncMock, return_value=mock_service
             ) as mock_create,
-            patch("spec.cli.AuthenticationManager") as mock_auth_class,
+            patch("ingot.cli.AuthenticationManager") as mock_auth_class,
         ):
             mock_factory_class.create.return_value = mock_backend
 
@@ -1619,10 +1619,10 @@ class TestCreateTicketServiceFromConfig:
 class TestBackendFlag:
     """Tests for --backend CLI flag."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_backend_flag_passed_to_workflow(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):
@@ -1636,10 +1636,10 @@ class TestBackendFlag:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["backend"] == "auggie"
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_backend_short_flag(self, mock_run, mock_prereq, mock_config_class, mock_banner):
         """-b shorthand works for --backend."""
         mock_prereq.return_value = True
@@ -1651,10 +1651,10 @@ class TestBackendFlag:
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["backend"] == "claude"
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.cli._check_prerequisites")
-    @patch("spec.cli._run_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.cli._check_prerequisites")
+    @patch("ingot.cli._run_workflow")
     def test_backend_none_when_not_provided(
         self, mock_run, mock_prereq, mock_config_class, mock_banner
     ):

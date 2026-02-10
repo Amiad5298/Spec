@@ -10,9 +10,9 @@ import time
 
 import pytest
 
-from spec.ui.log_buffer import TaskLogBuffer
-from spec.ui.tui import TaskRunnerUI
-from spec.workflow.events import (
+from ingot.ui.log_buffer import TaskLogBuffer
+from ingot.ui.tui import TaskRunnerUI
+from ingot.workflow.events import (
     TaskEventType,
     TaskRunStatus,
     create_task_finished_event,

@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-103 - Phase 1.0.1: Update Config Template for Claude Rename
 
-**Ticket:** [AMI-103](https://linear.app/amiadspec/issue/AMI-103/phase-101-update-config-template-for-claude-rename)
+**Ticket:** [AMI-103](https://linear.app/amiadingot/issue/AMI-103/phase-101-update-config-template-for-claude-rename)
 **Status:** Done (verification complete; ready to close in Linear)
 **Date:** 2026-02-02
 **Labels:** MultiAgent
@@ -25,7 +25,7 @@ This ticket addresses a follow-up task discovered during the code review of AMI-
 - "Claude Desktop" is an outdated name; the CLI is now "Claude Code CLI" or simply "Claude"
 
 **Scope:**
-- Update `spec/config/templates/fetch_config.template` line 24 comment
+- Update `ingot/config/templates/fetch_config.template` line 24 comment
 - Verify no other template files reference `claude_desktop`
 
 **Out of Scope:**
@@ -40,7 +40,7 @@ This ticket addresses a follow-up task discovered during the code review of AMI-
 
 ### ⚠️ Important: Template Already Updated
 
-Upon investigation, the template file has **already been updated**. The current state of `spec/config/templates/fetch_config.template` line 24 is:
+Upon investigation, the template file has **already been updated**. The current state of `ingot/config/templates/fetch_config.template` line 24 is:
 
 ```
 # AI backend: auggie, claude, cursor, aider, manual
@@ -49,7 +49,7 @@ Upon investigation, the template file has **already been updated**. The current 
 This matches the target state specified in the Linear ticket. Verification:
 
 ```bash
-$ rg -n 'claude_desktop' --glob '*.template' spec/
+$ rg -n 'claude_desktop' --glob '*.template' ingot/
 # Returns no matches (empty output)
 ```
 
@@ -62,14 +62,14 @@ $ rg -n 'claude_desktop' --glob '*.template' spec/
 The change was made in commit `440fc046` on 2026-01-31:
 
 ```bash
-$ git blame -L 24,24 spec/config/templates/fetch_config.template
+$ git blame -L 24,24 ingot/config/templates/fetch_config.template
 440fc046 (Amiad5298 2026-01-31 19:55:13 +0200 24) # AI backend: auggie, claude, cursor, aider, manual
 ```
 
 Additional verification (no `claude_desktop` references in source code):
 
 ```bash
-$ rg -n 'claude_desktop' spec/ tests/
+$ rg -n 'claude_desktop' ingot/ tests/
 # Returns no matches (empty output)
 ```
 
@@ -81,11 +81,11 @@ $ rg -n 'claude_desktop' spec/ tests/
 
 | File | Change Type | Description | Status |
 |------|-------------|-------------|--------|
-| `spec/config/templates/fetch_config.template` | Template | Update line 24 comment from `claude_desktop` to `claude` | ✅ **Already Done** |
+| `ingot/config/templates/fetch_config.template` | Template | Update line 24 comment from `claude_desktop` to `claude` | ✅ **Already Done** |
 
 ### Target Change (Already Applied)
 
-**File:** `spec/config/templates/fetch_config.template`
+**File:** `ingot/config/templates/fetch_config.template`
 
 **Original Code (line 24, per AMI-103 ticket):**
 ```
@@ -111,7 +111,7 @@ Since the template has already been updated, the implementation consists of veri
 
 **Command:**
 ```bash
-rg -n 'claude_desktop' --glob '*.template' spec/
+rg -n 'claude_desktop' --glob '*.template' ingot/
 # Expected: No matches (empty output)
 ```
 
@@ -121,7 +121,7 @@ rg -n 'claude_desktop' --glob '*.template' spec/
 
 **Command:**
 ```bash
-sed -n '24p' spec/config/templates/fetch_config.template
+sed -n '24p' ingot/config/templates/fetch_config.template
 ```
 
 **Expected Output:**
@@ -140,12 +140,12 @@ sed -n '24p' spec/config/templates/fetch_config.template
 | AC | Description | Verification Method | Status |
 |----|-------------|---------------------|--------|
 | **AC1** | Template file comment updated from `claude_desktop` to `claude` | Visual inspection of line 24 | ✅ Done |
-| **AC2** | No other references to `claude_desktop` in template files | `rg -n 'claude_desktop' --glob '*.template' spec/` returns empty | ✅ Done |
+| **AC2** | No other references to `claude_desktop` in template files | `rg -n 'claude_desktop' --glob '*.template' ingot/` returns empty | ✅ Done |
 
 ### Verification Command (Per Ticket)
 
 ```bash
-rg -n 'claude_desktop' --glob '*.template' spec/
+rg -n 'claude_desktop' --glob '*.template' ingot/
 # Should return no matches (empty output)
 ```
 
@@ -159,7 +159,7 @@ rg -n 'claude_desktop' --glob '*.template' spec/
 
 | Ticket | Component | Status | Description |
 |--------|-----------|--------|-------------|
-| [AMI-46](https://linear.app/amiadspec/issue/AMI-46/phase-10-rename-claude-platform-enum) | Phase 1.0: Rename Claude Platform Enum | ✅ Done | Primary rename completed (2026-01-31) |
+| [AMI-46](https://linear.app/amiadingot/issue/AMI-46/phase-10-rename-claude-platform-enum) | Phase 1.0: Rename Claude Platform Enum | ✅ Done | Primary rename completed (2026-01-31) |
 
 ### Downstream Dependents
 
@@ -169,8 +169,8 @@ None - this is a documentation/template update with no downstream dependencies.
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-45](https://linear.app/amiadspec/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
-| [AMI-46](https://linear.app/amiadspec/issue/AMI-46) | Phase 1.0: Rename Claude Platform Enum | Blocks this ticket (completed) |
+| [AMI-45](https://linear.app/amiadingot/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
+| [AMI-46](https://linear.app/amiadingot/issue/AMI-46) | Phase 1.0: Rename Claude Platform Enum | Blocks this ticket (completed) |
 
 ---
 
@@ -178,7 +178,7 @@ None - this is a documentation/template update with no downstream dependencies.
 
 | File | Change | Lines Changed | Status |
 |------|--------|---------------|--------|
-| `spec/config/templates/fetch_config.template` | Comment updated from `claude_desktop` to `claude` | 1 line | ✅ Already Done |
+| `ingot/config/templates/fetch_config.template` | Comment updated from `claude_desktop` to `claude` | 1 line | ✅ Already Done |
 
 ---
 

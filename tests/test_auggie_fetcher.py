@@ -1,4 +1,4 @@
-"""Tests for spec.integrations.fetchers.auggie_fetcher module.
+"""Tests for ingot.integrations.fetchers.auggie_fetcher module.
 
 Tests cover:
 - AuggieMediatedFetcher instantiation
@@ -18,22 +18,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from spec.config.fetch_config import AgentConfig, AgentPlatform
-from spec.integrations.backends.base import AIBackend
-from spec.integrations.fetchers import (
+from ingot.config.fetch_config import AgentConfig, AgentPlatform
+from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.fetchers import (
     AgentFetchError,
     AgentIntegrationError,
     AgentResponseParseError,
     PlatformNotSupportedError,
 )
-from spec.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
-from spec.integrations.fetchers.base import DEFAULT_TIMEOUT_SECONDS
-from spec.integrations.fetchers.templates import (
+from ingot.integrations.fetchers.auggie_fetcher import AuggieMediatedFetcher
+from ingot.integrations.fetchers.base import DEFAULT_TIMEOUT_SECONDS
+from ingot.integrations.fetchers.templates import (
     PLATFORM_PROMPT_TEMPLATES,
     REQUIRED_FIELDS,
     SUPPORTED_PLATFORMS,
 )
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 
 @pytest.fixture

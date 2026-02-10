@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-22 - Implement AuthenticationManager for Multi-Platform Credentials
 
-**Ticket:** [AMI-22](https://linear.app/amiadspec/issue/AMI-22/implement-authenticationmanager-for-multi-platform-credentials)
+**Ticket:** [AMI-22](https://linear.app/amiadingot/issue/AMI-22/implement-authenticationmanager-for-multi-platform-credentials)
 **Status:** Draft
 **Date:** 2026-01-25
 
@@ -51,12 +51,12 @@ The `AuthenticationManager` integrates with the existing `ConfigManager` to load
 
 | Component | Location | Integration |
 |-----------|----------|-------------|
-| `ConfigManager` | `spec/config/manager.py` | Injected via constructor; provides `get_fallback_credentials()` |
-| `PLATFORM_REQUIRED_CREDENTIALS` | `spec/config/fetch_config.py` | Defines required fields per platform |
-| `CREDENTIAL_ALIASES` | `spec/config/fetch_config.py` | Credential key normalization |
-| `Platform` enum | `spec/integrations/providers/base.py` | Platform identification |
-| `AuthenticationError` | `spec/integrations/providers/exceptions.py` | For credential validation failures |
-| `expand_env_vars` | `spec/utils/env_utils.py` | Environment variable expansion |
+| `ConfigManager` | `ingot/config/manager.py` | Injected via constructor; provides `get_fallback_credentials()` |
+| `PLATFORM_REQUIRED_CREDENTIALS` | `ingot/config/fetch_config.py` | Defines required fields per platform |
+| `CREDENTIAL_ALIASES` | `ingot/config/fetch_config.py` | Credential key normalization |
+| `Platform` enum | `ingot/integrations/providers/base.py` | Platform identification |
+| `AuthenticationError` | `ingot/integrations/providers/exceptions.py` | For credential validation failures |
+| `expand_env_vars` | `ingot/utils/env_utils.py` | Environment variable expansion |
 
 ### Key Design Decisions
 
@@ -69,7 +69,7 @@ The `AuthenticationManager` integrates with the existing `ConfigManager` to load
 
 ## Components to Create
 
-### New File: `spec/integrations/auth.py`
+### New File: `ingot/integrations/auth.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -80,14 +80,14 @@ The `AuthenticationManager` integrates with the existing `ConfigManager` to load
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/__init__.py` | Export `AuthenticationManager`, `PlatformCredentials` |
+| `ingot/integrations/__init__.py` | Export `AuthenticationManager`, `PlatformCredentials` |
 
 ---
 
 ## Implementation Steps
 
 ### Step 1: Create Auth Module with PlatformCredentials Dataclass
-**File:** `spec/integrations/auth.py`
+**File:** `ingot/integrations/auth.py`
 
 ```python
 """Authentication management for fallback credentials.
@@ -106,9 +106,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from spec.config.manager import ConfigManager
+    from ingot.config.manager import ConfigManager
 
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class PlatformCredentials:
 ```
 
 ### Step 2: Implement AuthenticationManager Class
-**File:** `spec/integrations/auth.py` (continued)
+**File:** `ingot/integrations/auth.py` (continued)
 
 ```python
 class AuthenticationManager:
@@ -273,12 +273,12 @@ class AuthenticationManager:
 ```
 
 ### Step 3: Update Package Exports
-**File:** `spec/integrations/__init__.py`
+**File:** `ingot/integrations/__init__.py`
 
 Add exports for the new auth module:
 
 ```python
-from spec.integrations.auth import (
+from ingot.integrations.auth import (
     AuthenticationManager,
     PlatformCredentials,
 )
@@ -300,7 +300,7 @@ Create comprehensive tests with mocked ConfigManager.
 
 ## File Changes Detail
 
-### New: `spec/integrations/auth.py`
+### New: `ingot/integrations/auth.py`
 
 Complete module with:
 - Module docstring explaining FALLBACK-only purpose
@@ -313,12 +313,12 @@ Complete module with:
   - `list_fallback_platforms() -> list[Platform]`
   - `validate_credentials(platform: Platform) -> tuple[bool, str]`
 
-### Modified: `spec/integrations/__init__.py`
+### Modified: `ingot/integrations/__init__.py`
 
 Add imports and exports:
 
 ```python
-from spec.integrations.auth import (
+from ingot.integrations.auth import (
     AuthenticationManager,
     PlatformCredentials,
 )
@@ -365,9 +365,9 @@ from spec.integrations.auth import (
 import pytest
 from unittest.mock import MagicMock
 
-from spec.config import ConfigManager, ConfigValidationError
-from spec.integrations.auth import AuthenticationManager, PlatformCredentials
-from spec.integrations.providers.base import Platform
+from ingot.config import ConfigManager, ConfigValidationError
+from ingot.integrations.auth import AuthenticationManager, PlatformCredentials
+from ingot.integrations.providers.base import Platform
 
 
 @pytest.fixture
@@ -397,11 +397,11 @@ def config_with_jira_creds(mock_config_manager):
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| `ConfigManager.get_fallback_credentials()` | ✅ Implemented (AMI-33) | `spec/config/manager.py` |
-| `PLATFORM_REQUIRED_CREDENTIALS` | ✅ Implemented (AMI-33) | `spec/config/fetch_config.py` |
-| `CREDENTIAL_ALIASES` | ✅ Implemented (AMI-33) | `spec/config/fetch_config.py` |
-| `validate_credentials()` | ✅ Implemented (AMI-33) | `spec/config/fetch_config.py` |
-| `Platform` enum | ✅ Implemented (AMI-16) | `spec/integrations/providers/base.py` |
+| `ConfigManager.get_fallback_credentials()` | ✅ Implemented (AMI-33) | `ingot/config/manager.py` |
+| `PLATFORM_REQUIRED_CREDENTIALS` | ✅ Implemented (AMI-33) | `ingot/config/fetch_config.py` |
+| `CREDENTIAL_ALIASES` | ✅ Implemented (AMI-33) | `ingot/config/fetch_config.py` |
+| `validate_credentials()` | ✅ Implemented (AMI-33) | `ingot/config/fetch_config.py` |
+| `Platform` enum | ✅ Implemented (AMI-16) | `ingot/integrations/providers/base.py` |
 
 ### Downstream Dependents (Will Use This After Implementation)
 
@@ -475,7 +475,7 @@ class AuthenticationManager:
         - 'base_url' → 'url' (Jira)
         - 'api_token' → 'token' (Trello)
 
-        See CREDENTIAL_ALIASES in spec/config/fetch_config.py for full mapping.
+        See CREDENTIAL_ALIASES in ingot/config/fetch_config.py for full mapping.
     """
 ```
 
@@ -490,9 +490,9 @@ The `validate_credentials()` method must have a clear docstring explaining it pe
 ### Basic Usage
 
 ```python
-from spec.config import ConfigManager
-from spec.integrations.auth import AuthenticationManager, PlatformCredentials
-from spec.integrations.providers.base import Platform
+from ingot.config import ConfigManager
+from ingot.integrations.auth import AuthenticationManager, PlatformCredentials
+from ingot.integrations.providers.base import Platform
 
 # Initialize
 config = ConfigManager()
@@ -595,7 +595,7 @@ Additionally, common aliases are resolved via `CREDENTIAL_ALIASES`:
 ### Example Configuration
 
 ```bash
-# ~/.spec-config or .spec
+# ~/.ingot-config or .ingot
 
 # Fallback credentials (only used when agent doesn't support platform)
 FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg
@@ -617,8 +617,8 @@ FALLBACK_TRELLO_TOKEN=${TRELLO_API_TOKEN}
 │                         Configuration Sources                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  Environment Variables   ────────────────────────────────────> Highest      │
-│  Local Config (.spec)    ──────────────────────────────────>                │
-│  Global Config (~/.spec-config) ───────────────────────────>                │
+│  Local Config (.ingot)    ──────────────────────────────────>                │
+│  Global Config (~/.ingot-config) ───────────────────────────>                │
 │  Built-in Defaults       ────────────────────────────────────> Lowest       │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │

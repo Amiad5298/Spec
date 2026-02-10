@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-23 - Implement Caching Layer for Ticket Data
 
-**Ticket:** [AMI-23](https://linear.app/amiadspec/issue/AMI-23/implement-caching-layer-for-ticket-data)
+**Ticket:** [AMI-23](https://linear.app/amiadingot/issue/AMI-23/implement-caching-layer-for-ticket-data)
 **Status:** Draft
 **Date:** 2026-01-26
 
@@ -11,7 +11,7 @@
 This ticket implements the caching layer for ticket data as defined in **Section 8: Caching Strategy** of `specs/00_Architecture_Refactor_Spec.md`. The caching layer provides efficient caching of ticket data to minimize API calls and improve responsiveness, while ensuring data freshness through TTL-based expiration.
 
 **Key Architecture Decision (per AMI-23 comments):**
-- **File location changed** from `specflow/integrations/providers/cache.py` to `spec/integrations/cache.py`
+- **File location changed** from `ingot/integrations/providers/cache.py` to `ingot/integrations/cache.py`
 - **Caching is an orchestration concern** owned by `TicketService` (AMI-32), not individual providers
 - The `@cached_fetch` decorator is **removed from scope** - caching is handled by `TicketService`
 
@@ -72,7 +72,7 @@ The caching layer provides:
 
 ## Components to Create
 
-### New File: `spec/integrations/cache.py`
+### New File: `ingot/integrations/cache.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -87,7 +87,7 @@ The caching layer provides:
 
 | File | Changes |
 |------|---------|
-| `spec/integrations/__init__.py` | Export cache classes |
+| `ingot/integrations/__init__.py` | Export cache classes |
 
 ---
 
@@ -95,7 +95,7 @@ The caching layer provides:
 
 ### Step 1: Create Cache Module with CacheKey and CachedTicket
 
-**File:** `spec/integrations/cache.py`
+**File:** `ingot/integrations/cache.py`
 
 ```python
 """Caching layer for ticket data.
@@ -121,9 +121,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from spec.integrations.providers.base import GenericTicket
+    from ingot.integrations.providers.base import GenericTicket
 
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 logger = logging.getLogger(__name__)
 
@@ -412,7 +412,7 @@ class InMemoryTicketCache(TicketCache):
 class FileBasedTicketCache(TicketCache):
     """File-based persistent ticket cache.
 
-    Stores cache in ~/.specflow-cache/ directory for persistence across sessions.
+    Stores cache in ~/.ingot-cache/ directory for persistence across sessions.
     Each ticket is stored as a separate JSON file with platform_ticketId hash.
 
     Attributes:
@@ -430,11 +430,11 @@ class FileBasedTicketCache(TicketCache):
         """Initialize file-based cache.
 
         Args:
-            cache_dir: Directory for cache files (default: ~/.specflow-cache)
+            cache_dir: Directory for cache files (default: ~/.ingot-cache)
             default_ttl: Default TTL for entries (default: 1 hour)
             max_size: Maximum entries before LRU eviction (0 = unlimited)
         """
-        self.cache_dir = cache_dir or Path.home() / ".specflow-cache"
+        self.cache_dir = cache_dir or Path.home() / ".ingot-cache"
         self.default_ttl = default_ttl
         self.max_size = max_size
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -469,7 +469,7 @@ class FileBasedTicketCache(TicketCache):
 
     def _deserialize_ticket(self, data: dict) -> CachedTicket | None:
         """Deserialize JSON dict to CachedTicket."""
-        from spec.integrations.providers.base import (
+        from ingot.integrations.providers.base import (
             GenericTicket,
             Platform,
             TicketStatus,
@@ -695,11 +695,11 @@ def clear_global_cache() -> None:
 
 ### Step 6: Update Package Exports
 
-**File:** `spec/integrations/__init__.py`
+**File:** `ingot/integrations/__init__.py`
 
 ```python
 # Add to existing exports
-from spec.integrations.cache import (
+from ingot.integrations.cache import (
     CacheKey,
     CachedTicket,
     TicketCache,
@@ -732,7 +732,7 @@ __all__ = [
 The `TicketCache` integrates with `TicketService` which owns the caching logic:
 
 ```python
-from spec.integrations.cache import (
+from ingot.integrations.cache import (
     CacheKey,
     TicketCache,
     InMemoryTicketCache,
@@ -845,19 +845,19 @@ Providers are **cache-unaware** - they only handle normalization. The `@cached_f
 
 ### Cache Settings
 
-The cache respects the following configuration from `spec/config/fetch_config.py`:
+The cache respects the following configuration from `ingot/config/fetch_config.py`:
 
 | Setting | Environment Variable | Default | Description |
 |---------|---------------------|---------|-------------|
 | Cache TTL | `TICKET_CACHE_DURATION` | `3600` (1 hour) | Cache entry TTL in seconds |
 | Cache Type | `TICKET_CACHE_TYPE` | `memory` | `memory` or `file` |
 | Max Size | `TICKET_CACHE_MAX_SIZE` | `0` (unlimited) | Max entries for LRU eviction |
-| Cache Dir | `TICKET_CACHE_DIR` | `~/.specflow-cache` | Directory for file cache |
+| Cache Dir | `TICKET_CACHE_DIR` | `~/.ingot-cache` | Directory for file cache |
 
 ### Example Configuration
 
 ```bash
-# ~/.spec-config
+# ~/.ingot-config
 
 # === Cache Settings ===
 TICKET_CACHE_DURATION=3600    # 1 hour TTL
@@ -866,7 +866,7 @@ TICKET_CACHE_MAX_SIZE=1000    # LRU eviction threshold
 
 # For file-based cache (cross-session persistence)
 # TICKET_CACHE_TYPE=file
-# TICKET_CACHE_DIR=/tmp/specflow-cache
+# TICKET_CACHE_DIR=/tmp/ingot-cache
 ```
 
 ---
@@ -904,7 +904,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import tempfile
 
-from spec.integrations.cache import (
+from ingot.integrations.cache import (
     CacheKey,
     CachedTicket,
     InMemoryTicketCache,
@@ -913,7 +913,7 @@ from spec.integrations.cache import (
     set_global_cache,
     clear_global_cache,
 )
-from spec.integrations.providers.base import (
+from ingot.integrations.providers.base import (
     GenericTicket,
     Platform,
     TicketStatus,
@@ -1339,7 +1339,7 @@ From Linear ticket AMI-23:
 ### Updated Scope (per architecture review):
 
 - [ ] **REMOVED:** `@cached_fetch` decorator (caching owned by TicketService)
-- [ ] **ADDED:** File location changed to `spec/integrations/cache.py`
+- [ ] **ADDED:** File location changed to `ingot/integrations/cache.py`
 - [ ] **ADDED:** `FileBasedTicketCache` implementation with LRU eviction support
 - [ ] **ADDED:** Global cache singleton pattern
 - [ ] **ADDED:** `get_etag()` method for conditional requests
@@ -1356,11 +1356,11 @@ From Linear ticket AMI-23:
 
 ```python
 from datetime import timedelta
-from spec.integrations.cache import (
+from ingot.integrations.cache import (
     CacheKey,
     InMemoryTicketCache,
 )
-from spec.integrations.providers.base import Platform
+from ingot.integrations.providers.base import Platform
 
 # Create cache with 30-minute TTL
 cache = InMemoryTicketCache(default_ttl=timedelta(minutes=30))
@@ -1380,7 +1380,7 @@ else:
 ### Using Global Cache Singleton
 
 ```python
-from spec.integrations.cache import get_global_cache
+from ingot.integrations.cache import get_global_cache
 
 # Get or create the global cache
 cache = get_global_cache(cache_type="memory", max_size=500)
@@ -1392,8 +1392,8 @@ cache.set(ticket)
 ### Integration with TicketService (AMI-32)
 
 ```python
-from spec.integrations.cache import InMemoryTicketCache
-from spec.integrations.fetchers import AuggieMediatedFetcher, DirectAPIFetcher
+from ingot.integrations.cache import InMemoryTicketCache
+from ingot.integrations.fetchers import AuggieMediatedFetcher, DirectAPIFetcher
 
 # Create service with caching
 cache = InMemoryTicketCache(default_ttl=timedelta(hours=1), max_size=1000)
@@ -1416,11 +1416,11 @@ service.invalidate_cache("PROJ-123")
 
 ```python
 from pathlib import Path
-from spec.integrations.cache import FileBasedTicketCache
+from ingot.integrations.cache import FileBasedTicketCache
 
 # Use file-based cache for cross-session persistence
 cache = FileBasedTicketCache(
-    cache_dir=Path.home() / ".specflow-cache",
+    cache_dir=Path.home() / ".ingot-cache",
     default_ttl=timedelta(hours=24),  # Longer TTL for file cache
 )
 
@@ -1432,7 +1432,7 @@ cache = FileBasedTicketCache(
 ## References
 
 - [Architecture Spec - Section 8: Caching Strategy](specs/00_Architecture_Refactor_Spec.md#8-caching-strategy)
-- [AMI-32 Linear Ticket](https://linear.app/amiadspec/issue/AMI-32) - TicketService integration
+- [AMI-32 Linear Ticket](https://linear.app/amiadingot/issue/AMI-32) - TicketService integration
 - [AMI-30 Implementation Plan](specs/AMI-30-implementation-plan.md) - AuggieMediatedFetcher
 - [AMI-31 Implementation Plan](specs/AMI-31-implementation-plan.md) - DirectAPIFetcher
 
@@ -1442,7 +1442,7 @@ cache = FileBasedTicketCache(
 
 > **Architecture Review Updates (2026-01-25):**
 >
-> 1. **File Location Changed**: From `specflow/integrations/providers/cache.py` to `spec/integrations/cache.py` - caching is an orchestration concern, not a provider concern.
+> 1. **File Location Changed**: From `ingot/integrations/providers/cache.py` to `ingot/integrations/cache.py` - caching is an orchestration concern, not a provider concern.
 >
 > 2. **Decorator Removed**: The `@cached_fetch` decorator pattern from Section 8.3 is NOT implemented. Per architecture review, caching is handled by `TicketService`, not by individual providers.
 >

@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-40 - Add End-to-End Integration Tests for Multi-Platform CLI
 
-**Ticket:** [AMI-40](https://linear.app/amiadspec/issue/AMI-40/add-end-to-end-integration-tests-for-multi-platform-cli)
+**Ticket:** [AMI-40](https://linear.app/amiadingot/issue/AMI-40/add-end-to-end-integration-tests-for-multi-platform-cli)
 **Status:** Draft
 **Date:** 2026-01-28
 **Last Updated:** 2026-01-28
@@ -13,7 +13,7 @@
 
 The original plan had two inconsistencies with the ticket requirements:
 
-1. **Mixed Testing Approaches**: The plan patched `spec.cli._fetch_ticket_async` for CLI tests (bypassing TicketService entirely), while separate E2E tests ran TicketService directly without going through CLI. This didn't match AC1: "Integration tests exist for CLI with mocked TicketService."
+1. **Mixed Testing Approaches**: The plan patched `ingot.cli._fetch_ticket_async` for CLI tests (bypassing TicketService entirely), while separate E2E tests ran TicketService directly without going through CLI. This didn't match AC1: "Integration tests exist for CLI with mocked TicketService."
 
 2. **Incomplete CLI Coverage**: The ticket requires "All 6 platforms are tested through the CLI entry point" (AC2), but the deeper integration tests (verifying TicketService→provider→fetcher) weren't exercised via `runner.invoke(app, ...)`.
 
@@ -164,19 +164,19 @@ This ticket adds end-to-end integration tests that verify the complete flow from
 
 | Layer | Mock Target | What Runs Real | Code Location |
 |-------|-------------|----------------|---------------|
-| **Layer A** | `spec.integrations.ticket_service.create_ticket_service` | CLI, arg parsing, `_disambiguate_platform`, `_validate_platform` | `spec/integrations/ticket_service.py:293` |
-| **Layer B** | `spec.integrations.ticket_service.AuggieMediatedFetcher` and `DirectAPIFetcher` | CLI, TicketService, Providers, ProviderRegistry | `spec/integrations/ticket_service.py:40, 55` |
+| **Layer A** | `ingot.integrations.ticket_service.create_ticket_service` | CLI, arg parsing, `_disambiguate_platform`, `_validate_platform` | `ingot/integrations/ticket_service.py:293` |
+| **Layer B** | `ingot.integrations.ticket_service.AuggieMediatedFetcher` and `DirectAPIFetcher` | CLI, TicketService, Providers, ProviderRegistry | `ingot/integrations/ticket_service.py:40, 55` |
 
 ### What to Mock (Cheat Sheet)
 
 ```python
 # Layer A: Mock the entire TicketService via factory
-with patch("spec.integrations.ticket_service.create_ticket_service", mock_factory):
+with patch("ingot.integrations.ticket_service.create_ticket_service", mock_factory):
     result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
 
 # Layer B: Mock just the fetcher classes
-with patch("spec.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_primary):
-    with patch("spec.integrations.ticket_service.DirectAPIFetcher", return_value=mock_fallback):
+with patch("ingot.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_primary):
+    with patch("ingot.integrations.ticket_service.DirectAPIFetcher", return_value=mock_fallback):
         result = runner.invoke(app, ["https://jira.example.com/browse/PROJ-123"])
 ```
 
@@ -200,7 +200,7 @@ def test_all_platforms_via_cli(platform, url, expected_title, request):
     mock_fetcher = MagicMock()
     mock_fetcher.fetch = AsyncMock(return_value=raw_data)
 
-    with patch("spec.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_fetcher):
+    with patch("ingot.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_fetcher):
         result = runner.invoke(app, [url])
 
     # Workflow should receive correctly normalized ticket
@@ -212,7 +212,7 @@ def test_all_platforms_via_cli(platform, url, expected_title, request):
 ```python
 def test_invalid_platform_error(mock_ticket_service_factory):
     """Layer A: Invalid --platform value shows helpful error."""
-    with patch("spec.integrations.ticket_service.create_ticket_service",
+    with patch("ingot.integrations.ticket_service.create_ticket_service",
                mock_ticket_service_factory({})):
         result = runner.invoke(app, ["PROJ-123", "--platform", "invalid_platform"])
 
@@ -223,14 +223,14 @@ def test_invalid_platform_error(mock_ticket_service_factory):
 #### 3. Ambiguous ID Disambiguation Flow (Layer A)
 
 ```python
-@patch("spec.cli._disambiguate_platform")
+@patch("ingot.cli._disambiguate_platform")
 def test_ambiguous_id_triggers_disambiguation(
     mock_disambig, mock_ticket_service_factory, mock_jira_ticket
 ):
     """Layer A: PROJ-123 format triggers disambiguation prompt."""
     mock_disambig.return_value = Platform.JIRA
 
-    with patch("spec.integrations.ticket_service.create_ticket_service",
+    with patch("ingot.integrations.ticket_service.create_ticket_service",
                mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})):
         runner.invoke(app, ["PROJ-123"])  # No --platform flag
 
@@ -242,13 +242,13 @@ def test_ambiguous_id_triggers_disambiguation(
 ```python
 def test_unconfigured_platform_error_via_cli():
     """Layer B: Platform with no credentials shows helpful error."""
-    from spec.integrations.fetchers.exceptions import PlatformNotSupportedError
+    from ingot.integrations.fetchers.exceptions import PlatformNotSupportedError
 
     mock_fetcher = MagicMock()
     mock_fetcher.supports_platform.return_value = False  # No support
 
-    with patch("spec.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_fetcher):
-        with patch("spec.integrations.ticket_service.DirectAPIFetcher", return_value=mock_fetcher):
+    with patch("ingot.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_fetcher):
+        with patch("ingot.integrations.ticket_service.DirectAPIFetcher", return_value=mock_fetcher):
             result = runner.invoke(app, ["https://monday.com/boards/123/pulses/456"])
 
     assert result.exit_code != 0
@@ -260,7 +260,7 @@ def test_unconfigured_platform_error_via_cli():
 ```python
 def test_fallback_on_primary_failure_via_cli(mock_jira_raw_data):
     """Layer B: Primary fetcher fails → fallback succeeds → ticket returned."""
-    from spec.integrations.fetchers.exceptions import AgentIntegrationError
+    from ingot.integrations.fetchers.exceptions import AgentIntegrationError
 
     # Primary fails
     mock_primary = MagicMock()
@@ -270,8 +270,8 @@ def test_fallback_on_primary_failure_via_cli(mock_jira_raw_data):
     mock_fallback = MagicMock()
     mock_fallback.fetch = AsyncMock(return_value=mock_jira_raw_data)
 
-    with patch("spec.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_primary):
-        with patch("spec.integrations.ticket_service.DirectAPIFetcher", return_value=mock_fallback):
+    with patch("ingot.integrations.ticket_service.AuggieMediatedFetcher", return_value=mock_primary):
+        with patch("ingot.integrations.ticket_service.DirectAPIFetcher", return_value=mock_fallback):
             result = runner.invoke(app, ["https://jira.example.com/browse/PROJ-123"])
 
     mock_primary.fetch.assert_called_once()
@@ -301,18 +301,18 @@ import pytest
 from typer.testing import CliRunner
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from spec.cli import app
-from spec.integrations.fetchers.exceptions import (
+from ingot.cli import app
+from ingot.integrations.fetchers.exceptions import (
     AgentFetchError,
     AgentIntegrationError,
 )
-from spec.integrations.providers import GenericTicket, Platform
-from spec.integrations.providers.exceptions import (
+from ingot.integrations.providers import GenericTicket, Platform
+from ingot.integrations.providers.exceptions import (
     AuthenticationError,
     PlatformNotSupportedError,
     TicketNotFoundError,
 )
-from spec.utils.errors import ExitCode
+from ingot.utils.errors import ExitCode
 
 
 runner = CliRunner()
@@ -346,12 +346,12 @@ Add shared fixtures for all 6 platforms to `tests/conftest.py`:
 
 ```python
 # Note: There are TWO different PlatformNotSupportedError classes:
-# 1. spec.integrations.providers.exceptions.PlatformNotSupportedError - for provider-level errors
-# 2. spec.integrations.fetchers.exceptions.PlatformNotSupportedError - for fetcher-level errors
+# 1. ingot.integrations.providers.exceptions.PlatformNotSupportedError - for provider-level errors
+# 2. ingot.integrations.fetchers.exceptions.PlatformNotSupportedError - for fetcher-level errors
 # We alias the fetcher version to avoid confusion
-from spec.integrations.fetchers.exceptions import PlatformNotSupportedError as FetcherPlatformNotSupportedError
-# Import from the public API (spec.integrations.providers) for consistency
-from spec.integrations.providers import GenericTicket, Platform, TicketStatus, TicketType
+from ingot.integrations.fetchers.exceptions import PlatformNotSupportedError as FetcherPlatformNotSupportedError
+# Import from the public API (ingot.integrations.providers) for consistency
+from ingot.integrations.providers import GenericTicket, Platform, TicketStatus, TicketType
 
 
 @pytest.fixture
@@ -553,7 +553,7 @@ def mock_fetcher_factory():
             Platform.LINEAR: {"identifier": "ENG-456", ...},
         })
     """
-    from spec.integrations.fetchers.exceptions import (
+    from ingot.integrations.fetchers.exceptions import (
         PlatformNotSupportedError as FetcherPlatformNotSupportedError,
     )
 
@@ -607,7 +607,7 @@ def mock_ticket_service_factory():
 
     Usage:
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})
         ):
             result = runner.invoke(app, ["PROJ-123", "--platform", "jira"])
@@ -630,7 +630,7 @@ def mock_ticket_service_factory():
                     if key in ticket_input:
                         return ticket
                 # Not found - raise error
-                from spec.integrations.providers.exceptions import TicketNotFoundError
+                from ingot.integrations.providers.exceptions import TicketNotFoundError
                 raise TicketNotFoundError(ticket_id=ticket_input, platform="unknown")
 
             mock_service.get_ticket = AsyncMock(side_effect=mock_get_ticket)
@@ -651,7 +651,7 @@ def mock_ticket_service_factory():
 
 ### Phase 2: Layer A - CLI Contract Tests (Mock at create_ticket_service)
 
-**Injection Point:** Mock `spec.integrations.ticket_service.create_ticket_service` to return a MockTicketService.
+**Injection Point:** Mock `ingot.integrations.ticket_service.create_ticket_service` to return a MockTicketService.
 This tests CLI behavior without exercising real TicketService/Provider code.
 
 **Note:** The `mock_ticket_service_factory` fixture is already defined in Step 1.2 above.
@@ -685,9 +685,9 @@ class TestPlatformFlagValidation:
         ("monday", Platform.MONDAY),
         ("trello", Platform.TRELLO),
     ])
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_valid_platform_values(
         self, mock_config_class, mock_prereq, mock_banner,
         platform_name, expected_platform, mock_ticket_service_factory, mock_jira_ticket
@@ -699,7 +699,7 @@ class TestPlatformFlagValidation:
 
         # Mock at create_ticket_service factory (not _fetch_ticket_async)
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})
         ):
             result = runner.invoke(app, ["PROJ-123", "--platform", platform_name])
@@ -708,9 +708,9 @@ class TestPlatformFlagValidation:
         assert "Invalid platform" not in result.stdout
 
     @pytest.mark.parametrize("variant", ["JIRA", "Jira", "JiRa", "jira"])
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_platform_flag_case_insensitive(
         self, mock_config_class, mock_prereq, mock_banner,
         variant, mock_ticket_service_factory, mock_jira_ticket
@@ -721,7 +721,7 @@ class TestPlatformFlagValidation:
         mock_config_class.return_value = mock_config
 
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})
         ):
             result = runner.invoke(app, ["PROJ-123", "--platform", variant])
@@ -731,9 +731,9 @@ class TestPlatformFlagValidation:
     @pytest.mark.parametrize("platform_name", [
         "jira", "linear", "github", "azure_devops", "monday", "trello"
     ])
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_short_flag_alias(
         self, mock_config_class, mock_prereq, mock_banner,
         platform_name, mock_ticket_service_factory, mock_jira_ticket
@@ -744,7 +744,7 @@ class TestPlatformFlagValidation:
         mock_config_class.return_value = mock_config
 
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"TEST-123": mock_jira_ticket})
         ):
             result = runner.invoke(app, ["TEST-123", "-p", platform_name])
@@ -763,13 +763,13 @@ but CLI-level tests should mock at `create_ticket_service` boundary.
 class TestDisambiguationFlow:
     """Test disambiguation flow for ambiguous ticket IDs (Layer A)."""
 
-    @patch("spec.ui.prompts.prompt_select")
+    @patch("ingot.ui.prompts.prompt_select")
     def test_disambiguation_prompts_user(self, mock_prompt):
         """Disambiguation prompts user to choose between Jira and Linear.
 
         Note: This is a unit test of _disambiguate_platform, not a CLI integration test.
         """
-        from spec.cli import _disambiguate_platform
+        from ingot.cli import _disambiguate_platform
 
         mock_config = MagicMock()
         mock_config.settings.default_jira_project = ""
@@ -786,7 +786,7 @@ class TestDisambiguationFlow:
 
     def test_default_platform_skips_prompt(self):
         """default_platform config skips user prompt for ambiguous IDs."""
-        from spec.cli import _disambiguate_platform
+        from ingot.cli import _disambiguate_platform
 
         mock_config = MagicMock()
         mock_config.settings.default_jira_project = ""
@@ -796,10 +796,10 @@ class TestDisambiguationFlow:
 
         assert result == Platform.LINEAR
 
-    @patch("spec.cli._disambiguate_platform")
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli._disambiguate_platform")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_ambiguous_id_triggers_disambiguation_via_cli(
         self, mock_config_class, mock_prereq, mock_banner, mock_disambig,
         mock_ticket_service_factory, mock_jira_ticket
@@ -812,17 +812,17 @@ class TestDisambiguationFlow:
         mock_disambig.return_value = Platform.JIRA
 
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})
         ):
             runner.invoke(app, ["PROJ-123"])
 
         mock_disambig.assert_called_once()
 
-    @patch("spec.cli._disambiguate_platform")
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli._disambiguate_platform")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_flag_overrides_disambiguation(
         self, mock_config_class, mock_prereq, mock_banner, mock_disambig,
         mock_ticket_service_factory, mock_jira_ticket
@@ -833,17 +833,17 @@ class TestDisambiguationFlow:
         mock_config_class.return_value = mock_config
 
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"PROJ-123": mock_jira_ticket})
         ):
             runner.invoke(app, ["PROJ-123", "--platform", "linear"])
 
         mock_disambig.assert_not_called()
 
-    @patch("spec.cli._disambiguate_platform")
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli._disambiguate_platform")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_github_format_no_disambiguation(
         self, mock_config_class, mock_prereq, mock_banner, mock_disambig,
         mock_ticket_service_factory, mock_github_ticket
@@ -854,16 +854,16 @@ class TestDisambiguationFlow:
         mock_config_class.return_value = mock_config
 
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"owner/repo#42": mock_github_ticket})
         ):
             runner.invoke(app, ["owner/repo#42"])
 
         mock_disambig.assert_not_called()
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_config_default_platform_used(
         self, mock_config_class, mock_prereq, mock_banner,
         mock_ticket_service_factory, mock_linear_ticket
@@ -875,7 +875,7 @@ class TestDisambiguationFlow:
         mock_config_class.return_value = mock_config
 
         with patch(
-            "spec.integrations.ticket_service.create_ticket_service",
+            "ingot.integrations.ticket_service.create_ticket_service",
             mock_ticket_service_factory({"ENG-456": mock_linear_ticket})
         ):
             result = runner.invoke(app, ["ENG-456"])
@@ -939,10 +939,10 @@ class TestCLIServiceIntegration:
     }
 
     @pytest.mark.parametrize("platform", list(PLATFORM_TEST_DATA.keys()))
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.workflow.runner.run_spec_driven_workflow")  # Prevent actual workflow execution
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.workflow.runner.run_ingot_workflow")  # Prevent actual workflow execution
     def test_platform_via_cli(
         self, mock_workflow, mock_config_class, mock_prereq, mock_banner,
         platform, request
@@ -984,21 +984,21 @@ class TestCLIServiceIntegration:
         mock_fetcher.close = AsyncMock()
 
         # Mock AuggieClient to avoid process spawning
-        with patch("spec.cli.AuggieClient") as mock_auggie_class:
+        with patch("ingot.cli.AuggieClient") as mock_auggie_class:
             mock_auggie_class.return_value = MagicMock()
 
             # Mock AuthenticationManager
-            with patch("spec.cli.AuthenticationManager") as mock_auth_class:
+            with patch("ingot.cli.AuthenticationManager") as mock_auth_class:
                 mock_auth = MagicMock()
                 mock_auth.get_credentials.return_value = {"api_token": "test"}
                 mock_auth_class.return_value = mock_auth
 
                 # Mock the fetcher creation to return our mock
                 with patch(
-                    "spec.integrations.ticket_service.AuggieMediatedFetcher",
+                    "ingot.integrations.ticket_service.AuggieMediatedFetcher",
                     return_value=mock_fetcher
                 ), patch(
-                    "spec.integrations.ticket_service.DirectAPIFetcher",
+                    "ingot.integrations.ticket_service.DirectAPIFetcher",
                     return_value=mock_fetcher
                 ):
                     result = runner.invoke(app, [test_data["url"]])
@@ -1011,16 +1011,16 @@ class TestCLIServiceIntegration:
             assert ticket.platform == platform
             assert ticket.title == test_data["expected_title"]
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
-    @patch("spec.workflow.runner.run_spec_driven_workflow")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
+    @patch("ingot.workflow.runner.run_ingot_workflow")
     def test_fallback_behavior_via_cli(
         self, mock_workflow, mock_config_class, mock_prereq, mock_banner,
         mock_jira_raw_data
     ):
         """Primary fetcher failure triggers fallback - tested via CLI."""
-        from spec.integrations.fetchers.exceptions import AgentIntegrationError
+        from ingot.integrations.fetchers.exceptions import AgentIntegrationError
 
         mock_config = MagicMock()
         mock_config.settings.default_jira_project = ""
@@ -1050,19 +1050,19 @@ class TestCLIServiceIntegration:
         mock_fallback.fetch = AsyncMock(return_value=mock_jira_raw_data)
         mock_fallback.close = AsyncMock()
 
-        with patch("spec.cli.AuggieClient") as mock_auggie_class:
+        with patch("ingot.cli.AuggieClient") as mock_auggie_class:
             mock_auggie_class.return_value = MagicMock()
 
-            with patch("spec.cli.AuthenticationManager") as mock_auth_class:
+            with patch("ingot.cli.AuthenticationManager") as mock_auth_class:
                 mock_auth = MagicMock()
                 mock_auth.get_credentials.return_value = {"api_token": "test"}
                 mock_auth_class.return_value = mock_auth
 
                 with patch(
-                    "spec.integrations.ticket_service.AuggieMediatedFetcher",
+                    "ingot.integrations.ticket_service.AuggieMediatedFetcher",
                     return_value=mock_primary
                 ), patch(
-                    "spec.integrations.ticket_service.DirectAPIFetcher",
+                    "ingot.integrations.ticket_service.DirectAPIFetcher",
                     return_value=mock_fallback
                 ):
                     result = runner.invoke(
@@ -1088,9 +1088,9 @@ class TestCLIServiceIntegration:
 class TestErrorPropagationViaCLI:
     """Layer B: Test that errors from TicketService propagate correctly to CLI."""
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_ticket_not_found_via_cli(
         self, mock_config_class, mock_prereq, mock_banner
     ):
@@ -1107,9 +1107,9 @@ class TestErrorPropagationViaCLI:
         )
         mock_fetcher.close = AsyncMock()
 
-        with patch("spec.cli.AuggieClient"), patch("spec.cli.AuthenticationManager"):
+        with patch("ingot.cli.AuggieClient"), patch("ingot.cli.AuthenticationManager"):
             with patch(
-                "spec.integrations.ticket_service.AuggieMediatedFetcher",
+                "ingot.integrations.ticket_service.AuggieMediatedFetcher",
                 return_value=mock_fetcher
             ):
                 result = runner.invoke(
@@ -1120,9 +1120,9 @@ class TestErrorPropagationViaCLI:
         # Should mention ticket not found
         assert "PROJ-999" in result.stdout or "not found" in result.stdout.lower()
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_auth_error_via_cli(
         self, mock_config_class, mock_prereq, mock_banner
     ):
@@ -1143,9 +1143,9 @@ class TestErrorPropagationViaCLI:
         )
         mock_fetcher.close = AsyncMock()
 
-        with patch("spec.cli.AuggieClient"), patch("spec.cli.AuthenticationManager"):
+        with patch("ingot.cli.AuggieClient"), patch("ingot.cli.AuthenticationManager"):
             with patch(
-                "spec.integrations.ticket_service.AuggieMediatedFetcher",
+                "ingot.integrations.ticket_service.AuggieMediatedFetcher",
                 return_value=mock_fetcher
             ):
                 result = runner.invoke(
@@ -1155,14 +1155,14 @@ class TestErrorPropagationViaCLI:
         assert result.exit_code != 0
         assert "auth" in result.stdout.lower() or "token" in result.stdout.lower()
 
-    @patch("spec.cli.show_banner")
-    @patch("spec.cli._check_prerequisites", return_value=True)
-    @patch("spec.cli.ConfigManager")
+    @patch("ingot.cli.show_banner")
+    @patch("ingot.cli._check_prerequisites", return_value=True)
+    @patch("ingot.cli.ConfigManager")
     def test_unconfigured_platform_error_via_cli(
         self, mock_config_class, mock_prereq, mock_banner
     ):
         """Unconfigured platform error surfaces correctly via CLI."""
-        from spec.integrations.fetchers.exceptions import (
+        from ingot.integrations.fetchers.exceptions import (
             PlatformNotSupportedError as FetcherPlatformNotSupported
         )
 
@@ -1175,12 +1175,12 @@ class TestErrorPropagationViaCLI:
         mock_fetcher.supports_platform.return_value = False
         mock_fetcher.close = AsyncMock()
 
-        with patch("spec.cli.AuggieClient"), patch("spec.cli.AuthenticationManager"):
+        with patch("ingot.cli.AuggieClient"), patch("ingot.cli.AuthenticationManager"):
             with patch(
-                "spec.integrations.ticket_service.AuggieMediatedFetcher",
+                "ingot.integrations.ticket_service.AuggieMediatedFetcher",
                 return_value=mock_fetcher
             ), patch(
-                "spec.integrations.ticket_service.DirectAPIFetcher",
+                "ingot.integrations.ticket_service.DirectAPIFetcher",
                 return_value=mock_fetcher
             ):
                 result = runner.invoke(
@@ -1248,7 +1248,7 @@ pytest tests/test_cli_integration.py::TestCLIServiceIntegration -v
 pytest tests/test_cli_integration.py::TestErrorPropagationViaCLI -v
 
 # Run with coverage
-pytest tests/test_cli_integration.py --cov=spec.cli --cov=spec.integrations.ticket_service
+pytest tests/test_cli_integration.py --cov=ingot.cli --cov=ingot.integrations.ticket_service
 ```
 
 ---
@@ -1287,11 +1287,11 @@ pytest tests/test_cli_integration.py --cov=spec.cli --cov=spec.integrations.tick
 
 | Ticket | Component | Status | Description |
 |--------|-----------|--------|-------------|
-| [AMI-25](https://linear.app/amiadspec/issue/AMI-25) | CLI Migration | ✅ Required | CLI must support `--platform` flag |
-| [AMI-30](https://linear.app/amiadspec/issue/AMI-30) | AuggieMediatedFetcher | ✅ Implemented | Primary fetcher |
-| [AMI-31](https://linear.app/amiadspec/issue/AMI-31) | DirectAPIFetcher | ✅ Implemented | Fallback fetcher |
-| [AMI-32](https://linear.app/amiadspec/issue/AMI-32) | TicketService | ✅ Implemented | Orchestration layer |
-| [AMI-17](https://linear.app/amiadspec/issue/AMI-17) | ProviderRegistry | ✅ Implemented | Platform detection |
+| [AMI-25](https://linear.app/amiadingot/issue/AMI-25) | CLI Migration | ✅ Required | CLI must support `--platform` flag |
+| [AMI-30](https://linear.app/amiadingot/issue/AMI-30) | AuggieMediatedFetcher | ✅ Implemented | Primary fetcher |
+| [AMI-31](https://linear.app/amiadingot/issue/AMI-31) | DirectAPIFetcher | ✅ Implemented | Fallback fetcher |
+| [AMI-32](https://linear.app/amiadingot/issue/AMI-32) | TicketService | ✅ Implemented | Orchestration layer |
+| [AMI-17](https://linear.app/amiadingot/issue/AMI-17) | ProviderRegistry | ✅ Implemented | Platform detection |
 
 ### Downstream Dependencies (Will Use This)
 

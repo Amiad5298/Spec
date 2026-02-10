@@ -1,8 +1,8 @@
-"""Tests for spec.ui.log_buffer module."""
+"""Tests for ingot.ui.log_buffer module."""
 
 from pathlib import Path
 
-from spec.ui.log_buffer import TaskLogBuffer
+from ingot.ui.log_buffer import TaskLogBuffer
 
 
 class TestTaskLogBufferCreation:
@@ -159,4 +159,3 @@ class TestTaskLogBufferContextManager:
         buffer.close()
         buffer.close()  # Should not raise
         buffer.close()  # Should not raise
-

@@ -1,13 +1,13 @@
-"""Tests for spec.integrations.backends.auggie module - AuggieBackend class."""
+"""Tests for ingot.integrations.backends.auggie module - AuggieBackend class."""
 
 import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from spec.config.fetch_config import AgentPlatform
-from spec.integrations.backends import AIBackend, AuggieBackend
-from spec.integrations.backends.errors import BackendTimeoutError
+from ingot.config.fetch_config import AgentPlatform
+from ingot.integrations.backends import AIBackend, AuggieBackend
+from ingot.integrations.backends.errors import BackendTimeoutError
 
 
 class TestAuggieBackendProperties:
@@ -105,12 +105,12 @@ class TestAuggieBackendDelegation:
             backend.run_with_callback(
                 "test prompt",
                 output_callback=mock_callback,
-                subagent="spec-planner",
+                subagent="ingot-planner",
             )
 
         # Verify agent parameter was passed (not subagent)
         call_kwargs = mock_run.call_args.kwargs
-        assert call_kwargs.get("agent") == "spec-planner"
+        assert call_kwargs.get("agent") == "ingot-planner"
         assert "subagent" not in call_kwargs
 
     def test_run_print_with_output_delegates(self):
@@ -145,11 +145,11 @@ class TestAuggieBackendDelegation:
         with patch.object(
             backend._client, "run_print_quiet", return_value="quiet output"
         ) as mock_run:
-            backend.run_print_quiet("test prompt", subagent="spec-planner")
+            backend.run_print_quiet("test prompt", subagent="ingot-planner")
 
         # Verify agent parameter was passed (not subagent)
         call_kwargs = mock_run.call_args.kwargs
-        assert call_kwargs.get("agent") == "spec-planner"
+        assert call_kwargs.get("agent") == "ingot-planner"
         assert "subagent" not in call_kwargs
 
     def test_run_print_with_output_maps_subagent_to_agent(self):
@@ -228,7 +228,7 @@ class TestAuggieBackendDelegation:
         backend = AuggieBackend()
 
         with patch(
-            "spec.integrations.backends.auggie.check_auggie_installed",
+            "ingot.integrations.backends.auggie.check_auggie_installed",
             return_value=(True, "1.0.0"),
         ) as mock_check:
             is_installed, message = backend.check_installed()
@@ -458,7 +458,7 @@ class TestAuggieBackendTimeout:
         backend = AuggieBackend()
         mocker.patch.object(backend._client, "_build_command", return_value=["auggie", "test"])
         mocker.patch(
-            "spec.integrations.backends.auggie.subprocess.run",
+            "ingot.integrations.backends.auggie.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd=["auggie"], timeout=10.0),
         )
 
@@ -475,7 +475,7 @@ class TestAuggieBackendTimeout:
 
         backend = AuggieBackend()
         mocker.patch.object(backend._client, "_build_command", return_value=["auggie", "test"])
-        mocker.patch("spec.integrations.backends.auggie.subprocess.run", return_value=mock_result)
+        mocker.patch("ingot.integrations.backends.auggie.subprocess.run", return_value=mock_result)
 
         success, output = backend.run_print_with_output("test prompt", timeout_seconds=30.0)
 
@@ -488,7 +488,7 @@ class TestAuggieBackendTimeout:
         mock_run = mocker.patch.object(
             backend._client, "run_print_with_output", return_value=(True, "delegated")
         )
-        mock_subprocess = mocker.patch("spec.integrations.backends.auggie.subprocess.run")
+        mock_subprocess = mocker.patch("ingot.integrations.backends.auggie.subprocess.run")
 
         success, output = backend.run_print_with_output("test prompt", timeout_seconds=None)
 
@@ -504,7 +504,7 @@ class TestAuggieBackendTimeout:
         backend = AuggieBackend()
         mocker.patch.object(backend._client, "_build_command", return_value=["auggie", "test"])
         mocker.patch(
-            "spec.integrations.backends.auggie.subprocess.run",
+            "ingot.integrations.backends.auggie.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd=["auggie"], timeout=15.0),
         )
 
@@ -521,7 +521,7 @@ class TestAuggieBackendTimeout:
 
         backend = AuggieBackend()
         mocker.patch.object(backend._client, "_build_command", return_value=["auggie", "test"])
-        mocker.patch("spec.integrations.backends.auggie.subprocess.run", return_value=mock_result)
+        mocker.patch("ingot.integrations.backends.auggie.subprocess.run", return_value=mock_result)
 
         output = backend.run_print_quiet("test prompt", timeout_seconds=30.0)
 
@@ -531,7 +531,7 @@ class TestAuggieBackendTimeout:
         """run_print_quiet without timeout delegates to client."""
         backend = AuggieBackend()
         mock_run = mocker.patch.object(backend._client, "run_print_quiet", return_value="delegated")
-        mock_subprocess = mocker.patch("spec.integrations.backends.auggie.subprocess.run")
+        mock_subprocess = mocker.patch("ingot.integrations.backends.auggie.subprocess.run")
 
         output = backend.run_print_quiet("test prompt", timeout_seconds=None)
 
@@ -549,7 +549,7 @@ class TestAuggieClientContract:
 
     def test_build_command_basic_structure(self):
         """Verify _build_command() returns expected command structure."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         cmd = client._build_command("test prompt", print_mode=True)
@@ -559,7 +559,7 @@ class TestAuggieClientContract:
 
     def test_build_command_with_model(self):
         """Verify _build_command() includes model flag."""
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
         cmd = client._build_command("test prompt", model="test-model", print_mode=True)
@@ -574,7 +574,7 @@ class TestAuggieClientContract:
         """
         from unittest.mock import MagicMock, patch
 
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
 
@@ -584,7 +584,7 @@ class TestAuggieClientContract:
         mock_agent_def.prompt = "Agent instructions"
 
         with patch(
-            "spec.integrations.auggie._parse_agent_definition",
+            "ingot.integrations.auggie._parse_agent_definition",
             return_value=mock_agent_def,
         ):
             cmd = client._build_command(
@@ -602,7 +602,7 @@ class TestAuggieClientContract:
         """Agent definition model is used when no explicit model is passed."""
         from unittest.mock import MagicMock, patch
 
-        from spec.integrations.auggie import AuggieClient
+        from ingot.integrations.auggie import AuggieClient
 
         client = AuggieClient()
 
@@ -611,7 +611,7 @@ class TestAuggieClientContract:
         mock_agent_def.prompt = "Agent instructions"
 
         with patch(
-            "spec.integrations.auggie._parse_agent_definition",
+            "ingot.integrations.auggie._parse_agent_definition",
             return_value=mock_agent_def,
         ):
             cmd = client._build_command(
@@ -703,8 +703,8 @@ class TestAuggieDetectRateLimit:
 
 
 @pytest.mark.skipif(
-    os.environ.get("SPEC_INTEGRATION_TESTS") != "1",
-    reason="Integration tests require SPEC_INTEGRATION_TESTS=1",
+    os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
+    reason="Integration tests require INGOT_INTEGRATION_TESTS=1",
 )
 class TestAuggieBackendIntegration:
     """Integration tests with real Auggie CLI."""
@@ -714,6 +714,6 @@ class TestAuggieBackendIntegration:
         backend = AuggieBackend()
         is_installed, message = backend.check_installed()
         # If Auggie is installed, should return True
-        # Note: This test only runs when SPEC_INTEGRATION_TESTS=1
+        # Note: This test only runs when INGOT_INTEGRATION_TESTS=1
         assert isinstance(is_installed, bool)
         assert isinstance(message, str)

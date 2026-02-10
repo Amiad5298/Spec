@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-46 - Phase 1.0: Rename Claude Platform Enum
 
-**Ticket:** [AMI-46](https://linear.app/amiadspec/issue/AMI-46/phase-10-rename-claude-platform-enum)
+**Ticket:** [AMI-46](https://linear.app/amiadingot/issue/AMI-46/phase-10-rename-claude-platform-enum)
 **Status:** Draft
 **Date:** 2026-01-31
 **Labels:** MultiAgent
@@ -42,7 +42,7 @@ Per the Pluggable Multi-Agent Support specification:
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `spec/config/fetch_config.py` | **PRIMARY** | Rename enum member and value, update docstring |
+| `ingot/config/fetch_config.py` | **PRIMARY** | Rename enum member and value, update docstring |
 | `tests/test_config_manager.py` | **Test Update** | Update test assertions for new enum name/value |
 
 ### Verification Commands
@@ -51,11 +51,11 @@ After the rename, these commands should pass:
 
 ```bash
 # These should return 0 matches (verify old names are gone):
-grep -rn "CLAUDE_DESKTOP" --include="*.py" spec/ tests/
-grep -rn "claude_desktop" --include="*.py" spec/ tests/
+grep -rn "CLAUDE_DESKTOP" --include="*.py" ingot/ tests/
+grep -rn "claude_desktop" --include="*.py" ingot/ tests/
 
 # These should return matches (verify new names exist):
-grep -rn "AgentPlatform.CLAUDE" --include="*.py" spec/ tests/
+grep -rn "AgentPlatform.CLAUDE" --include="*.py" ingot/ tests/
 ```
 
 ---
@@ -66,7 +66,7 @@ grep -rn "AgentPlatform.CLAUDE" --include="*.py" spec/ tests/
 
 #### Step 1.1: Rename Enum Member and Value
 
-**File:** `spec/config/fetch_config.py`
+**File:** `ingot/config/fetch_config.py`
 
 **Current Code (lines 49-64):**
 ```python
@@ -125,7 +125,7 @@ class AgentPlatform(Enum):
 ```python
     def test_ai_backend_values(self):
         """AgentPlatform enum has correct values."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         assert AgentPlatform.AUGGIE.value == "auggie"
         assert AgentPlatform.CLAUDE_DESKTOP.value == "claude_desktop"
@@ -138,7 +138,7 @@ class AgentPlatform(Enum):
 ```python
     def test_ai_backend_values(self):
         """AgentPlatform enum has correct values."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         assert AgentPlatform.AUGGIE.value == "auggie"
         assert AgentPlatform.CLAUDE.value == "claude"
@@ -157,7 +157,7 @@ The existing `test_ai_backend_from_string` test (lines 1415-1420) tests `auggie`
 ```python
     def test_ai_backend_from_string(self):
         """AgentPlatform can be created from string value."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         assert AgentPlatform("auggie") == AgentPlatform.AUGGIE
         assert AgentPlatform("cursor") == AgentPlatform.CURSOR
@@ -167,7 +167,7 @@ The existing `test_ai_backend_from_string` test (lines 1415-1420) tests `auggie`
 ```python
     def test_ai_backend_from_string(self):
         """AgentPlatform can be created from string value."""
-        from spec.config.fetch_config import AgentPlatform
+        from ingot.config.fetch_config import AgentPlatform
 
         assert AgentPlatform("auggie") == AgentPlatform.AUGGIE
         assert AgentPlatform("claude") == AgentPlatform.CLAUDE
@@ -182,9 +182,9 @@ The existing `test_ai_backend_from_string` test (lines 1415-1420) tests `auggie`
 
 | AC | Description | Verification Method | Status |
 |----|-------------|---------------------|--------|
-| **AC1** | `AgentPlatform.CLAUDE` exists with value `'claude'` | `python -c "from spec.config.fetch_config import AgentPlatform; assert AgentPlatform.CLAUDE.value == 'claude'"` | [ ] |
-| **AC2** | No references to `CLAUDE_DESKTOP` remain in codebase | `grep -rn 'CLAUDE_DESKTOP' --include='*.py' spec/ tests/` returns 0 | [ ] |
-| **AC3** | No references to `claude_desktop` string remain in codebase | `grep -rn 'claude_desktop' --include='*.py' spec/ tests/` returns 0 | [ ] |
+| **AC1** | `AgentPlatform.CLAUDE` exists with value `'claude'` | `python -c "from ingot.config.fetch_config import AgentPlatform; assert AgentPlatform.CLAUDE.value == 'claude'"` | [ ] |
+| **AC2** | No references to `CLAUDE_DESKTOP` remain in codebase | `grep -rn 'CLAUDE_DESKTOP' --include='*.py' ingot/ tests/` returns 0 | [ ] |
+| **AC3** | No references to `claude_desktop` string remain in codebase | `grep -rn 'claude_desktop' --include='*.py' ingot/ tests/` returns 0 | [ ] |
 | **AC4** | All existing tests pass | `pytest tests/ -v` | [ ] |
 | **AC5** | CLI `--backend` choice list includes `claude` | Valid backend values include `claude` | [ ] |
 
@@ -196,7 +196,7 @@ The existing `test_ai_backend_from_string` test (lines 1415-1420) tests `auggie`
 
 | Ticket | Component | Status | Description |
 |--------|-----------|--------|-------------|
-| [AMI-44](https://linear.app/amiadspec/issue/AMI-44) | Phase 0: Baseline Tests | ✅ Done | Baseline tests completed (2026-01-31) |
+| [AMI-44](https://linear.app/amiadingot/issue/AMI-44) | Phase 0: Baseline Tests | ✅ Done | Baseline tests completed (2026-01-31) |
 
 ### Downstream Dependents (Blocked by This Ticket)
 
@@ -209,7 +209,7 @@ The existing `test_ai_backend_from_string` test (lines 1415-1420) tests `auggie`
 
 | Ticket | Title | Relationship |
 |--------|-------|--------------|
-| [AMI-45](https://linear.app/amiadspec/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
+| [AMI-45](https://linear.app/amiadingot/issue/AMI-45) | Phase 1: Backend Infrastructure | Parent ticket |
 | [Pluggable Multi-Agent Support](./Pluggable%20Multi-Agent%20Support.md) | Specification | Parent specification |
 
 ---
@@ -226,7 +226,7 @@ pytest tests/ -v
 pytest tests/test_config_manager.py -v -k "ai_backend"
 
 # Run type checking
-mypy spec/config/fetch_config.py
+mypy ingot/config/fetch_config.py
 ```
 
 ### Manual Verification
@@ -234,14 +234,14 @@ mypy spec/config/fetch_config.py
 ```bash
 # 1. Verify enum exists with correct value
 python -c "
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.fetch_config import AgentPlatform
 assert AgentPlatform.CLAUDE.value == 'claude'
 print('✅ AgentPlatform.CLAUDE exists with value claude')
 "
 
 # 2. Verify old enum member no longer exists
 python -c "
-from spec.config.fetch_config import AgentPlatform
+from ingot.config.fetch_config import AgentPlatform
 try:
     _ = AgentPlatform.CLAUDE_DESKTOP
     print('❌ CLAUDE_DESKTOP still exists!')
@@ -252,7 +252,7 @@ except AttributeError:
 
 # 3. Verify parse_ai_backend accepts 'claude'
 python -c "
-from spec.config.fetch_config import parse_ai_backend, AgentPlatform
+from ingot.config.fetch_config import parse_ai_backend, AgentPlatform
 result = parse_ai_backend('claude')
 assert result == AgentPlatform.CLAUDE
 print('✅ parse_ai_backend correctly parses claude')
@@ -260,10 +260,10 @@ print('✅ parse_ai_backend correctly parses claude')
 
 # 4. Verify no old references remain
 echo '=== Checking for CLAUDE_DESKTOP references ==='
-grep -rn 'CLAUDE_DESKTOP' --include='*.py' spec/ tests/ && echo '❌ Found references!' || echo '✅ No references found'
+grep -rn 'CLAUDE_DESKTOP' --include='*.py' ingot/ tests/ && echo '❌ Found references!' || echo '✅ No references found'
 
 echo '=== Checking for claude_desktop references ==='
-grep -rn 'claude_desktop' --include='*.py' spec/ tests/ && echo '❌ Found references!' || echo '✅ No references found'
+grep -rn 'claude_desktop' --include='*.py' ingot/ tests/ && echo '❌ Found references!' || echo '✅ No references found'
 ```
 
 ---
@@ -322,7 +322,7 @@ Users with existing configuration files using `claude_desktop` will need to upda
 
 | File | Change | Lines Changed |
 |------|--------|---------------|
-| `spec/config/fetch_config.py` | Rename `CLAUDE_DESKTOP` → `CLAUDE`, value `"claude_desktop"` → `"claude"`, update docstring | ~3 lines |
+| `ingot/config/fetch_config.py` | Rename `CLAUDE_DESKTOP` → `CLAUDE`, value `"claude_desktop"` → `"claude"`, update docstring | ~3 lines |
 | `tests/test_config_manager.py` | Update `test_ai_backend_values` assertion for new enum name/value | 1 line |
 | `tests/test_config_manager.py` | Add `claude` test case to `test_ai_backend_from_string` | 1 line |
 
@@ -336,7 +336,7 @@ The `.mypy_cache/` directory contains cached type information that references `C
 
 ```bash
 rm -rf .mypy_cache/
-mypy spec/config/fetch_config.py
+mypy ingot/config/fetch_config.py
 ```
 
 ---

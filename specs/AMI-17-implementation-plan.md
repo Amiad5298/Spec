@@ -1,6 +1,6 @@
 # Implementation Plan: AMI-17 - Implement ProviderRegistry Factory Pattern
 
-**Ticket:** [AMI-17](https://linear.app/amiadspec/issue/AMI-17/implement-providerregistry-factory-pattern)
+**Ticket:** [AMI-17](https://linear.app/amiadingot/issue/AMI-17/implement-providerregistry-factory-pattern)
 **Status:** ✅ IMPLEMENTED (PR #21)
 **PR:** [#21](https://github.com/Amiad5298/Spec/pull/21)
 **Date:** 2026-01-24
@@ -26,7 +26,7 @@ The `ProviderRegistry` acts as the central factory connecting user input to prov
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              SPECFLOW CLI                                    │
+│                              INGOT CLI                                    │
 │  spec <ticket_url_or_id>                                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                      │
@@ -56,18 +56,18 @@ The `ProviderRegistry` acts as the central factory connecting user input to prov
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `Platform` enum | `spec/integrations/providers/base.py` | Platform identification |
-| `IssueTrackerProvider` ABC | `spec/integrations/providers/base.py` | Provider interface |
-| `PlatformDetector` | `spec/integrations/providers/detector.py` | URL/ID → Platform mapping |
-| `PlatformNotSupportedError` | `spec/integrations/providers/exceptions.py` | Error for unregistered platforms |
-| `UserInteractionInterface` | `spec/integrations/providers/user_interaction.py` | User prompt abstraction |
-| `CLIUserInteraction` | `spec/integrations/providers/user_interaction.py` | Default CLI implementation |
+| `Platform` enum | `ingot/integrations/providers/base.py` | Platform identification |
+| `IssueTrackerProvider` ABC | `ingot/integrations/providers/base.py` | Provider interface |
+| `PlatformDetector` | `ingot/integrations/providers/detector.py` | URL/ID → Platform mapping |
+| `PlatformNotSupportedError` | `ingot/integrations/providers/exceptions.py` | Error for unregistered platforms |
+| `UserInteractionInterface` | `ingot/integrations/providers/user_interaction.py` | User prompt abstraction |
+| `CLIUserInteraction` | `ingot/integrations/providers/user_interaction.py` | Default CLI implementation |
 
 ---
 
 ## Components to Create
 
-### New File: `spec/integrations/providers/registry.py`
+### New File: `ingot/integrations/providers/registry.py`
 
 | Component | Purpose |
 |-----------|---------|
@@ -79,7 +79,7 @@ The `ProviderRegistry` acts as the central factory connecting user input to prov
 
 ### Step 1: Create Registry Module
 
-**File:** `spec/integrations/providers/registry.py`
+**File:** `ingot/integrations/providers/registry.py`
 
 Implement `ProviderRegistry` class with:
 
@@ -123,7 +123,7 @@ class ProviderRegistry:
 
 ### Step 2: Update Package Exports
 
-**File:** `spec/integrations/providers/__init__.py`
+**File:** `ingot/integrations/providers/__init__.py`
 
 Add `ProviderRegistry` to exports:
 - Import from `registry.py`
@@ -146,7 +146,7 @@ Test coverage for:
 
 ## File Changes Detail
 
-### New: `spec/integrations/providers/registry.py`
+### New: `ingot/integrations/providers/registry.py`
 
 Key implementation details:
 
@@ -169,12 +169,12 @@ Key implementation details:
    - `clear()` resets both `_providers` and `_instances`
    - `set_user_interaction()` enables mock injection
 
-### Modified: `spec/integrations/providers/__init__.py`
+### Modified: `ingot/integrations/providers/__init__.py`
 
 Add imports and exports:
 
 ```python
-from spec.integrations.providers.registry import ProviderRegistry
+from ingot.integrations.providers.registry import ProviderRegistry
 
 __all__ = [
     # ... existing exports ...
@@ -250,18 +250,18 @@ class MockJiraProvider(IssueTrackerProvider):
 
 | Dependency | Status | Notes |
 |------------|--------|-------|
-| `Platform` enum | ✅ Implemented | `spec/integrations/providers/base.py` |
-| `IssueTrackerProvider` ABC | ✅ Implemented | `spec/integrations/providers/base.py` |
-| `PlatformDetector` | ✅ Implemented | `spec/integrations/providers/detector.py` |
-| `PlatformNotSupportedError` | ✅ Implemented | `spec/integrations/providers/exceptions.py` |
-| `UserInteractionInterface` | ✅ Implemented | `spec/integrations/providers/user_interaction.py` |
-| `CLIUserInteraction` | ✅ Implemented | `spec/integrations/providers/user_interaction.py` |
+| `Platform` enum | ✅ Implemented | `ingot/integrations/providers/base.py` |
+| `IssueTrackerProvider` ABC | ✅ Implemented | `ingot/integrations/providers/base.py` |
+| `PlatformDetector` | ✅ Implemented | `ingot/integrations/providers/detector.py` |
+| `PlatformNotSupportedError` | ✅ Implemented | `ingot/integrations/providers/exceptions.py` |
+| `UserInteractionInterface` | ✅ Implemented | `ingot/integrations/providers/user_interaction.py` |
+| `CLIUserInteraction` | ✅ Implemented | `ingot/integrations/providers/user_interaction.py` |
 
 ### Downstream Dependents (Future)
 
 - **AMI-18:** `JiraProvider` uses `@ProviderRegistry.register` decorator
 - **AMI-27:** `AuggieMediatedFetcher` may use registry for provider lookup
-- **CLI Integration:** `specflow/cli.py` will use `get_provider_for_input()`
+- **CLI Integration:** `ingot/cli.py` will use `get_provider_for_input()`
 
 ---
 
@@ -371,9 +371,9 @@ Added to `IssueTrackerProvider` base class docstring (lines 401-430 in `base.py`
 ### Provider Registration (Future AMI-18)
 
 ```python
-# In spec/integrations/providers/jira_provider.py
+# In ingot/integrations/providers/jira_provider.py
 
-from spec.integrations.providers import IssueTrackerProvider, Platform, ProviderRegistry
+from ingot.integrations.providers import IssueTrackerProvider, Platform, ProviderRegistry
 
 @ProviderRegistry.register
 class JiraProvider(IssueTrackerProvider):
@@ -395,9 +395,9 @@ class JiraProvider(IssueTrackerProvider):
 ### Provider Lookup (Future CLI Integration)
 
 ```python
-# In spec/cli.py
+# In ingot/cli.py
 
-from spec.integrations.providers import ProviderRegistry, PlatformNotSupportedError
+from ingot.integrations.providers import ProviderRegistry, PlatformNotSupportedError
 
 def fetch_ticket(input_str: str) -> GenericTicket:
     try:
@@ -415,7 +415,7 @@ def fetch_ticket(input_str: str) -> GenericTicket:
 # In tests/test_some_feature.py
 
 import pytest
-from spec.integrations.providers import ProviderRegistry
+from ingot.integrations.providers import ProviderRegistry
 
 @pytest.fixture(autouse=True)
 def reset_registry():

@@ -585,7 +585,7 @@ class TestGenerateTasklist:
         _generate_tasklist(state, plan_path, tasklist_path, mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context:" in prompt
+        assert "Additional Context" in prompt
         assert "Focus on backward compatibility" in prompt
 
     def test_excludes_user_context_when_empty(
@@ -616,7 +616,7 @@ class TestGenerateTasklist:
         _generate_tasklist(state, plan_path, tasklist_path, mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context:" not in prompt
+        assert "Additional Context" not in prompt
 
     def test_excludes_user_context_when_whitespace_only(
         self,
@@ -646,7 +646,7 @@ class TestGenerateTasklist:
         _generate_tasklist(state, plan_path, tasklist_path, mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context:" not in prompt
+        assert "Additional Context" not in prompt
 
 
 class TestStep2CreateTasklist:

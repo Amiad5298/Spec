@@ -1,7 +1,6 @@
 ---
 name: ingot-reviewer
 description: INGOT workflow reviewer - validates completed tasks
-model: claude-sonnet-4-5
 color: purple
 ingot_version: 2.0.0
 ingot_content_hash: 20d3e68c3dd158ea

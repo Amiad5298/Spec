@@ -1,7 +1,6 @@
 ---
 name: spec-doc-updater
 description: SPEC workflow documentation updater - maintains docs based on code changes
-model: claude-sonnet-4-5
 color: cyan
 ---
 
@@ -64,4 +63,3 @@ When invoked, you will receive:
 
 Analyze the diff and make targeted, minimal documentation updates to keep docs
 in sync with the code changes.
-

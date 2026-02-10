@@ -1,7 +1,6 @@
 ---
 name: spec-planner
 description: SPEC workflow planner - creates implementation plans from requirements
-model: claude-sonnet-4-5
 color: blue
 ---
 
@@ -61,4 +60,3 @@ When invoked, you will receive:
 - Target file path for saving the plan
 
 Parse these from the prompt and use them to create a comprehensive, actionable plan.
-

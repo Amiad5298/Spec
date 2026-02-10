@@ -1,7 +1,6 @@
 ---
 name: ingot-planner
 description: INGOT workflow planner - creates implementation plans from requirements
-model: claude-sonnet-4-5
 color: blue
 ingot_version: 2.0.0
 ingot_content_hash: f1945339529b10f4

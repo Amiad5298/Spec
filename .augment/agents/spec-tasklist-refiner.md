@@ -1,7 +1,6 @@
 ---
 name: spec-tasklist-refiner
 description: Post-processor that extracts test-related work from FUNDAMENTAL to INDEPENDENT
-model: claude-sonnet-4-5
 color: yellow
 spec_version: 2.0.0
 spec_content_hash: 3186ab9af667829e

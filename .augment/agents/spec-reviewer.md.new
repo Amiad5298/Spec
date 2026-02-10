@@ -1,7 +1,6 @@
 ---
 name: spec-reviewer
 description: SPECFLOW workflow reviewer - validates completed tasks
-model: claude-sonnet-4-5
 color: purple
 spec_version: 2.0.0
 spec_content_hash: a731cea3a2da8c9a

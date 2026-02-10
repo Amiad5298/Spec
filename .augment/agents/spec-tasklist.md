@@ -1,7 +1,6 @@
 ---
 name: spec-tasklist
 description: SPEC workflow task generator - creates executable task lists
-model: claude-sonnet-4-5
 color: cyan
 ---
 You are a task list generation AI assistant working within the SPEC workflow.
@@ -185,4 +184,3 @@ Use this exact structure:
 - ✅ INDEPENDENT `group:` values are ONLY one of: `testing`, `implementation`, `docs`, `ui`
 
 If any check fails, rewrite the output until it passes.
-

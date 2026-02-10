@@ -1,7 +1,6 @@
 ---
 name: spec-implementer
 description: SPEC workflow implementer - executes individual tasks
-model: claude-sonnet-4-5
 color: green
 ---
 
@@ -91,4 +90,3 @@ When invoked, you will receive:
 - Whether you're running in parallel mode (affects git behavior)
 
 Focus on completing your assigned task efficiently and correctly within the specified file boundaries.
-

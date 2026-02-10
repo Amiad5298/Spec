@@ -1,7 +1,6 @@
 ---
 name: ingot-implementer
 description: INGOT workflow implementer - executes individual tasks
-model: claude-sonnet-4-5
 color: green
 ingot_version: 2.0.0
 ingot_content_hash: 679bebc0b7580c04

@@ -1,7 +1,6 @@
 ---
 name: spec-tasklist
 description: SPECFLOW workflow task generator - creates executable task lists
-model: claude-sonnet-4-5
 color: cyan
 spec_version: 2.0.0
 spec_content_hash: ffcec41699715263

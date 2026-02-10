@@ -1,7 +1,6 @@
 ---
 name: spec-planner
 description: SPECFLOW workflow planner - creates implementation plans from requirements
-model: claude-sonnet-4-5
 color: blue
 spec_version: 2.0.0
 spec_content_hash: 4af353662676f017

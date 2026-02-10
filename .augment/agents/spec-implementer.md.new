@@ -1,7 +1,6 @@
 ---
 name: spec-implementer
 description: SPECFLOW workflow implementer - executes individual tasks
-model: claude-sonnet-4-5
 color: green
 spec_version: 2.0.0
 spec_content_hash: 660bbcd780b34a93

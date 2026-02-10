@@ -1,7 +1,6 @@
 ---
 name: ingot-tasklist
 description: INGOT workflow task generator - creates executable task lists
-model: claude-sonnet-4-5
 color: cyan
 ingot_version: 2.0.0
 ingot_content_hash: 94cc7974cde00653

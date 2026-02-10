@@ -1,7 +1,6 @@
 ---
 name: ingot-tasklist-refiner
 description: Post-processor that extracts test-related work from FUNDAMENTAL to INDEPENDENT
-model: claude-sonnet-4-5
 color: yellow
 ingot_version: 2.0.0
 ingot_content_hash: dba4d93911d82e43

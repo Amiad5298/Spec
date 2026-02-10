@@ -1,7 +1,6 @@
 ---
 name: spec-reviewer
 description: SPEC workflow reviewer - validates completed tasks
-model: claude-sonnet-4-5
 color: purple
 ---
 
@@ -79,4 +78,3 @@ When invoked, you will receive:
 - Optionally, specific files to focus on
 
 Use git commands and codebase-retrieval to understand what changed.
-

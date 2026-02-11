@@ -45,7 +45,7 @@ WORKFLOW_ARTIFACT_PATHS = frozenset(
 )
 
 
-def _is_workflow_artifact(path: str) -> bool:
+def is_workflow_artifact(path: str) -> bool:
     """Check if a path is a workflow artifact that should be excluded from dirty checks.
 
     Args:
@@ -58,6 +58,58 @@ def _is_workflow_artifact(path: str) -> bool:
         if path == artifact_path.rstrip("/") or path.startswith(artifact_path):
             return True
     return False
+
+
+def parse_porcelain_z_output(output: str) -> list[tuple[str, str]]:
+    """Parse git status --porcelain -z output.
+
+    The -z flag uses NUL as delimiter between entries and between renamed file
+    paths.  This handles filenames with spaces and special characters correctly
+    (no C-style quoting, no escape sequences).
+
+    Format for each entry:
+    - Regular file: ``XY path\\0``
+    - Renamed/copied: ``XY new_path\\0old_path\\0``
+
+    Note: with ``-z`` the field order for renames is *reversed* compared to the
+    non-z arrow format (``old -> new``).  The first path (inline in the status
+    entry) is the **new** path; the following NUL-separated token is the old
+    path.
+
+    Returns:
+        List of ``(status_code, filepath)`` tuples where *filepath* is the
+        relevant path (new path for renames/copies).
+    """
+    if not output:
+        return []
+
+    entries: list[tuple[str, str]] = []
+    parts = output.split("\0")
+
+    i = 0
+    while i < len(parts):
+        part = parts[i]
+        if not part:
+            i += 1
+            continue
+
+        if len(part) < 3:
+            i += 1
+            continue
+
+        status_code = part[:2]
+        filepath = part[3:]
+
+        if status_code[0] in ("R", "C") and i + 1 < len(parts):
+            # For renames/copies: filepath (part[3:]) is the NEW path,
+            # parts[i+1] is the OLD path.  We want the new path.
+            i += 2  # skip the old-path token
+        else:
+            i += 1
+
+        entries.append((status_code, filepath))
+
+    return entries
 
 
 def capture_baseline() -> str:
@@ -115,7 +167,7 @@ def check_dirty_working_tree(
         text=True,
     )
     unstaged_files = [
-        f for f in result_unstaged.stdout.strip().split("\n") if f and not _is_workflow_artifact(f)
+        f for f in result_unstaged.stdout.strip().split("\n") if f and not is_workflow_artifact(f)
     ]
 
     # Check for staged changes (index vs HEAD)
@@ -125,7 +177,7 @@ def check_dirty_working_tree(
         text=True,
     )
     staged_files = [
-        f for f in result_staged.stdout.strip().split("\n") if f and not _is_workflow_artifact(f)
+        f for f in result_staged.stdout.strip().split("\n") if f and not is_workflow_artifact(f)
     ]
 
     # Check for untracked files (excluding workflow artifacts)
@@ -135,7 +187,7 @@ def check_dirty_working_tree(
         text=True,
     )
     untracked_files = [
-        f for f in result_untracked.stdout.strip().split("\n") if f and not _is_workflow_artifact(f)
+        f for f in result_untracked.stdout.strip().split("\n") if f and not is_workflow_artifact(f)
     ]
 
     is_dirty = bool(unstaged_files or staged_files or untracked_files)
@@ -659,6 +711,8 @@ __all__ = [
     "DirtyTreePolicy",
     "DirtyWorkingTreeError",
     "WORKFLOW_ARTIFACT_PATHS",
+    "is_workflow_artifact",
+    "parse_porcelain_z_output",
     "capture_baseline",
     "check_dirty_working_tree",
     "get_diff_from_baseline",

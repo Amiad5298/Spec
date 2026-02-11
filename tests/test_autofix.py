@@ -98,6 +98,48 @@ class TestRunAutoFix:
         assert "Do NOT commit" in prompt
 
 
+class TestReviewFeedbackTruncation:
+    def test_truncates_long_feedback(self, mock_backend, workflow_state, log_dir):
+        mock_backend.run_with_callback.return_value = (True, "Done")
+
+        long_feedback = "x" * 5000
+        run_auto_fix(workflow_state, long_feedback, log_dir, mock_backend)
+
+        call_args = mock_backend.run_with_callback.call_args
+        prompt = call_args[0][0]
+        assert "x" * 3000 in prompt
+        assert "review feedback truncated" in prompt
+        assert "x" * 5000 not in prompt
+
+    def test_truncates_at_newline_boundary(self, mock_backend, workflow_state, log_dir):
+        mock_backend.run_with_callback.return_value = (True, "Done")
+
+        # Build feedback with newlines so truncation snaps to line boundary
+        long_feedback = ("issue line\n") * 500  # 5500 chars, well over 3000
+        run_auto_fix(workflow_state, long_feedback, log_dir, mock_backend)
+
+        call_args = mock_backend.run_with_callback.call_args
+        prompt = call_args[0][0]
+        assert "review feedback truncated" in prompt
+        # Should cut at a newline, not mid-word
+        truncated_part = prompt.split("... [review feedback truncated")[0]
+        feedback_part = truncated_part.split(
+            "Fix the following issues identified during code review:\n\n"
+        )[1]
+        assert feedback_part.endswith("\n\n")
+
+    def test_short_feedback_unchanged(self, mock_backend, workflow_state, log_dir):
+        mock_backend.run_with_callback.return_value = (True, "Done")
+
+        short_feedback = "Missing test for function foo()"
+        run_auto_fix(workflow_state, short_feedback, log_dir, mock_backend)
+
+        call_args = mock_backend.run_with_callback.call_args
+        prompt = call_args[0][0]
+        assert short_feedback in prompt
+        assert "truncated" not in prompt
+
+
 class TestBackwardsCompatibility:
     def test_underscore_alias_is_same_function(self):
         assert _run_auto_fix is run_auto_fix

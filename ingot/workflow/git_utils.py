@@ -45,7 +45,7 @@ WORKFLOW_ARTIFACT_PATHS = frozenset(
 )
 
 
-def _is_workflow_artifact(path: str) -> bool:
+def is_workflow_artifact(path: str) -> bool:
     """Check if a path is a workflow artifact that should be excluded from dirty checks.
 
     Args:
@@ -115,7 +115,7 @@ def check_dirty_working_tree(
         text=True,
     )
     unstaged_files = [
-        f for f in result_unstaged.stdout.strip().split("\n") if f and not _is_workflow_artifact(f)
+        f for f in result_unstaged.stdout.strip().split("\n") if f and not is_workflow_artifact(f)
     ]
 
     # Check for staged changes (index vs HEAD)
@@ -125,7 +125,7 @@ def check_dirty_working_tree(
         text=True,
     )
     staged_files = [
-        f for f in result_staged.stdout.strip().split("\n") if f and not _is_workflow_artifact(f)
+        f for f in result_staged.stdout.strip().split("\n") if f and not is_workflow_artifact(f)
     ]
 
     # Check for untracked files (excluding workflow artifacts)
@@ -135,7 +135,7 @@ def check_dirty_working_tree(
         text=True,
     )
     untracked_files = [
-        f for f in result_untracked.stdout.strip().split("\n") if f and not _is_workflow_artifact(f)
+        f for f in result_untracked.stdout.strip().split("\n") if f and not is_workflow_artifact(f)
     ]
 
     is_dirty = bool(unstaged_files or staged_files or untracked_files)
@@ -659,6 +659,7 @@ __all__ = [
     "DirtyTreePolicy",
     "DirtyWorkingTreeError",
     "WORKFLOW_ARTIFACT_PATHS",
+    "is_workflow_artifact",
     "capture_baseline",
     "check_dirty_working_tree",
     "get_diff_from_baseline",

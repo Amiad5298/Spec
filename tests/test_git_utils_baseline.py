@@ -161,38 +161,38 @@ class TestWorkflowArtifactFiltering:
     """
 
     def test_is_workflow_artifact_spec_dir(self):
-        from ingot.workflow.git_utils import _is_workflow_artifact
+        from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert _is_workflow_artifact(".ingot/") is True
-        assert _is_workflow_artifact(".ingot/runs/log.txt") is True
-        assert _is_workflow_artifact(".ingot") is True
+        assert is_workflow_artifact(".ingot/") is True
+        assert is_workflow_artifact(".ingot/runs/log.txt") is True
+        assert is_workflow_artifact(".ingot") is True
 
     def test_is_workflow_artifact_augment_dir(self):
-        from ingot.workflow.git_utils import _is_workflow_artifact
+        from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert _is_workflow_artifact(".augment/") is True
-        assert _is_workflow_artifact(".augment/agents/ingot-planner.md") is True
-        assert _is_workflow_artifact(".augment") is True
+        assert is_workflow_artifact(".augment/") is True
+        assert is_workflow_artifact(".augment/agents/ingot-planner.md") is True
+        assert is_workflow_artifact(".augment") is True
 
     def test_is_workflow_artifact_specs_dir(self):
-        from ingot.workflow.git_utils import _is_workflow_artifact
+        from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert _is_workflow_artifact("specs/") is True
-        assert _is_workflow_artifact("specs/TICKET-123-plan.md") is True
-        assert _is_workflow_artifact("specs") is True
+        assert is_workflow_artifact("specs/") is True
+        assert is_workflow_artifact("specs/TICKET-123-plan.md") is True
+        assert is_workflow_artifact("specs") is True
 
     def test_is_workflow_artifact_ds_store(self):
-        from ingot.workflow.git_utils import _is_workflow_artifact
+        from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert _is_workflow_artifact(".DS_Store") is True
+        assert is_workflow_artifact(".DS_Store") is True
 
     def test_is_workflow_artifact_non_artifact(self):
-        from ingot.workflow.git_utils import _is_workflow_artifact
+        from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert _is_workflow_artifact("src/main.py") is False
-        assert _is_workflow_artifact("README.md") is False
-        assert _is_workflow_artifact("tests/test_foo.py") is False
-        assert _is_workflow_artifact("config.yaml") is False
+        assert is_workflow_artifact("src/main.py") is False
+        assert is_workflow_artifact("README.md") is False
+        assert is_workflow_artifact("tests/test_foo.py") is False
+        assert is_workflow_artifact("config.yaml") is False
 
     def test_untracked_spec_dir_ignored(self, temp_git_repo):
         spec_dir = temp_git_repo.path / ".ingot" / "runs"
@@ -284,9 +284,9 @@ class TestWorkflowArtifactFiltering:
         assert result is True
 
     def test_is_workflow_artifact_gitignore(self):
-        from ingot.workflow.git_utils import _is_workflow_artifact
+        from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert _is_workflow_artifact(".gitignore") is True
+        assert is_workflow_artifact(".gitignore") is True
 
     def test_workflow_artifact_paths_constant_exported(self):
         from ingot.workflow.git_utils import WORKFLOW_ARTIFACT_PATHS

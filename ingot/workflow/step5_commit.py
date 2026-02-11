@@ -23,8 +23,8 @@ from ingot.utils.console import (
     print_success,
 )
 from ingot.workflow.git_utils import (
-    _is_workflow_artifact,
     get_working_tree_diff_from_baseline,
+    is_workflow_artifact,
 )
 from ingot.workflow.state import WorkflowState
 
@@ -101,7 +101,7 @@ def _get_stageable_files() -> tuple[list[str], list[str]]:
         if " -> " in filepath:
             filepath = filepath.split(" -> ")[-1]
 
-        if _is_workflow_artifact(filepath):
+        if is_workflow_artifact(filepath):
             excluded.append(filepath)
         else:
             stageable.append(filepath)

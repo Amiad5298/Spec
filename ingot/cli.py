@@ -330,6 +330,7 @@ def show_help() -> None:
     print_info("  --retry-base-delay SECS   Base delay for retry backoff (seconds)")
     print_info("  --enable-review           Enable phase reviews after task execution")
     print_info("  --auto-update-docs/--no-auto-update-docs  Enable/disable doc updates")
+    print_info("  --auto-commit/--no-auto-commit  Enable/disable auto-commit")
     print_info("  --config                  Show current configuration")
     print_info("  --version, -v             Show version information")
     print_info("  --help, -h                Show this help message")
@@ -469,6 +470,13 @@ def main(
             help="Enable automatic documentation updates (default: from config)",
         ),
     ] = None,
+    auto_commit: Annotated[
+        bool | None,
+        typer.Option(
+            "--auto-commit/--no-auto-commit",
+            help="Enable automatic commit after workflow (default: from config)",
+        ),
+    ] = None,
     backend: Annotated[
         str | None,
         typer.Option(
@@ -559,6 +567,7 @@ def main(
                 enable_review=enable_review,
                 dirty_tree_policy=dirty_tree_policy,
                 auto_update_docs=auto_update_docs,
+                auto_commit=auto_commit,
             )
         else:
             # Show main menu
@@ -798,6 +807,7 @@ def _run_workflow(
     enable_review: bool = False,
     dirty_tree_policy: str | None = None,
     auto_update_docs: bool | None = None,
+    auto_commit: bool | None = None,
 ) -> None:
     """Run the AI-assisted workflow."""
     from ingot.workflow.runner import run_ingot_workflow
@@ -861,6 +871,9 @@ def _run_workflow(
         auto_update_docs if auto_update_docs is not None else config.settings.auto_update_docs
     )
 
+    # Determine auto_commit setting
+    effective_auto_commit = auto_commit if auto_commit is not None else config.settings.auto_commit
+
     # Run workflow
     run_ingot_workflow(
         ticket=generic_ticket,
@@ -879,6 +892,7 @@ def _run_workflow(
         enable_phase_review=enable_review,
         dirty_tree_policy=effective_dirty_tree_policy,
         auto_update_docs=effective_auto_update_docs,
+        auto_commit=effective_auto_commit,
     )
 
 

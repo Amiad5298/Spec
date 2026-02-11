@@ -54,6 +54,7 @@ class Settings:
         subagent_reviewer: Agent name for task validation
         subagent_doc_updater: Agent name for documentation update step
         auto_update_docs: Enable automatic documentation updates after code changes
+        auto_commit: Enable automatic commit after workflow completion
         default_platform: Default platform for ambiguous ticket IDs (jira, linear, etc.)
         ai_backend: AI backend selection (auggie, claude, cursor) - must be explicitly configured
     """
@@ -94,6 +95,9 @@ class Settings:
     # Documentation update settings
     auto_update_docs: bool = True  # Enable automatic documentation updates
 
+    # Commit settings
+    auto_commit: bool = True  # Enable automatic commit after workflow completion
+
     # Platform settings
     default_platform: str = ""  # Default platform for ambiguous ticket IDs (jira, linear, etc.)
 
@@ -133,6 +137,7 @@ class Settings:
             "SUBAGENT_FIXER": "subagent_fixer",
             "SUBAGENT_DOC_UPDATER": "subagent_doc_updater",
             "AUTO_UPDATE_DOCS": "auto_update_docs",
+            "AUTO_COMMIT": "auto_commit",
             # Platform settings
             "DEFAULT_PLATFORM": "default_platform",
             # Backend settings

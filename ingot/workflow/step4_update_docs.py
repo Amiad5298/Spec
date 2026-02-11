@@ -617,11 +617,16 @@ def _build_doc_update_prompt(state: WorkflowState, diff_result: DiffResult) -> s
 
     # Truncate full diff to avoid context overflow
     diff_content = diff_result.diff
-    truncated_diff = diff_content[:MAX_DIFF_SIZE]
     diff_was_truncated = len(diff_content) > MAX_DIFF_SIZE
-    truncation_note = ""
     if diff_was_truncated:
+        cut = diff_content[:MAX_DIFF_SIZE].rfind("\n")
+        if cut <= 0:
+            cut = MAX_DIFF_SIZE
+        truncated_diff = diff_content[:cut]
         truncation_note = "\n\n... (diff truncated due to size - see Changed Files and Statistics above for full scope)"
+    else:
+        truncated_diff = diff_content
+        truncation_note = ""
 
     # Only include changed files list and diffstat when diff is truncated
     # (they're redundant when the full diff is present)

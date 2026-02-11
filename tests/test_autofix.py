@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from ingot.workflow.autofix import _run_auto_fix, run_auto_fix
+from ingot.workflow.autofix import _MAX_REVIEW_FEEDBACK_LENGTH, _run_auto_fix, run_auto_fix
 from ingot.workflow.state import WorkflowState
 
 
@@ -102,20 +102,24 @@ class TestReviewFeedbackTruncation:
     def test_truncates_long_feedback(self, mock_backend, workflow_state, log_dir):
         mock_backend.run_with_callback.return_value = (True, "Done")
 
-        long_feedback = "x" * 5000
+        overflow = _MAX_REVIEW_FEEDBACK_LENGTH + 2000
+        long_feedback = "x" * overflow
         run_auto_fix(workflow_state, long_feedback, log_dir, mock_backend)
 
         call_args = mock_backend.run_with_callback.call_args
         prompt = call_args[0][0]
-        assert "x" * 3000 in prompt
+        # Full feedback must not appear, but truncated portion must
+        assert long_feedback not in prompt
+        assert "x" * _MAX_REVIEW_FEEDBACK_LENGTH in prompt
         assert "review feedback truncated" in prompt
-        assert "x" * 5000 not in prompt
 
     def test_truncates_at_newline_boundary(self, mock_backend, workflow_state, log_dir):
         mock_backend.run_with_callback.return_value = (True, "Done")
 
         # Build feedback with newlines so truncation snaps to line boundary
-        long_feedback = ("issue line\n") * 500  # 5500 chars, well over 3000
+        line = "issue line\n"
+        repeat_count = (_MAX_REVIEW_FEEDBACK_LENGTH // len(line)) + 100
+        long_feedback = line * repeat_count  # well over the limit
         run_auto_fix(workflow_state, long_feedback, log_dir, mock_backend)
 
         call_args = mock_backend.run_with_callback.call_args

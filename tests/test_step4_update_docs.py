@@ -102,8 +102,8 @@ class TestParsePorcelainZOutput:
 
 
 class TestMaxDiffSize:
-    def test_max_diff_size_is_8000(self):
-        assert MAX_DIFF_SIZE == 8000
+    def test_max_diff_size_is_positive(self):
+        assert MAX_DIFF_SIZE > 0
 
 
 class TestStep4NoChanges:

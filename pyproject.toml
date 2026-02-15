@@ -51,9 +51,9 @@ dev = [
 ingot = "ingot.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/Amiad5298/Spec"
-Documentation = "https://github.com/Amiad5298/Spec#readme"
-Repository = "https://github.com/Amiad5298/Spec"
+Homepage = "https://github.com/Amiad5298/INGOT"
+Documentation = "https://github.com/Amiad5298/INGOT#readme"
+Repository = "https://github.com/Amiad5298/INGOT"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ingot"]

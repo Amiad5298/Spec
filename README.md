@@ -1,48 +1,155 @@
-<p align="center">
-  <h1 align="center">INGOT</h1>
-  <p align="center">
-    <strong>Spec-Driven Development Workflow Powered by AI</strong>
-  </p>
-  <p align="center">
-    Transform tickets from any supported platform into implemented features with a structured, AI-assisted three-step workflow.
-  </p>
-</p>
+# INGOT
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#ai-backends">AI Backends</a> •
-  <a href="#supported-platforms">Supported Platforms</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#how-it-works">How It Works</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#contributing">Contributing</a>
-</p>
+**Spec-Driven Development Workflow Powered by AI**
+
+Transform tickets from any supported platform into implemented features with a structured, AI-assisted workflow.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 ---
 
+## Table of Contents
+
+- [What is INGOT?](#what-is-ingot)
+- [Features](#features)
+- [AI Backends](#ai-backends)
+- [Supported Platforms](#supported-platforms)
+- [Quick Start](#quick-start)
+- [How It Works](#how-it-works)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Agent Customization](#agent-customization)
+- [Project Structure](#project-structure)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## What is INGOT?
 
-INGOT is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a ticket from any supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, or Trello), INGOT:
+INGOT is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a ticket from any supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, or Trello), INGOT runs a multi-step workflow:
 
 1. **Plans** - Creates a detailed implementation plan by analyzing requirements and your codebase
-2. **Tasks** - Generates an optimized task list, identifying which tasks can run in parallel
-3. **Executes** - Runs specialized AI agents to complete each task, with checkpoint commits and progress tracking
+2. **Clarifies** - Optional interactive Q&A to resolve ambiguities before coding begins
+3. **Tasks** - Generates an optimized task list, identifying which tasks can run in parallel
+4. **Executes** - Runs specialized AI agents to complete each task, with checkpoint commits and progress tracking
+5. **Updates Docs** - Automatically updates documentation to reflect code changes
+6. **Commits** - Stages and commits implementation files with a generated commit message
 
-INGOT orchestrates AI coding assistants—[Auggie](https://docs.augmentcode.com/cli), [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), or [Cursor](https://www.cursor.com/cli)—with specialized AI agents to deliver a structured, reproducible development workflow.
+INGOT orchestrates AI coding assistants with specialized AI agents to deliver a structured, reproducible development workflow.
 
-[Screenshot placeholder: INGOT main workflow showing the three steps with progress indicators]
+## Features
+
+### Multi-Step Workflow
+A structured approach that breaks complex features into manageable pieces:
+- **Step 1 - Plan**: AI-generated implementation plan based on ticket and codebase analysis
+- **Step 1.5 - Clarify** (optional): Interactive Q&A loop with conflict detection to resolve ambiguities before coding
+- **Step 2 - Task List**: Task list with dependency analysis and user approval loop (approve/edit/regenerate)
+- **Step 3 - Execute**: Dual-phase task execution with real-time progress tracking
+- **Step 4 - Update Docs** (optional): AI-driven documentation synchronization with guardrails
+- **Step 5 - Commit** (optional): Automated staging and commit with artifact exclusion
+
+### Parallel Task Execution
+Dramatically reduce implementation time:
+- Automatically identifies independent tasks that can run concurrently
+- Configurable parallelism (1-5 concurrent tasks)
+- Fail-fast or continue-on-error modes
+- Built-in rate limit handling with exponential backoff and jitter
+- Thread-safe execution with fresh backend instance per worker
+
+### Conflict Detection
+Fail-Fast Semantic Check before implementation begins:
+- Detects contradictions between ticket requirements and user-provided context
+- LLM-powered semantic analysis (not keyword matching)
+- Automatically triggers clarification step when conflicts are found
+
+### Task Memory
+Cross-task learning system that improves execution across tasks:
+- Captures patterns, key decisions, and test commands from completed tasks
+- Finds related memories via keyword overlap
+- Provides established patterns to subsequent tasks without context pollution
+
+### Deep Integrations
+- **6 Ticket Platforms**: Jira, Linear, GitHub, Azure DevOps, Monday, and Trello
+- **Automatic Platform Detection**: URLs and ticket IDs are automatically routed to the correct platform
+- **6 AI Backends**: Auggie, Claude Code, Cursor, Aider, Gemini, and Codex
+- **Git**: Feature branch creation, checkpoint commits after each task, optional commit squashing
+- **Fetch Strategy System**: Configurable AGENT/DIRECT/AUTO strategies with ticket caching
+
+### Git Integration
+INGOT integrates with Git while giving you full control over your commits:
+
+- **Automatic `.gitignore` Configuration**: On first run, INGOT adds patterns to exclude run logs (`.ingot/`), keeping your repository clean.
+- **Baseline-Anchored Diffs**: Captures a baseline commit at Step 3 start. All subsequent diffs are scoped to changes since that baseline, preventing pollution from pre-existing uncommitted changes.
+- **Dirty Tree Policy**: Configurable handling of uncommitted changes before execution (`fail-fast` to abort, `warn` to continue).
+- **Workflow Artifact Exclusion**: Files in `specs/`, `.ingot/`, and `.augment/` are excluded from commits and dirty tree checks.
+
+### Automated Code Review
+Optional reviews that validate work quality:
+- Runs after task execution with baseline-anchored diffs
+- Smart diff handling (uses `--stat` for large changesets >2000 lines or >20 files)
+- **Auto-fix**: When reviews return NEEDS_ATTENTION, optionally run the implementer agent to address feedback
+- **Re-review**: Automatically re-runs review after auto-fix to verify fixes
+- PASS/NEEDS_ATTENTION output format for clear status
+- Enable with `--enable-review` flag
+
+### Documentation Enforcement (Step 4)
+Non-blocking documentation maintenance with guardrails:
+- Smart doc-file detection across multiple patterns (`.md`, `.rst`, `docs/`, root README, CHANGELOG, etc.)
+- Non-doc change enforcement: snapshots non-doc state, detects, and reverts unauthorized changes by the doc agent
+- Prominent violation warnings for manual review
+
+### Predictive Context (Target Files)
+Reduce AI hallucinations and prevent file conflicts during parallel execution:
+- Explicit file scoping with `<!-- files: ... -->` task annotations
+- Task list agent predicts which files each task will modify
+- File disjointness validation for parallel tasks
+- Path security with directory traversal prevention
+
+```markdown
+<!-- category: fundamental, order: 1 -->
+<!-- files: src/models/user.py, src/db/schema.py -->
+- [ ] Create user model and database schema
+
+<!-- category: independent, group: features -->
+<!-- files: src/api/auth.py, tests/test_auth.py -->
+- [ ] Implement authentication endpoint
+```
+
+### Rich Terminal UI
+- Real-time task progress visualization with Rich
+- Log streaming with expandable panels
+- Interactive menus for task review and approval
+- Thread-safe parallel execution display
+- Works in both TUI mode and simple fallback for CI environments
+
+### Specialized AI Agents
+Seven purpose-built agents work together:
+
+| Agent | Purpose |
+|-------|---------|
+| `ingot-planner` | Analyzes requirements and creates implementation plans |
+| `ingot-tasklist` | Converts plans into optimized, executable task lists |
+| `ingot-tasklist-refiner` | Post-processes task lists to extract test tasks into the independent category |
+| `ingot-implementer` | Executes individual tasks with codebase awareness |
+| `ingot-reviewer` | Validates completed work with PASS/NEEDS_ATTENTION output |
+| `ingot-fixer` | Auto-fixes issues found by the reviewer (reuses implementer) |
+| `ingot-doc-updater` | Updates documentation after code changes (Step 4) |
 
 ## AI Backends
 
-INGOT supports multiple AI coding assistants as backends. You choose one during first-run setup, and can switch at any time.
+INGOT supports six AI coding assistants as backends. You choose one during first-run setup and can switch at any time.
 
 | Backend | CLI Requirement | Installation |
 |---------|----------------|--------------|
 | **Auggie** | Auggie CLI (Node.js 22+) | [docs.augmentcode.com/cli](https://docs.augmentcode.com/cli) |
 | **Claude Code** | Claude Code CLI | [docs.anthropic.com/en/docs/claude-code](https://docs.anthropic.com/en/docs/claude-code/overview) |
 | **Cursor** | Cursor CLI | [cursor.com/cli](https://www.cursor.com/cli) |
+| **Aider** | Aider CLI | [aider.chat](https://aider.chat) |
+| **Gemini** | Gemini CLI | [ai.google.dev](https://ai.google.dev) |
+| **Codex** | OpenAI Codex CLI | [openai.com](https://openai.com) |
 
 ### Selecting Your Backend
 
@@ -54,104 +161,30 @@ INGOT supports multiple AI coding assistants as backends. You choose one during 
 # Override backend for a single run
 ingot --backend claude PROJECT-123
 ingot -b cursor PROJECT-123
+ingot -b aider PROJECT-123
 
 # Or change the default in ~/.ingot-config
 # AI_BACKEND="claude"
 ```
 
-## Features
-
-### 🚀 Three-Step Workflow
-A structured approach that breaks complex features into manageable pieces:
-- **Step 1**: AI-generated implementation plan based on ticket and codebase analysis
-- **Step 2**: Task list with dependency analysis for optimal execution order
-- **Step 3**: Automated task execution with real-time progress tracking
-
-### ⚡ Parallel Task Execution
-Dramatically reduce implementation time:
-- Automatically identifies independent tasks that can run concurrently
-- Configurable parallelism (1-5 concurrent tasks)
-- Fail-fast or continue-on-error modes
-- Built-in rate limit handling with exponential backoff
-
-### 🔗 Deep Integrations
-- **6 Ticket Platforms**: Jira, Linear, GitHub, Azure DevOps, Monday, and Trello
-- **Automatic Platform Detection**: URLs and ticket IDs are automatically routed to the correct platform
-- **Git**: Feature branch creation, checkpoint commits after each task, optional commit squashing
-- **Multi-Backend Support**: Works with Auggie, Claude Code, or Cursor—choose your preferred AI coding assistant
-
-### 🔧 Git Integration Details
-INGOT integrates with Git while giving you full control over your commits:
-
-- **Automatic `.gitignore` Configuration**: On first run, INGOT automatically adds patterns to your project's `.gitignore` to exclude run logs (`.ingot/` and `*.log`), keeping your repository clean without manual configuration.
-
-- **Manual Staging by Design**: INGOT generates and modifies files but does **not** automatically stage them with `git add`. This gives you full control to review changes before committing. After execution, you'll see a note reminding you to manually `git add` files you want to include.
-
-### 🎨 Rich Terminal UI
-- Real-time task progress visualization
-- Log streaming with expandable panels
-- Interactive menus for task review and approval
-- Works in both TUI mode and simple fallback for CI environments
-
-### 🤖 Specialized AI Agents
-Four purpose-built agents work together:
-- **ingot-planner**: Analyzes requirements and creates implementation plans
-- **ingot-tasklist**: Converts plans into optimized, executable task lists
-- **ingot-implementer**: Executes individual tasks with codebase awareness
-- **ingot-reviewer**: Validates completed work and triggers auto-fix for issues
-
-### 🔍 Automated Code Review
-Optional phase reviews that validate work quality:
-- Runs after Phase 1 (fundamental tasks) and at workflow completion
-- Smart diff handling with baseline-anchored comparisons (uses `--stat` for large changesets >2000 lines or >20 files)
-- **Auto-fix capability**: When reviews return NEEDS_ATTENTION, optionally run the implementer agent to address feedback
-- **Re-review after fix**: Automatically re-run review to verify fixes were successful
-- PASS/NEEDS_ATTENTION output format for clear status
-- Enable with `--enable-review` flag
-
-### 📊 Baseline-Anchored Diffs
-Reviews only inspect changes introduced by the current workflow:
-- Captures baseline commit at Step 3 start before any modifications
-- Dirty tree policy (`--dirty-tree-policy`) prevents pollution from pre-existing uncommitted changes
-- Supports `fail-fast` (abort on dirty tree) or `warn` (continue with warning) modes
-
-### 🎯 Predictive Context (Target Files)
-Reduce AI hallucinations and prevent file conflicts during parallel execution:
-- Explicit file scoping with `<!-- files: ... -->` task annotations
-- Task list agent predicts which files each task will modify
-- File disjointness validation for parallel tasks
-- Path security with directory traversal prevention
-- "Setup Task Pattern": Shared files modified in FUNDAMENTAL tasks before parallel work
-
-Example task list with file annotations:
-```markdown
-<!-- category: fundamental, order: 1 -->
-<!-- files: src/models/user.py, src/db/schema.py -->
-- [ ] Create user model and database schema
-
-<!-- category: independent, group: features -->
-<!-- files: src/api/auth.py, tests/test_auth.py -->
-- [ ] Implement authentication endpoint
-```
-
-[Screenshot placeholder: Terminal showing the TUI with parallel task execution in progress]
-
 ## Supported Platforms
 
-INGOT supports 6 ticket platforms. Three integrate with Auggie's MCP tools for zero-config ticket fetching; the others require fallback API credentials:
+INGOT supports 6 ticket platforms. Three backends (Auggie, Claude Code, Cursor) provide MCP integrations for zero-config ticket fetching on supported platforms; the remaining backends (Aider, Gemini, Codex) require API credentials for all platforms.
 
-| Platform | URL Support | Ticket ID Support | Auggie MCP | Notes |
-|----------|-------------|-------------------|------------|-------|
-| **Jira** | ✅ | ✅ `PROJECT-123` | ✅ | Works out of the box with Auggie backend |
-| **Linear** | ✅ | ⚠️ URL preferred | ✅ | IDs like `ENG-123` may be ambiguous with Jira |
-| **GitHub Issues** | ✅ | ✅ `owner/repo#42` | ✅ | Works out of the box with Auggie backend |
-| **Azure DevOps** | ✅ | ✅ `AB#123` | ❌ | Requires credentials in `~/.ingot-config` |
-| **Monday** | ✅ | ❌ URL only | ❌ | Requires credentials in `~/.ingot-config` |
-| **Trello** | ✅ | ✅ 8-char short ID | ❌ | Requires credentials in `~/.ingot-config` |
+| Platform | URL Support | Ticket ID Support | MCP Support | Notes |
+|----------|-------------|-------------------|-------------|-------|
+| **Jira** | Yes | `PROJECT-123` | Auggie, Claude, Cursor | Zero-config with MCP-enabled backends |
+| **Linear** | Yes | URL preferred | Auggie, Claude, Cursor | IDs like `ENG-123` may be ambiguous with Jira |
+| **GitHub Issues** | Yes | `owner/repo#42` | Auggie, Claude, Cursor | Zero-config with MCP-enabled backends |
+| **Azure DevOps** | Yes | `AB#123` | -- | Requires credentials in `~/.ingot-config` |
+| **Monday** | Yes | URL only | -- | Requires credentials in `~/.ingot-config` |
+| **Trello** | Yes | 8-char short ID | -- | Requires credentials in `~/.ingot-config` |
 
-> **MCP-integrated platforms (when using Auggie backend)** (Jira, Linear, GitHub): No additional configuration needed—works via Auggie's built-in MCP integrations.
+> **MCP-integrated platforms** (Jira, Linear, GitHub): No additional configuration needed when using Auggie, Claude Code, or Cursor backends — works via built-in MCP integrations.
 >
-> **Fallback platforms** (Azure DevOps, Monday, Trello): Requires API credentials regardless of backend. See the [Platform Configuration Guide](docs/platform-configuration.md).
+> **API-only platforms** (Azure DevOps, Monday, Trello): Requires API credentials regardless of backend. See the [Platform Configuration Guide](docs/platform-configuration.md).
+>
+> **Non-MCP backends** (Aider, Gemini, Codex): Require API credentials for all platforms, including Jira, Linear, and GitHub.
 
 ### Platform Detection
 
@@ -159,10 +192,10 @@ INGOT automatically detects the platform from the ticket URL or ID:
 
 ```bash
 # URLs are auto-detected
-ingot https://company.atlassian.net/browse/PROJ-123        # → Jira
-ingot https://linear.app/team/issue/ENG-456                # → Linear
-ingot https://github.com/owner/repo/issues/42              # → GitHub
-ingot https://dev.azure.com/org/project/_workitems/edit/789  # → Azure DevOps
+ingot https://company.atlassian.net/browse/PROJ-123          # Jira
+ingot https://linear.app/team/issue/ENG-456                  # Linear
+ingot https://github.com/owner/repo/issues/42                # GitHub
+ingot https://dev.azure.com/org/project/_workitems/edit/789  # Azure DevOps
 
 # Ambiguous IDs require --platform flag
 ingot PROJ-123 --platform jira
@@ -176,13 +209,10 @@ Some ticket ID formats are shared across platforms (e.g., `ABC-123` matches both
 1. Check `DEFAULT_PLATFORM` in `~/.ingot-config` (if set)
 2. Prompt you to select a platform interactively
 
-**Rule of thumb:** If your ticket ID looks like `ABC-123` and you use both Jira and Linear, always pass `--platform` or set `DEFAULT_PLATFORM`.
-
 ```bash
-# Example: You have "ENG-456" which exists in both Jira and Linear
-ingot ENG-456                    # ⚠️ Ambiguous → prompts or uses DEFAULT_PLATFORM
-ingot ENG-456 --platform linear  # ✅ Explicitly targets Linear
-ingot ENG-456 --platform jira    # ✅ Explicitly targets Jira
+ingot ENG-456                    # Ambiguous - prompts or uses DEFAULT_PLATFORM
+ingot ENG-456 --platform linear  # Explicitly targets Linear
+ingot ENG-456 --platform jira    # Explicitly targets Jira
 ```
 
 ## Quick Start
@@ -198,64 +228,83 @@ cd your-project
 ingot https://company.atlassian.net/browse/PROJECT-123  # Jira URL
 ingot https://linear.app/team/issue/ENG-456              # Linear URL
 ingot https://github.com/owner/repo/issues/42            # GitHub URL
-
-# URL-based examples for fallback platforms
-ingot https://dev.azure.com/org/project/_workitems/edit/789    # Azure DevOps
-ingot https://mycompany.monday.com/boards/123456/pulses/789    # Monday
-ingot https://trello.com/c/aBcDeFgH/123-card-title             # Trello
+ingot https://dev.azure.com/org/project/_workitems/edit/789  # Azure DevOps
+ingot https://mycompany.monday.com/boards/123456/pulses/789  # Monday
+ingot https://trello.com/c/aBcDeFgH/123-card-title           # Trello
 
 # Or use a ticket ID with explicit platform
 ingot PROJECT-123 --platform jira
-ingot ENG-456 --platform linear
-ingot owner/repo#42                                            # GitHub (unambiguous)
+ingot owner/repo#42  # GitHub (unambiguous)
 ```
 
 That's it! INGOT will guide you through the entire workflow with interactive prompts.
-
-[Screenshot placeholder: Quick start workflow showing initial prompts and plan generation]
 
 ## How It Works
 
 ### The INGOT Workflow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           INGOT WORKFLOW                                  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│   Ticket (Any Platform)                                                  │
-│       │                                                                  │
-│       ▼                                                                  │
-│   ┌───────────────────────────────────────────────────────────┐         │
-│   │  STEP 1: PLAN                                              │         │
-│   │  • Fetch ticket details from platform                      │         │
-│   │  • Analyze codebase with context retrieval                 │         │
-│   │  • Generate implementation plan                            │         │
-│   │  • Output: specs/{ticket}-plan.md                          │         │
-│   └───────────────────────────────────────────────────────────┘         │
-│       │                                                                  │
-│       ▼                                                                  │
-│   ┌───────────────────────────────────────────────────────────┐         │
-│   │  STEP 2: TASK LIST                                         │         │
-│   │  • Parse implementation plan                               │         │
-│   │  • Generate task list with categories                      │         │
-│   │  • User reviews and approves/edits/regenerates             │         │
-│   │  • Output: specs/{ticket}-tasklist.md                      │         │
-│   └───────────────────────────────────────────────────────────┘         │
-│       │                                                                  │
-│       ▼                                                                  │
-│   ┌───────────────────────────────────────────────────────────┐         │
-│   │  STEP 3: EXECUTE                                           │         │
-│   │  • Phase 1: Sequential execution of fundamental tasks      │         │
-│   │  • Phase 2: Parallel execution of independent tasks        │         │
-│   │  • Checkpoint commits after each task                      │         │
-│   │  • Optional commit squashing at end                        │         │
-│   └───────────────────────────────────────────────────────────┘         │
-│       │                                                                  │
-│       ▼                                                                  │
-│   Implemented Feature (ready for PR)                                    │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         INGOT WORKFLOW                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Ticket (Any Platform)                                               │
+│      │                                                               │
+│      ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  STEP 1: PLAN                                                │    │
+│  │  • Fetch ticket details from platform                        │    │
+│  │  • Analyze codebase with context retrieval                   │    │
+│  │  • Generate implementation plan                              │    │
+│  │  • Output: specs/{ticket}-plan.md                            │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│      │                                                               │
+│      ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  STEP 1.5: CLARIFY (optional)                                │    │
+│  │  • Conflict detection between ticket and user context        │    │
+│  │  • Interactive Q&A loop (up to 10 rounds)                    │    │
+│  │  • Rewrite plan with clarifications                          │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│      │                                                               │
+│      ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  STEP 2: TASK LIST                                           │    │
+│  │  • Generate task list with FUNDAMENTAL/INDEPENDENT categories │    │
+│  │  • Post-process: extract test tasks to INDEPENDENT           │    │
+│  │  • User reviews and approves/edits/regenerates/aborts        │    │
+│  │  • Output: specs/{ticket}-tasklist.md                        │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│      │                                                               │
+│      ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  STEP 3: EXECUTE                                             │    │
+│  │  • Capture baseline commit for diff anchoring                │    │
+│  │  • Phase 1: Sequential execution of FUNDAMENTAL tasks        │    │
+│  │  • Phase 2: Parallel execution of INDEPENDENT tasks          │    │
+│  │  • Post-implementation targeted test execution               │    │
+│  │  • Optional code review with auto-fix                        │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│      │                                                               │
+│      ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  STEP 4: UPDATE DOCS (optional)                              │    │
+│  │  • AI-driven documentation synchronization                   │    │
+│  │  • Non-doc change enforcement (revert unauthorized changes)  │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│      │                                                               │
+│      ▼                                                               │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  STEP 5: COMMIT (optional)                                   │    │
+│  │  • Diff summary display                                      │    │
+│  │  • Workflow artifact exclusion from staging                   │    │
+│  │  • Auto-generated commit message with user editing            │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│      │                                                               │
+│      ▼                                                               │
+│  Implemented Feature (ready for PR)                                  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Task Categories
@@ -285,18 +334,31 @@ INGOT creates files in the `specs/` directory:
 | `specs/{ticket}-plan.md` | Detailed implementation plan with technical approach, steps, and testing strategy |
 | `specs/{ticket}-tasklist.md` | Executable task list with categories and checkboxes |
 
-Run logs are stored in `.ingot/runs/{ticket}/` for debugging and audit purposes.
+Run logs are stored in `.ingot/runs/{ticket}/` for debugging and audit purposes:
+
+```
+.ingot/runs/{ticket}/
+├── {timestamp}/          # Step 3 task logs
+│   ├── task_001_*.log
+│   └── task_002_*.log
+├── plan_generation/      # Step 1 logs
+├── test_execution/       # Post-implementation test logs
+└── doc_update/           # Step 4 logs
+```
 
 ## Installation
 
 ### Requirements
 
-- **Python 3.11+**
+- **Python 3.12+**
 - **Git** (must be run from a git repository)
-- **AI Backend CLI** (one of the following):
+- **AI Backend CLI** (at least one):
   - [Auggie CLI](https://docs.augmentcode.com/cli) (requires Node.js 22+)
   - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview)
   - [Cursor](https://www.cursor.com/cli)
+  - [Aider](https://aider.chat)
+  - [Gemini CLI](https://ai.google.dev)
+  - [Codex CLI](https://openai.com)
 
 > Backend requirements are verified during first-run setup.
 
@@ -309,8 +371,7 @@ pip install ingot
 ### Install from Source
 
 ```bash
-# Clone the repository
-git clone https://github.com/Amiad5298/AI-Platform.git
+git clone https://github.com/Amiad5298/INGOT.git
 cd AI-Platform
 
 # Create and activate virtual environment
@@ -324,10 +385,7 @@ pip install -e ".[dev]"
 ### Verify Installation
 
 ```bash
-# Check version
 ingot --version
-
-# View help
 ingot --help
 ```
 
@@ -335,9 +393,9 @@ ingot --help
 
 On first run, INGOT launches an onboarding wizard that walks you through backend setup:
 
-1. **Select AI Backend** — choose Auggie, Claude Code, or Cursor
-2. **Verify Installation** — INGOT checks that the CLI is installed and provides installation links if not
-3. **Save Configuration** — your choice is saved to `~/.ingot-config` as `AI_BACKEND`
+1. **Select AI Backend** - choose your preferred AI coding assistant
+2. **Verify Installation** - INGOT checks that the CLI is installed
+3. **Save Configuration** - your choice is saved to `~/.ingot-config` as `AI_BACKEND`
 
 ```
 $ ingot PROJECT-123
@@ -349,12 +407,13 @@ $ ingot PROJECT-123
   > Auggie (Augment Code CLI)
     Claude Code CLI
     Cursor
+    Aider
+    Gemini
+    Codex
 
-  ✓ Auggie CLI detected (v0.15.2).
+  ✓ Backend detected and configured.
   ✓ Configuration saved to ~/.ingot-config
 ```
-
-**Note:** Azure DevOps, Monday, and Trello require fallback credentials regardless of your backend choice. See [Platform Configuration Guide](docs/platform-configuration.md) for setup instructions.
 
 ## Usage
 
@@ -362,20 +421,13 @@ $ ingot PROJECT-123
 
 ```bash
 # Start workflow with a ticket URL (auto-detected platform)
-ingot https://company.atlassian.net/browse/PROJECT-123     # Jira
-ingot https://linear.app/team/issue/ENG-456                 # Linear
-ingot https://github.com/owner/repo/issues/42               # GitHub
+ingot https://company.atlassian.net/browse/PROJECT-123
 
-# Start with ticket ID (may need --platform for ambiguous IDs)
+# Start with ticket ID
 ingot PROJECT-123 --platform jira
-ingot ENG-456 --platform linear
-ingot owner/repo#42                                          # GitHub (unambiguous)
 
 # Show interactive main menu
 ingot
-
-# Check version (confirm supported flags)
-ingot --version
 
 # View current configuration
 ingot --config
@@ -383,34 +435,35 @@ ingot --config
 
 ### Command-Line Options
 
-```bash
+```
 ingot [OPTIONS] [TICKET]
 
 Arguments:
   TICKET                      Ticket ID or URL from a supported platform
-                              Examples: PROJ-123, https://jira.example.com/browse/PROJ-123,
-                              https://linear.app/team/issue/ENG-456, owner/repo#42
 
 Platform Options:
   --platform, -p PLATFORM     Override platform detection (jira, linear, github,
                               azure_devops, monday, trello)
 
 Backend Options:
-  --backend, -b BACKEND       Override AI backend for this run (auggie, claude, cursor)
+  --backend, -b BACKEND       Override AI backend (auggie, claude, cursor,
+                              aider, gemini, codex)
 
 Model Options:
   --model, -m MODEL           Override AI model for all phases
-  --planning-model MODEL      Model specifically for Steps 1-2 (planning)
-  --impl-model MODEL          Model specifically for Step 3 (implementation)
+  --planning-model MODEL      Model for Steps 1-2 (planning)
+  --impl-model MODEL          Model for Step 3 (implementation)
 
 Workflow Options:
-  --skip-clarification        Skip the clarification step
+  --skip-clarification        Skip the clarification step (Step 1.5)
   --no-squash                 Don't squash checkpoint commits at end
-  --force-jira-check          Force fresh Jira integration check
+  --force-integration-check   Force fresh platform integration check
   --enable-review             Enable automated code review after task execution
   --dirty-tree-policy POLICY  Handle uncommitted changes: 'fail-fast' (default) or 'warn'
-                              - 'fail-fast': Abort if working tree has uncommitted changes
-                              - 'warn': Continue with warning (diffs may include unrelated changes)
+  --auto-update-docs /
+    --no-auto-update-docs     Enable/disable automatic documentation updates (Step 4)
+  --auto-commit /
+    --no-auto-commit          Enable/disable automatic commit (Step 5)
 
 Parallel Execution:
   --parallel/--no-parallel    Enable/disable parallel task execution
@@ -436,17 +489,19 @@ Other:
 #### Standard Feature Development
 
 ```bash
-# Start a new feature
 ingot PROJ-456
 
 # INGOT will:
 # 1. Fetch ticket from platform
 # 2. Ask if you want to add context
-# 3. Create feature branch (e.g., proj-456-add-user-authentication)
-# 4. Generate implementation plan
-# 5. Generate task list (you review/approve)
-# 6. Execute tasks with progress tracking
-# 7. Squash commits at end
+# 3. Detect conflicts (if context provided)
+# 4. Create feature branch
+# 5. Generate implementation plan (Step 1)
+# 6. Run interactive clarification (Step 1.5, if not skipped)
+# 7. Generate task list with approval loop (Step 2)
+# 8. Execute tasks in two phases (Step 3)
+# 9. Update documentation (Step 4)
+# 10. Commit changes (Step 5)
 ```
 
 #### Fast Mode (Skip Clarification)
@@ -458,7 +513,7 @@ ingot PROJ-789 --skip-clarification
 #### Custom Model Selection
 
 ```bash
-# Use specific model for planning (faster, cheaper)
+# Use specific model for planning vs implementation
 ingot PROJ-101 --planning-model claude-sonnet-4-5 --impl-model claude-opus-4
 
 # Use same model for everything
@@ -476,6 +531,26 @@ ingot PROJ-202 --no-parallel
 
 # Stop immediately on any task failure
 ingot PROJ-202 --fail-fast
+```
+
+#### With Code Review
+
+```bash
+# Enable automated code review with auto-fix
+ingot PROJ-303 --enable-review
+```
+
+#### Documentation and Commit Control
+
+```bash
+# Skip automatic documentation updates
+ingot PROJ-404 --no-auto-update-docs
+
+# Skip automatic commit
+ingot PROJ-404 --no-auto-commit
+
+# Skip both
+ingot PROJ-404 --no-auto-update-docs --no-auto-commit
 ```
 
 ## Configuration
@@ -499,57 +574,77 @@ DEFAULT_PLATFORM=""  # Options: jira, linear, github, azure_devops, monday, trel
 SKIP_CLARIFICATION="false"
 SQUASH_AT_END="true"
 AUTO_OPEN_FILES="true"
+AUTO_UPDATE_DOCS="true"
+AUTO_COMMIT="true"
 
 # Parallel Execution
 PARALLEL_EXECUTION_ENABLED="true"
 MAX_PARALLEL_TASKS="3"
 FAIL_FAST="false"
 
-# Custom Subagent Names (customize agent identifiers)
+# Fetch Strategy
+FETCH_STRATEGY_DEFAULT="auto"      # Options: auto, agent, direct
+FETCH_CACHE_DURATION_HOURS="24"
+FETCH_TIMEOUT_SECONDS="30"
+FETCH_MAX_RETRIES="3"
+
+# Custom Subagent Names
 SUBAGENT_PLANNER="ingot-planner"
 SUBAGENT_TASKLIST="ingot-tasklist"
+SUBAGENT_TASKLIST_REFINER="ingot-tasklist-refiner"
 SUBAGENT_IMPLEMENTER="ingot-implementer"
 SUBAGENT_REVIEWER="ingot-reviewer"
+SUBAGENT_FIXER="ingot-implementer"
+SUBAGENT_DOC_UPDATER="ingot-doc-updater"
 ```
 
 ### Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `AI_BACKEND` | string | "" | AI backend (auggie, claude, cursor) — set during first run |
-| `PLANNING_MODEL` | string | "" | AI model for Steps 1-2 |
-| `IMPLEMENTATION_MODEL` | string | "" | AI model for Step 3 |
-| `DEFAULT_PLATFORM` | string | "" | Default platform for ambiguous ticket IDs (empty = auto-detect) |
-| `SKIP_CLARIFICATION` | bool | false | Skip clarification step |
-| `SQUASH_AT_END` | bool | true | Squash commits after workflow |
-| `AUTO_OPEN_FILES` | bool | true | Auto-open generated files |
-| `PARALLEL_EXECUTION_ENABLED` | bool | true | Enable parallel task execution |
-| `MAX_PARALLEL_TASKS` | int | 3 | Max concurrent tasks (1-5) |
-| `FAIL_FAST` | bool | false | Stop on first task failure |
-| `SUBAGENT_PLANNER` | string | "ingot-planner" | Custom planner subagent name |
-| `SUBAGENT_TASKLIST` | string | "ingot-tasklist" | Custom tasklist subagent name |
-| `SUBAGENT_IMPLEMENTER` | string | "ingot-implementer" | Custom implementer subagent name |
-| `SUBAGENT_REVIEWER` | string | "ingot-reviewer" | Custom reviewer subagent name |
+| `AI_BACKEND` | string | `""` | AI backend (auggie, claude, cursor, aider, gemini, codex) |
+| `PLANNING_MODEL` | string | `""` | AI model for Steps 1-2 |
+| `IMPLEMENTATION_MODEL` | string | `""` | AI model for Step 3 |
+| `DEFAULT_PLATFORM` | string | `""` | Default platform for ambiguous ticket IDs |
+| `SKIP_CLARIFICATION` | bool | `false` | Skip clarification step (Step 1.5) |
+| `SQUASH_AT_END` | bool | `true` | Squash commits after workflow |
+| `AUTO_OPEN_FILES` | bool | `true` | Auto-open generated files |
+| `AUTO_UPDATE_DOCS` | bool | `true` | Enable automatic documentation updates (Step 4) |
+| `AUTO_COMMIT` | bool | `true` | Enable automatic commit (Step 5) |
+| `PARALLEL_EXECUTION_ENABLED` | bool | `true` | Enable parallel task execution |
+| `MAX_PARALLEL_TASKS` | int | `3` | Max concurrent tasks (1-5) |
+| `FAIL_FAST` | bool | `false` | Stop on first task failure |
+| `FETCH_STRATEGY_DEFAULT` | string | `"auto"` | Fetch strategy: auto, agent, or direct |
+| `FETCH_CACHE_DURATION_HOURS` | int | `24` | Ticket cache TTL in hours |
+| `FETCH_TIMEOUT_SECONDS` | int | `30` | Fetch timeout per request |
+| `FETCH_MAX_RETRIES` | int | `3` | Max fetch retry attempts |
+| `SUBAGENT_PLANNER` | string | `"ingot-planner"` | Custom planner agent name |
+| `SUBAGENT_TASKLIST` | string | `"ingot-tasklist"` | Custom tasklist agent name |
+| `SUBAGENT_TASKLIST_REFINER` | string | `"ingot-tasklist-refiner"` | Custom tasklist refiner agent name |
+| `SUBAGENT_IMPLEMENTER` | string | `"ingot-implementer"` | Custom implementer agent name |
+| `SUBAGENT_REVIEWER` | string | `"ingot-reviewer"` | Custom reviewer agent name |
+| `SUBAGENT_FIXER` | string | `"ingot-implementer"` | Custom fixer agent name |
+| `SUBAGENT_DOC_UPDATER` | string | `"ingot-doc-updater"` | Custom doc updater agent name |
+
+### Configuration Hierarchy
+
+Configuration is resolved with the following priority (highest to lowest):
+
+1. **CLI flags** (e.g., `--backend claude`)
+2. **Environment variables** (e.g., `INGOT_LOG`)
+3. **Local config** (`.ingot` file in project or parent directories)
+4. **Global config** (`~/.ingot-config`)
+5. **Built-in defaults**
 
 ### Changing AI Backend
 
-To switch your default backend, edit `AI_BACKEND` in `~/.ingot-config`:
-
 ```bash
-AI_BACKEND="claude"   # Options: auggie, claude, cursor
-```
+# Edit the default in ~/.ingot-config
+AI_BACKEND="claude"   # Options: auggie, claude, cursor, aider, gemini, codex
 
-Or override for a single run without changing the default:
-
-```bash
+# Or override for a single run
 ingot --backend cursor PROJECT-123
-ingot -b auggie PROJECT-123
 ```
-
-Installation links:
-- Auggie: https://docs.augmentcode.com/cli
-- Claude Code: https://docs.anthropic.com/en/docs/claude-code/overview
-- Cursor: https://www.cursor.com/cli
 
 ### Platform Credentials
 
@@ -560,17 +655,6 @@ See the **[Platform Configuration Guide](docs/platform-configuration.md)** for:
 - Security best practices for storing credentials
 - Troubleshooting common authentication errors
 
-### Interactive Configuration
-
-```bash
-# Run INGOT without arguments to access the menu
-ingot
-
-# Select "Configure settings" from the menu
-```
-
-[Screenshot placeholder: Interactive configuration menu]
-
 ### View Current Configuration
 
 ```bash
@@ -579,16 +663,15 @@ ingot --config
 
 ## Agent Customization
 
-INGOT uses specialized AI agents defined in `.augment/agents/`. These are created automatically on first run and updated when INGOT detects newer internal templates.
-
-> **Note:** The `.augment/agents/` directory and agent file format are specific to the **Auggie backend**. Claude Code and Cursor use their own agent/configuration systems.
+INGOT uses specialized AI agents defined in `.augment/agents/`. These are created automatically on first run and updated when INGOT detects newer internal templates. All backends load subagent prompts from this directory.
 
 ### Agent Files
 
 | File | Purpose |
-|------|---------|
+|------|------------|
 | `.augment/agents/ingot-planner.md` | Creates implementation plans from tickets |
 | `.augment/agents/ingot-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
+| `.augment/agents/ingot-tasklist-refiner.md` | Extracts test tasks into the INDEPENDENT category |
 | `.augment/agents/ingot-implementer.md` | Executes individual tasks with codebase awareness |
 | `.augment/agents/ingot-reviewer.md` | Validates completed tasks with PASS/NEEDS_ATTENTION output |
 
@@ -609,17 +692,6 @@ ingot_content_hash: abc123def456
 # Your custom instructions here...
 ```
 
-### Frontmatter Fields
-
-| Field | Description |
-|-------|-------------|
-| `name` | Agent identifier (used with `--agent` flag in Auggie) |
-| `description` | Human-readable description shown in agent listings |
-| `model` | AI model for this agent (e.g., `claude-sonnet-4-5`, `claude-opus-4`) |
-| `color` | Terminal color for agent output (blue, green, purple, etc.) |
-| `ingot_version` | INGOT version that created/updated this agent |
-| `ingot_content_hash` | Hash for detecting template updates (auto-managed) |
-
 ### Version Management
 
 INGOT tracks agent file versions:
@@ -631,44 +703,83 @@ INGOT tracks agent file versions:
 
 ```
 ingot/
-├── __init__.py          # Version and constants
-├── __main__.py          # Module entry point (python -m ingot)
-├── cli.py               # CLI entry point and command handling
-├── config/
-│   ├── manager.py       # Configuration loading/saving
-│   └── settings.py      # Settings dataclass
-├── integrations/
-│   ├── agents.py        # Subagent file management and versioning
-│   ├── auggie.py        # Auggie CLI wrapper
-│   ├── git.py           # Git operations
-│   └── jira.py          # Jira ticket parsing
-├── ui/
-│   ├── keyboard.py      # Keyboard handling for TUI
-│   ├── log_buffer.py    # Log buffering for TUI display
-│   ├── menus.py         # Interactive menus
-│   ├── prompts.py       # User prompts
-│   ├── tui.py           # Terminal UI for execution
-│   └── plan_tui.py      # TUI for plan generation
-├── utils/
-│   ├── console.py       # Rich console output
-│   ├── error_analysis.py # Error pattern analysis
-│   ├── errors.py        # Error handling
-│   ├── logging.py       # Logging utilities
-│   └── retry.py         # Rate limit retry logic
-└── workflow/
-    ├── autofix.py       # Auto-fix after code review failures
-    ├── events.py        # TUI event system for parallel execution
-    ├── git_utils.py     # Baseline-anchored diff utilities
-    ├── log_management.py # Log file management
-    ├── prompts.py       # Task prompt building
-    ├── review.py        # Phase review logic (PASS/NEEDS_ATTENTION)
-    ├── runner.py        # Main workflow orchestration
-    ├── state.py         # Workflow state management
-    ├── step1_plan.py    # Step 1: Plan creation
-    ├── step2_tasklist.py # Step 2: Task list generation
-    ├── step3_execute.py # Step 3: Task execution
-    ├── tasks.py         # Task parsing and status
-    └── task_memory.py   # Cross-task context
+├── __init__.py              # Version and constants
+├── __main__.py              # Module entry point (python -m ingot)
+├── cli/                     # CLI layer (Typer-based)
+│   ├── app.py              # Typer application and main command
+│   ├── menu.py             # Main menu and configuration UI
+│   ├── platform.py         # Platform detection and disambiguation
+│   ├── ticket.py           # Ticket fetching logic
+│   ├── workflow.py         # Workflow orchestration
+│   └── async_helpers.py    # Async execution helpers
+├── config/                  # Configuration management
+│   ├── manager.py          # ConfigManager (cascading hierarchy)
+│   ├── settings.py         # Settings dataclass
+│   ├── fetch_config.py     # Fetch strategy and backend config
+│   ├── backend_resolver.py # Backend resolution logic
+│   ├── validation.py       # Configuration validation
+│   └── display.py          # Configuration display
+├── integrations/            # External integrations
+│   ├── backends/           # AI backend implementations
+│   │   ├── base.py        # AIBackend protocol and BaseBackend
+│   │   ├── factory.py     # BackendFactory for instantiation
+│   │   ├── auggie.py      # Auggie backend
+│   │   ├── claude.py      # Claude Code backend
+│   │   ├── cursor.py      # Cursor backend
+│   │   ├── aider.py       # Aider backend
+│   │   ├── gemini.py      # Gemini backend
+│   │   └── codex.py       # Codex backend
+│   ├── providers/          # Ticket platform providers
+│   │   ├── base.py        # IssueTrackerProvider ABC
+│   │   ├── registry.py    # Provider registry
+│   │   ├── detector.py    # Platform detection
+│   │   ├── jira.py        # Jira provider
+│   │   ├── linear.py      # Linear provider
+│   │   ├── github.py      # GitHub provider
+│   │   ├── azure_devops.py # Azure DevOps provider
+│   │   ├── monday.py      # Monday provider
+│   │   └── trello.py      # Trello provider
+│   ├── fetchers/           # Ticket fetching strategies
+│   ├── git.py             # Git operations
+│   ├── agents.py          # Agent file management
+│   ├── auth.py            # Authentication manager
+│   ├── cache.py           # Ticket caching
+│   └── ticket_service.py  # Unified ticket service
+├── onboarding/             # First-run setup
+│   └── flow.py            # Onboarding wizard
+├── ui/                     # User interface
+│   ├── tui.py             # Rich-based Terminal UI
+│   ├── menus.py           # Interactive menus
+│   ├── prompts.py         # User prompts (Questionary)
+│   ├── log_buffer.py      # Memory-efficient log buffer
+│   └── keyboard.py        # Keyboard event handling
+├── utils/                  # Utilities
+│   ├── errors.py          # Error hierarchy (IngotError base)
+│   ├── logging.py         # Logging setup
+│   ├── console.py         # Rich console output
+│   ├── retry.py           # Rate limit retry with backoff
+│   ├── env_utils.py       # Environment variable handling
+│   └── error_analysis.py  # Error classification
+└── workflow/               # Workflow execution engine
+    ├── runner.py           # Main workflow orchestrator
+    ├── state.py            # Workflow state management
+    ├── constants.py        # Agent names and timeout values
+    ├── events.py           # Task execution events
+    ├── tasks.py            # Task parsing, categories, metadata
+    ├── step1_plan.py       # Step 1: Plan creation
+    ├── step1_5_clarification.py  # Step 1.5: Interactive clarification
+    ├── step2_tasklist.py   # Step 2: Task list generation
+    ├── step3_execute.py    # Step 3: Task execution
+    ├── step4_update_docs.py # Step 4: Documentation updates
+    ├── step5_commit.py     # Step 5: Git commit
+    ├── parallel_executor.py # Thread-safe parallel execution
+    ├── review.py           # Phase review logic
+    ├── autofix.py          # Auto-fix after review failures
+    ├── conflict_detection.py # Semantic conflict detection
+    ├── git_utils.py        # Baseline-anchored diff utilities
+    ├── log_management.py   # Run log organization
+    ├── task_memory.py      # Cross-task learning system
+    └── prompts.py          # Task and test prompt templates
 ```
 
 ## Development
@@ -676,15 +787,12 @@ ingot/
 ### Setting Up Development Environment
 
 ```bash
-# Clone the repository
-git clone https://github.com/Amiad5298/AI-Platform.git
+git clone https://github.com/Amiad5298/INGOT.git
 cd AI-Platform
 
-# Create virtual environment
 python -m venv .venv
 source .venv/bin/activate
 
-# Install with dev dependencies
 pip install -e ".[dev]"
 ```
 
@@ -697,7 +805,10 @@ pytest
 # Run specific test file
 pytest tests/test_cli.py -v
 
-# Run with verbose output
+# Run tests in parallel
+pytest -n auto
+
+# Run with verbose output (no coverage)
 pytest -v --no-cov
 ```
 
@@ -712,6 +823,9 @@ ruff check ingot tests
 
 # Fix auto-fixable issues
 ruff check --fix ingot tests
+
+# Formatting
+ruff format ingot tests
 ```
 
 ### Test Coverage
@@ -725,7 +839,7 @@ open htmlcov/index.html
 
 ## Contributing
 
-We welcome contributions! Here's how to get started:
+Contributions are welcome! Here's how to get started:
 
 ### Reporting Issues
 
@@ -750,14 +864,10 @@ We welcome contributions! Here's how to get started:
 - Add tests for new functionality
 - Update documentation as needed
 - Keep commits atomic and well-described
-- **Do not use `AGENT_PLATFORM` / `agent_platform` naming** — the codebase uses `AI_BACKEND` / `ai_backend`. CI and pre-commit hooks reject `.py` files containing the legacy pattern (see AMI-66).
-
-### Code Style
-
 - Use type hints for all function signatures
 - Follow PEP 8 (enforced by Ruff)
 - Document public APIs with docstrings
-- Keep functions focused and testable
+- **Do not use `AGENT_PLATFORM` / `agent_platform` naming** — the codebase uses `AI_BACKEND` / `ai_backend`
 
 ## Troubleshooting
 
@@ -765,17 +875,16 @@ We welcome contributions! Here's how to get started:
 
 #### "AI Backend CLI is not installed"
 
-INGOT requires a supported AI backend CLI. Install the one matching your `AI_BACKEND` setting:
+INGOT requires a supported AI backend CLI. Install one matching your `AI_BACKEND` setting:
 
 - **Auggie**: `npm install -g @augmentcode/auggie && auggie login` — [docs](https://docs.augmentcode.com/cli)
 - **Claude Code**: See [docs.anthropic.com/en/docs/claude-code](https://docs.anthropic.com/en/docs/claude-code/overview)
 - **Cursor**: Download from [cursor.com/cli](https://www.cursor.com/cli)
-
-Run `ingot` again after installing — the onboarding wizard will re-verify.
+- **Aider**: `pip install aider-chat` — [aider.chat](https://aider.chat)
+- **Gemini**: See [ai.google.dev](https://ai.google.dev)
+- **Codex**: See [openai.com](https://openai.com)
 
 #### "Not in a git repository"
-
-INGOT must be run from within a git repository:
 
 ```bash
 cd your-project
@@ -784,8 +893,6 @@ ingot PROJECT-123
 ```
 
 #### Rate Limit Errors
-
-If you encounter rate limits during parallel execution:
 
 ```bash
 # Reduce parallelism
@@ -797,8 +904,6 @@ ingot PROJECT-123 --max-retries 10 --retry-base-delay 5
 
 #### TUI Display Issues
 
-If the TUI doesn't render correctly:
-
 ```bash
 # Force simple output mode
 ingot PROJECT-123 --no-tui
@@ -806,78 +911,36 @@ ingot PROJECT-123 --no-tui
 
 #### Dirty Working Tree Error
 
-If you see "Working tree has uncommitted changes":
-
 ```bash
 # Option 1: Stash your changes
 git stash push -m "WIP before ingot workflow"
 ingot PROJECT-123
-git stash pop  # Restore after workflow
+git stash pop
 
 # Option 2: Commit your changes
 git add -A && git commit -m "WIP"
 ingot PROJECT-123
 
-# Option 3: Continue anyway (not recommended - diffs may be polluted)
+# Option 3: Continue anyway (diffs may include unrelated changes)
 ingot PROJECT-123 --dirty-tree-policy warn
 ```
 
 #### Platform Detection Issues
 
-If INGOT detects the wrong platform:
-
 ```bash
 # Use --platform to explicitly specify
 ingot PROJ-123 --platform jira
 
-# Or set a default in configuration
-# Add to ~/.ingot-config:
-DEFAULT_PLATFORM="jira"
+# Or set a default in ~/.ingot-config
+# DEFAULT_PLATFORM="jira"
 ```
-
-#### "Platform not supported" Error
-
-For Azure DevOps, Monday, or Trello, fallback credentials are required:
-
-```bash
-# Check which platforms are configured
-ingot --config
-
-# See docs/platform-configuration.md for credential setup
-```
-
-#### Ambiguous Ticket ID
-
-Ticket IDs like `ABC-123` match both Jira and Linear formats. INGOT resolves ambiguity by:
-
-1. Checking `DEFAULT_PLATFORM` in `~/.ingot-config`
-2. Prompting you to select a platform interactively
-
-To avoid prompts, either:
-
-```bash
-# Option 1: Use --platform flag
-ingot ENG-456 --platform linear
-
-# Option 2: Set a default platform
-echo 'DEFAULT_PLATFORM=jira' >> ~/.ingot-config
-```
-
-> **Tip:** Use full URLs when possible—they're always unambiguous.
-
-#### Backend-Specific Issues
-
-- **Auggie**: If MCP integrations (Jira, Linear, GitHub) aren't working, verify `auggie login` was completed and your Auggie agent has the relevant integrations enabled.
-- **Claude Code**: Ensure the Claude Code CLI is on your `PATH` and authenticated. Consult the [Claude Code docs](https://docs.anthropic.com/en/docs/claude-code/overview) for setup.
-- **Cursor**: Ensure Cursor is installed and accessible from the terminal. See [cursor.com/cli](https://www.cursor.com/cli).
 
 ### Debug Logging
 
-INGOT writes detailed logs to `.ingot/runs/{ticket}/`. Check these for debugging:
+INGOT writes detailed logs to `.ingot/runs/{ticket}/`:
 
 ```bash
 ls -la .ingot/runs/PROJECT-123/
-cat .ingot/runs/PROJECT-123/*/task_*.log
 ```
 
 ## License
@@ -886,13 +949,8 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Acknowledgments
 
-- Supports multiple AI backends: [Auggie CLI](https://docs.augmentcode.com/cli), [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), and [Cursor](https://www.cursor.com/cli)
-- Uses [Typer](https://typer.tiangolo.com/) for CLI
-- Uses [Rich](https://rich.readthedocs.io/) for terminal UI
-- Uses [Questionary](https://questionary.readthedocs.io/) for prompts
-
----
-
-<p align="center">
-  Made with ❤️ for developers who want AI to handle the implementation details
-</p>
+Built with:
+- [Typer](https://typer.tiangolo.com/) - CLI framework
+- [Rich](https://rich.readthedocs.io/) - Terminal formatting
+- [Questionary](https://questionary.readthedocs.io/) - Interactive prompts
+- [httpx](https://www.python-httpx.org/) - HTTP client

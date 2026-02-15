@@ -24,42 +24,42 @@ INGOT supports fetching tickets from 6 platforms:
 
 ### Two Authentication Modes
 
-INGOT uses two authentication modes to fetch tickets. **"Agent integration"** refers to using an AI coding assistant's built-in platform connections (e.g., Auggie MCP tools), while **"fallback credentials"** means providing your own API keys for direct API access.
+INGOT uses two authentication modes to fetch tickets. **"Agent integration"** refers to using an AI backend's built-in MCP (Model Context Protocol) connections, while **"fallback credentials"** means providing your own API keys for direct API access.
 
-1. **Agent Integration via Auggie MCP (Primary)**
+1. **Agent Integration via MCP (Primary)**
    - Platforms: Jira, Linear, GitHub
-   - Authentication is handled by Auggie's built-in MCP (Model Context Protocol) integrations
-   - No configuration needed in INGOT—works out of the box when using Auggie
-   - Credentials are managed in your Auggie agent settings
-   - **Note:** "Auggie" is the specific AI agent implementation; if you're using a different agent or running INGOT standalone, use fallback credentials instead
+   - Backends with MCP support: **Auggie, Claude Code, Cursor**
+   - Authentication is handled by the backend's built-in MCP integrations
+   - No configuration needed in INGOT — works out of the box with any MCP-enabled backend
+   - **Note:** Backends without MCP support (Aider, Gemini, Codex) require fallback credentials for all platforms
 
 2. **Fallback Credentials (Direct API)**
    - Platforms: **All 6** (Azure DevOps, Monday, Trello **require** this)
    - Authentication via `FALLBACK_*` configuration keys
    - Credentials stored in `~/.ingot-config` or `.ingot` file
-   - Used when agent integration is unavailable or for platforms without agent support
+   - Used when the backend lacks MCP support or for platforms without MCP integration
 
 ### How Authentication Works
 
 When you run `ingot <ticket-id>`, INGOT uses the AUTO fetch strategy:
 
-1. **First**, tries Auggie MCP integration (if available for the platform)
+1. **First**, tries MCP integration (if the backend and platform both support it)
 2. **If unavailable**, falls back to direct API access using your configured credentials
 
-For Azure DevOps, Monday, and Trello, INGOT always uses direct API access since these platforms don't have Auggie MCP integration.
+For Azure DevOps, Monday, and Trello, INGOT always uses direct API access since no backend has MCP integration for these platforms.
 
 ---
 
 ## Quick Reference Table
 
-| Platform | Auggie Support | Fallback Required | Config Keys |
-|----------|---------------|-------------------|-------------|
-| Jira | ✅ Primary | Optional | `FALLBACK_JIRA_URL`, `FALLBACK_JIRA_EMAIL`, `FALLBACK_JIRA_TOKEN` |
-| Linear | ✅ Primary | Optional | `FALLBACK_LINEAR_API_KEY` |
-| GitHub | ✅ Primary | Optional | `FALLBACK_GITHUB_TOKEN` |
-| Azure DevOps | ❌ | **Required** | `FALLBACK_AZURE_DEVOPS_ORGANIZATION`, `FALLBACK_AZURE_DEVOPS_PAT` |
-| Monday | ❌ | **Required** | `FALLBACK_MONDAY_API_KEY` |
-| Trello | ❌ | **Required** | `FALLBACK_TRELLO_API_KEY`, `FALLBACK_TRELLO_TOKEN` |
+| Platform | MCP Support | Fallback Required | Config Keys |
+|----------|-------------|-------------------|-------------|
+| Jira | Auggie, Claude, Cursor | Optional | `FALLBACK_JIRA_URL`, `FALLBACK_JIRA_EMAIL`, `FALLBACK_JIRA_TOKEN` |
+| Linear | Auggie, Claude, Cursor | Optional | `FALLBACK_LINEAR_API_KEY` |
+| GitHub | Auggie, Claude, Cursor | Optional | `FALLBACK_GITHUB_TOKEN` |
+| Azure DevOps | -- | **Required** | `FALLBACK_AZURE_DEVOPS_ORGANIZATION`, `FALLBACK_AZURE_DEVOPS_PAT` |
+| Monday | -- | **Required** | `FALLBACK_MONDAY_API_KEY` |
+| Trello | -- | **Required** | `FALLBACK_TRELLO_API_KEY`, `FALLBACK_TRELLO_TOKEN` |
 
 ---
 
@@ -174,13 +174,13 @@ ingot --platform jira PROJ-123
 
 ---
 
-## Platforms with Auggie Integration
+## Platforms with MCP Integration
 
-These platforms work out-of-the-box when using Auggie. Fallback credentials are optional but recommended for CI/CD environments or as a backup.
+These platforms work out-of-the-box when using an MCP-enabled backend (Auggie, Claude Code, or Cursor). Fallback credentials are optional but recommended for CI/CD environments or as a backup.
 
 ### Jira
 
-Jira is fully integrated with Auggie's MCP tools. When using Auggie, no additional configuration is needed.
+Jira is fully integrated via MCP. When using Auggie, Claude Code, or Cursor, no additional configuration is needed.
 
 #### Supported Input Formats
 
@@ -226,7 +226,7 @@ FALLBACK_JIRA_TOKEN=${JIRA_API_TOKEN}
 
 ### Linear
 
-Linear is fully integrated with Auggie's MCP tools. When using Auggie, no additional configuration is needed.
+Linear is fully integrated via MCP. When using Auggie, Claude Code, or Cursor, no additional configuration is needed.
 
 #### Supported Input Formats
 
@@ -269,7 +269,7 @@ FALLBACK_LINEAR_API_KEY=${LINEAR_API_KEY}
 
 ### GitHub
 
-GitHub Issues is fully integrated with Auggie's MCP tools. When using Auggie, no additional configuration is needed.
+GitHub Issues is fully integrated via MCP. When using Auggie, Claude Code, or Cursor, no additional configuration is needed.
 
 #### Supported Input Formats
 
@@ -320,11 +320,11 @@ FALLBACK_GITHUB_TOKEN=${GITHUB_TOKEN}
 
 ## Platforms Requiring Fallback Credentials
 
-These platforms do not have Auggie MCP integration. You **must** configure fallback credentials to use them.
+These platforms do not have MCP integration in any backend. You **must** configure fallback credentials to use them.
 
 ### Azure DevOps
 
-Azure DevOps requires fallback credentials—there is no Auggie MCP integration.
+Azure DevOps requires fallback credentials — no backend has MCP integration for this platform.
 
 #### Supported Input Formats
 
@@ -374,7 +374,7 @@ FALLBACK_AZURE_DEVOPS_PAT=${AZURE_DEVOPS_PAT}
 
 ### Monday.com
 
-Monday.com requires fallback credentials—there is no Auggie MCP integration.
+Monday.com requires fallback credentials — no backend has MCP integration for this platform.
 
 #### Supported Input Formats
 
@@ -417,7 +417,7 @@ FALLBACK_MONDAY_API_KEY=${MONDAY_API_KEY}
 
 ### Trello
 
-Trello requires fallback credentials—there is no Auggie MCP integration.
+Trello requires fallback credentials — no backend has MCP integration for this platform.
 
 #### Supported Input Formats
 
@@ -485,9 +485,12 @@ Here's a complete example `~/.ingot-config` file:
 DEFAULT_PLATFORM=jira
 
 # ============================================================
-# AGENT CONFIGURATION (for Auggie users)
+# AGENT CONFIGURATION
 # ============================================================
-AI_BACKEND=auggie
+AI_BACKEND=auggie    # Options: auggie, claude, cursor, aider, gemini, codex
+
+# MCP integration overrides (optional - auto-detected from backend)
+# Set to false to force fallback credentials for a specific platform
 AGENT_INTEGRATION_JIRA=true
 AGENT_INTEGRATION_LINEAR=true
 AGENT_INTEGRATION_GITHUB=true
@@ -499,26 +502,26 @@ AGENT_INTEGRATION_MONDAY=false
 # FALLBACK CREDENTIALS
 # ============================================================
 
-# --- Azure DevOps (REQUIRED - no Auggie integration) ---
+# --- Azure DevOps (REQUIRED - no MCP integration) ---
 FALLBACK_AZURE_DEVOPS_ORGANIZATION=myorg
 FALLBACK_AZURE_DEVOPS_PAT=${AZURE_DEVOPS_PAT}
 
-# --- Trello (REQUIRED - no Auggie integration) ---
+# --- Trello (REQUIRED - no MCP integration) ---
 FALLBACK_TRELLO_API_KEY=${TRELLO_API_KEY}
 FALLBACK_TRELLO_TOKEN=${TRELLO_TOKEN}
 
-# --- Monday (REQUIRED - no Auggie integration) ---
+# --- Monday (REQUIRED - no MCP integration) ---
 FALLBACK_MONDAY_API_KEY=${MONDAY_API_KEY}
 
-# --- Jira (OPTIONAL - for fallback when Auggie unavailable) ---
+# --- Jira (OPTIONAL - for fallback when MCP unavailable) ---
 # FALLBACK_JIRA_URL=https://company.atlassian.net
 # FALLBACK_JIRA_EMAIL=user@example.com
 # FALLBACK_JIRA_TOKEN=${JIRA_API_TOKEN}
 
-# --- Linear (OPTIONAL - for fallback when Auggie unavailable) ---
+# --- Linear (OPTIONAL - for fallback when MCP unavailable) ---
 # FALLBACK_LINEAR_API_KEY=${LINEAR_API_KEY}
 
-# --- GitHub (OPTIONAL - for fallback when Auggie unavailable) ---
+# --- GitHub (OPTIONAL - for fallback when MCP unavailable) ---
 # FALLBACK_GITHUB_TOKEN=${GITHUB_TOKEN}
 ```
 

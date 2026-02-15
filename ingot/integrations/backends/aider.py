@@ -66,6 +66,11 @@ class AiderBackend(BaseBackend):
         """Return whether this backend supports parallel execution."""
         return True
 
+    @property
+    def supports_plan_mode(self) -> bool:
+        """Aider supports plan mode via --chat-mode ask."""
+        return True
+
     # _resolve_subagent() and _compose_prompt() inherited from BaseBackend
 
     @staticmethod

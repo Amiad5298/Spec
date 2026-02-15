@@ -581,6 +581,52 @@ class TestAiderBackendDeprecatedArchitect:
         call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("chat_mode") == "ask"
 
+    def test_architect_true_takes_precedence_over_plan_mode(self):
+        """When both architect=True and plan_mode=True, architect wins."""
+        backend = AiderBackend()
+
+        with (
+            patch.object(
+                backend._client, "run_with_callback", return_value=(True, "output")
+            ) as mock_run,
+            warnings.catch_warnings(record=True) as w,
+        ):
+            warnings.simplefilter("always")
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=True,
+                architect=True,
+            )
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("chat_mode") == "architect"
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+
+    def test_architect_false_falls_through_to_plan_mode(self):
+        """When architect=False and plan_mode=True, plan_mode applies after deprecation warning."""
+        backend = AiderBackend()
+
+        with (
+            patch.object(
+                backend._client, "run_with_callback", return_value=(True, "output")
+            ) as mock_run,
+            warnings.catch_warnings(record=True) as w,
+        ):
+            warnings.simplefilter("always")
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=True,
+                architect=False,
+            )
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("chat_mode") == "ask"
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+
     def test_architect_run_print_with_output(self):
         backend = AiderBackend()
 

@@ -400,6 +400,7 @@ class TestAiderClientModuleExports:
 
         assert set(__all__) == {
             "AIDER_CLI_NAME",
+            "AiderChatMode",
             "AiderClient",
             "check_aider_installed",
             "looks_like_rate_limit",

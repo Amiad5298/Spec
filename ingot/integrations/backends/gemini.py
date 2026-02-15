@@ -62,7 +62,33 @@ class GeminiBackend(BaseBackend):
         """Return whether this backend supports parallel execution."""
         return True
 
+    @property
+    def supports_plan_mode(self) -> bool:
+        """Gemini supports plan mode via --approval-mode=plan."""
+        return True
+
     # _resolve_subagent() inherited from BaseBackend
+
+    @staticmethod
+    def _resolve_approval_mode(plan_mode: bool) -> str:
+        """Resolve the Gemini approval mode and log a one-time warning if needed.
+
+        Args:
+            plan_mode: If True, use "plan" mode; otherwise "yolo".
+
+        Returns:
+            The approval mode string for the Gemini CLI.
+        """
+        if plan_mode:
+            log_once(
+                "gemini_plan_mode",
+                "Gemini plan mode (--approval-mode=plan) requires the following "
+                "in ~/.gemini/settings.json:\n"
+                '  {"experimental": {"plan": true}}\n'
+                "A restart of the Gemini CLI may be required after changing settings.",
+            )
+            return "plan"
+        return "yolo"
 
     def _build_system_prompt_env(
         self, subagent_prompt: str | None
@@ -118,16 +144,7 @@ class GeminiBackend(BaseBackend):
         """
         resolved_model, subagent_prompt = self._resolve_subagent(subagent, model)
         env, temp_path = self._build_system_prompt_env(subagent_prompt)
-        approval_mode = "plan" if plan_mode else "yolo"
-
-        if plan_mode:
-            log_once(
-                "gemini_plan_mode",
-                "Gemini plan mode (--approval-mode=plan) requires the following "
-                "in ~/.gemini/settings.json:\n"
-                '  {"experimental": {"plan": true}}\n'
-                "A restart of the Gemini CLI may be required after changing settings.",
-            )
+        approval_mode = self._resolve_approval_mode(plan_mode)
 
         try:
             if timeout_seconds is not None:
@@ -171,16 +188,7 @@ class GeminiBackend(BaseBackend):
         """
         resolved_model, subagent_prompt = self._resolve_subagent(subagent, model)
         env, temp_path = self._build_system_prompt_env(subagent_prompt)
-        approval_mode = "plan" if plan_mode else "yolo"
-
-        if plan_mode:
-            log_once(
-                "gemini_plan_mode",
-                "Gemini plan mode (--approval-mode=plan) requires the following "
-                "in ~/.gemini/settings.json:\n"
-                '  {"experimental": {"plan": true}}\n'
-                "A restart of the Gemini CLI may be required after changing settings.",
-            )
+        approval_mode = self._resolve_approval_mode(plan_mode)
 
         try:
             return self._client.run_print_with_output(
@@ -216,16 +224,7 @@ class GeminiBackend(BaseBackend):
         """
         resolved_model, subagent_prompt = self._resolve_subagent(subagent, model)
         env, temp_path = self._build_system_prompt_env(subagent_prompt)
-        approval_mode = "plan" if plan_mode else "yolo"
-
-        if plan_mode:
-            log_once(
-                "gemini_plan_mode",
-                "Gemini plan mode (--approval-mode=plan) requires the following "
-                "in ~/.gemini/settings.json:\n"
-                '  {"experimental": {"plan": true}}\n'
-                "A restart of the Gemini CLI may be required after changing settings.",
-            )
+        approval_mode = self._resolve_approval_mode(plan_mode)
 
         try:
             return self._client.run_print_quiet(

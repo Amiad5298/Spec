@@ -67,6 +67,11 @@ class CursorBackend(BaseBackend):
         """Return whether this backend supports parallel execution."""
         return True
 
+    @property
+    def supports_plan_mode(self) -> bool:
+        """Cursor supports plan mode via --mode plan."""
+        return True
+
     # _resolve_subagent() and _compose_prompt() inherited from BaseBackend
 
     def run_with_callback(

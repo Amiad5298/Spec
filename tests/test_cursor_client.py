@@ -667,26 +667,32 @@ class TestCursorClientModeFlag:
         assert "--mode" not in cmd
 
     def test_degradation_logs_warning(self):
+        import ingot.utils.logging as logging_mod
+
+        logging_mod._logged_once_keys.discard("cursor_mode_unsupported")
+
         client = self._make_client()
         client._mode_flag_supported = False
 
-        with patch("ingot.integrations.cursor.log_message") as mock_log:
+        with patch("ingot.integrations.cursor.log_once") as mock_log_once:
             client.build_command("test", mode="plan")
 
-        mock_log.assert_called_once()
-        msg = mock_log.call_args[0][0]
-        assert "Warning" in msg
-        assert "--mode plan" in msg
-        assert "not supported" in msg
+        mock_log_once.assert_called_once()
+        key_arg = mock_log_once.call_args[0][0]
+        msg_arg = mock_log_once.call_args[0][1]
+        assert key_arg == "cursor_mode_unsupported"
+        assert "Warning" in msg_arg
+        assert "--mode plan" in msg_arg
+        assert "not supported" in msg_arg
 
     def test_no_warning_when_mode_none(self):
         client = self._make_client()
         client._mode_flag_supported = False
 
-        with patch("ingot.integrations.cursor.log_message") as mock_log:
+        with patch("ingot.integrations.cursor.log_once") as mock_log_once:
             client.build_command("test", mode=None)
 
-        mock_log.assert_not_called()
+        mock_log_once.assert_not_called()
 
 
 class TestCursorClientModuleExports:

@@ -8,7 +8,6 @@ from collections.abc import Generator
 from contextlib import contextmanager
 
 from ingot.config.manager import ConfigManager
-from ingot.integrations.agents import ensure_agents_installed
 from ingot.integrations.backends.base import AIBackend
 from ingot.integrations.git import (
     create_branch,
@@ -121,6 +120,9 @@ def run_ingot_workflow(
 
         # Ensure INGOT subagent files are installed (includes .gitignore configuration)
         # This is done AFTER dirty state handling so the .gitignore updates aren't discarded
+        # Lazy import to break circular: agents → workflow.constants → workflow.__init__ → runner → agents
+        from ingot.integrations.agents import ensure_agents_installed
+
         if not ensure_agents_installed():
             print_error("Failed to install INGOT subagent files")
             return False
@@ -320,7 +322,6 @@ def _offer_cleanup(state: WorkflowState, original_branch: str) -> None:
 __all__ = [
     "run_ingot_workflow",
     "workflow_cleanup",
-    # Re-exported from conflict_detection module for backward compatibility
     "_detect_context_conflict",
     "detect_context_conflict",
 ]

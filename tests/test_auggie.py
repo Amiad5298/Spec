@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 from ingot.integrations.auggie import (
     AgentDefinition,
     AuggieClient,
-    AuggieRateLimitError,
     _parse_model_list,
     check_auggie_installed,
     extract_model_id,
@@ -15,6 +14,7 @@ from ingot.integrations.auggie import (
     looks_like_rate_limit,
     version_gte,
 )
+from ingot.utils.errors import AuggieRateLimitError
 from ingot.workflow.constants import (
     DEFAULT_EXECUTION_TIMEOUT,
     FIRST_RUN_TIMEOUT,

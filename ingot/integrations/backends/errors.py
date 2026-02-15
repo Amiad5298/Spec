@@ -7,14 +7,11 @@ other backends.
 All errors inherit from IngotError to leverage exit code semantics and
 the existing exception hierarchy.
 
-Note: BackendRateLimitError and AuggieRateLimitError are defined in
-ingot.utils.errors (the dependency-free base error module) to break
-circular imports. They are re-exported here for backward compatibility.
+Note: BackendRateLimitError is defined in ingot.utils.errors to break
+circular imports. It is re-exported here as backends/errors is the
+natural import location for backend error types.
 """
 
-from ingot.utils.errors import (
-    AuggieRateLimitError as AuggieRateLimitError,
-)
 from ingot.utils.errors import (
     BackendRateLimitError as BackendRateLimitError,
 )
@@ -86,7 +83,6 @@ class BackendTimeoutError(IngotError):
 
 
 __all__ = [
-    "AuggieRateLimitError",
     "BackendRateLimitError",
     "BackendNotInstalledError",
     "BackendNotConfiguredError",

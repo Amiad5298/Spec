@@ -22,7 +22,6 @@ from ingot.utils.console import (
     print_success,
     print_warning,
 )
-from ingot.utils.errors import AuggieRateLimitError as AuggieRateLimitError
 from ingot.utils.logging import log_command, log_message
 
 
@@ -723,7 +722,6 @@ def _parse_model_list(output: str) -> list[AuggieModel]:
 __all__ = [
     "AuggieModel",
     "AuggieClient",
-    "AuggieRateLimitError",
     "extract_model_id",
     "version_gte",
     "get_auggie_version",

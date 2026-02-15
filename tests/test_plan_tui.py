@@ -1,8 +1,4 @@
-"""Tests for TaskRunnerUI in single-operation mode.
-
-This module tests the unified TaskRunnerUI class when used in single-operation mode,
-which replaces the deprecated StreamingOperationUI class.
-"""
+"""Tests for TaskRunnerUI in single-operation mode."""
 
 import time
 from pathlib import Path
@@ -10,12 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ingot.ui.plan_tui import (
+from ingot.ui.tui import (
     DEFAULT_VERBOSE_LINES,
     MAX_LIVENESS_WIDTH,
     REFRESH_RATE,
+    TaskRunnerUI,
 )
-from ingot.ui.tui import TaskRunnerUI
 
 
 class TestTaskRunnerUISingleOperationMode:

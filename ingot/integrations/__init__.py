@@ -2,7 +2,6 @@
 
 This package contains:
 - git: Git operations (branch management, commits, etc.)
-- jira: Jira-specific ticket parsing (legacy, use TicketService for new code)
 - auggie: Auggie CLI wrapper and model management
 - auth: Authentication management for fallback credentials
 """
@@ -43,12 +42,6 @@ from ingot.integrations.git import (
     is_git_repo,
     squash_commits,
 )
-from ingot.integrations.jira import (
-    JiraTicket,
-    check_jira_integration,
-    fetch_ticket_info,
-    parse_jira_ticket,
-)
 from ingot.integrations.ticket_service import (
     TicketService,
     create_ticket_service,
@@ -68,10 +61,6 @@ __all__ = [
     "TicketCache",
     "InMemoryTicketCache",
     "FileBasedTicketCache",
-    # Note: _get_global_cache, _set_global_cache, _clear_global_cache are
-    # internal APIs imported above for testing/legacy support only.
-    # They are intentionally NOT exported in __all__ per AMI-32 spec.
-    # Production code should use dependency injection via TicketService.
     # Git
     "DirtyStateAction",
     "is_git_repo",
@@ -86,11 +75,6 @@ __all__ = [
     "add_to_gitignore",
     "create_checkpoint_commit",
     "squash_commits",
-    # Jira (legacy - use TicketService for new code)
-    "JiraTicket",
-    "parse_jira_ticket",
-    "check_jira_integration",
-    "fetch_ticket_info",
     # Auggie
     "AuggieModel",
     "AuggieClient",
@@ -99,7 +83,6 @@ __all__ = [
     "check_auggie_installed",
     "install_auggie",
     "list_models",
-    # Note: INGOT_AGENT_* constants removed - import from ingot.workflow.constants
     # TicketService
     "TicketService",
     "create_ticket_service",

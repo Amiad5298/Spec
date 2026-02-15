@@ -186,11 +186,7 @@ def rate_limit_config():
 
 @pytest.fixture
 def generic_ticket():
-    """Create a standard test ticket using GenericTicket.
-
-    This is the platform-agnostic ticket fixture that should be used
-    for all workflow tests after the JiraTicket to GenericTicket migration.
-    """
+    """Create a standard test ticket using GenericTicket."""
     from ingot.integrations.providers import GenericTicket, Platform
 
     return GenericTicket(

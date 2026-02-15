@@ -4,7 +4,7 @@ This package contains:
 - prompts: Questionary-based user input prompts
 - menus: Interactive menu functions
 - log_buffer: Memory-efficient log buffer with file backing
-- plan_tui: StreamingOperationUI for single long-running operations
+- tui: TaskRunnerUI for interactive task display
 """
 
 from ingot.ui.log_buffer import TaskLogBuffer
@@ -17,7 +17,6 @@ from ingot.ui.menus import (
     show_task_checkboxes,
     show_task_review_menu,
 )
-from ingot.ui.plan_tui import StreamingOperationUI
 from ingot.ui.prompts import (
     custom_style,
     prompt_checkbox,
@@ -30,8 +29,6 @@ from ingot.ui.prompts import (
 __all__ = [
     # Log Buffer
     "TaskLogBuffer",
-    # Streaming Operation TUI
-    "StreamingOperationUI",
     # Prompts
     "custom_style",
     "prompt_checkbox",

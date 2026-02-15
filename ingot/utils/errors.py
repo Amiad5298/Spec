@@ -128,13 +128,10 @@ class GitOperationError(IngotError):
 # ── Rate-limit exceptions ────────────────────────────────────────────────────
 # Defined here (in the dependency-free base error module) to break the
 # circular import chain: auggie.py → utils → utils.retry → auggie.py.
-# Re-exported from their original modules for backward compatibility.
 
 
 class AuggieRateLimitError(Exception):
     """Raised when Auggie CLI output indicates a rate limit error.
-
-    Re-exported from ingot.integrations.auggie for backward compatibility.
 
     Attributes:
         output: The output that triggered rate limit detection
@@ -147,8 +144,6 @@ class AuggieRateLimitError(Exception):
 
 class BackendRateLimitError(IngotError):
     """Raised when any backend hits a rate limit.
-
-    Re-exported from ingot.integrations.backends.errors for backward compatibility.
 
     Attributes:
         output: The output that triggered rate limit detection

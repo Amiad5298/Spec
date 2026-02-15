@@ -17,10 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import TYPE_CHECKING, Any, ClassVar, TypedDict
-
-if TYPE_CHECKING:
-    from ingot.integrations.jira import JiraTicket
+from typing import Any, ClassVar, TypedDict
 
 # Pre-compiled regex patterns for performance optimization
 # These are compiled once at module load time instead of on each function call
@@ -674,30 +671,6 @@ class GenericTicket:
             ticket_data["platform_metadata"] = {}
 
         return cls(**ticket_data)
-
-    @classmethod
-    def from_jira(cls, jira_ticket: JiraTicket) -> GenericTicket:
-        """Create GenericTicket from a legacy JiraTicket.
-
-        This factory method encapsulates the mapping logic from the legacy
-        JiraTicket dataclass to GenericTicket. Use this instead of manually
-        constructing GenericTicket from JiraTicket fields.
-
-        Args:
-            jira_ticket: JiraTicket instance from ingot.integrations.jira
-
-        Returns:
-            GenericTicket with fields mapped from JiraTicket
-        """
-        return cls(
-            id=jira_ticket.ticket_id,
-            platform=Platform.JIRA,
-            url=jira_ticket.ticket_url,
-            title=jira_ticket.title,
-            description=jira_ticket.description,
-            branch_summary=jira_ticket.summary,
-            full_info=jira_ticket.full_info,
-        )
 
 
 class IssueTrackerProvider(ABC):

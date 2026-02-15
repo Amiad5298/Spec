@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ingot.integrations.auggie import AuggieRateLimitError
 from ingot.integrations.backends.errors import BackendRateLimitError
+from ingot.utils.errors import AuggieRateLimitError
 from ingot.utils.retry import (
     RateLimitExceededError,
     _is_retryable_error,

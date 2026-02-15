@@ -6,16 +6,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ingot.integrations.providers import GenericTicket, Platform
+from ingot.workflow.log_management import (
+    cleanup_old_runs,
+    create_run_log_dir,
+    get_log_base_dir,
+)
+from ingot.workflow.prompts import build_task_prompt
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step3_execute import (
-    _build_task_prompt,
-    _cleanup_old_runs,
-    _create_run_log_dir,
     _execute_fallback,
     _execute_task,
     _execute_task_with_callback,
     _execute_with_tui,
-    _get_log_base_dir,
     _run_post_implementation_tests,
     _show_summary,
     step_3_execute,
@@ -79,12 +81,12 @@ def sample_task():
 class TestGetLogBaseDir:
     def test_default_returns_spec_runs(self, monkeypatch):
         monkeypatch.delenv("INGOT_LOG_DIR", raising=False)
-        result = _get_log_base_dir()
+        result = get_log_base_dir()
         assert result == Path(".ingot/runs")
 
     def test_respects_environment_variable(self, monkeypatch):
         monkeypatch.setenv("INGOT_LOG_DIR", "/custom/log/dir")
-        result = _get_log_base_dir()
+        result = get_log_base_dir()
         assert result == Path("/custom/log/dir")
 
 
@@ -92,7 +94,7 @@ class TestCreateRunLogDir:
     def test_creates_timestamped_directory(self, tmp_path, monkeypatch):
         monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
-        result = _create_run_log_dir("TEST-123")
+        result = create_run_log_dir("TEST-123")
 
         assert result.exists()
         assert result.is_dir()
@@ -102,7 +104,7 @@ class TestCreateRunLogDir:
         log_dir = tmp_path / "deep" / "nested" / "path"
         monkeypatch.setenv("INGOT_LOG_DIR", str(log_dir))
 
-        result = _create_run_log_dir("TEST-456")
+        result = create_run_log_dir("TEST-456")
 
         assert result.exists()
         assert "TEST-456" in str(result)
@@ -110,7 +112,7 @@ class TestCreateRunLogDir:
     def test_returns_correct_path(self, tmp_path, monkeypatch):
         monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
-        result = _create_run_log_dir("PROJ-789")
+        result = create_run_log_dir("PROJ-789")
 
         assert isinstance(result, Path)
         assert result.parent.name == "PROJ-789"
@@ -127,7 +129,7 @@ class TestCleanupOldRuns:
             run_dir = ticket_dir / f"20260101_00000{i}"
             run_dir.mkdir()
 
-        _cleanup_old_runs("TEST-123", keep_count=2)
+        cleanup_old_runs("TEST-123", keep_count=2)
 
         remaining = list(ticket_dir.iterdir())
         assert len(remaining) == 2
@@ -143,7 +145,7 @@ class TestCleanupOldRuns:
         for d in old_dirs + new_dirs:
             (ticket_dir / d).mkdir()
 
-        _cleanup_old_runs("TEST-123", keep_count=2)
+        cleanup_old_runs("TEST-123", keep_count=2)
 
         remaining = sorted([d.name for d in ticket_dir.iterdir()])
         assert remaining == new_dirs
@@ -152,7 +154,7 @@ class TestCleanupOldRuns:
         monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
 
         # Should not raise any exception
-        _cleanup_old_runs("NONEXISTENT-123", keep_count=2)
+        cleanup_old_runs("NONEXISTENT-123", keep_count=2)
 
     def test_ignores_cleanup_errors(self, tmp_path, monkeypatch):
         monkeypatch.setenv("INGOT_LOG_DIR", str(tmp_path))
@@ -166,7 +168,7 @@ class TestCleanupOldRuns:
         # Mock shutil.rmtree to raise an exception
         with patch("shutil.rmtree", side_effect=PermissionError("Access denied")):
             # Should not raise, just ignore the error
-            _cleanup_old_runs("TEST-123", keep_count=1)
+            cleanup_old_runs("TEST-123", keep_count=1)
 
 
 class TestBuildTaskPrompt:
@@ -174,7 +176,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan content")
 
-        result = _build_task_prompt(sample_task, plan_path)
+        result = build_task_prompt(sample_task, plan_path)
 
         assert "Implement feature" in result
 
@@ -182,7 +184,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(sample_task, plan_path, is_parallel=False)
+        result = build_task_prompt(sample_task, plan_path, is_parallel=False)
 
         assert "Parallel mode: NO" in result
 
@@ -190,7 +192,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(sample_task, plan_path, is_parallel=True)
+        result = build_task_prompt(sample_task, plan_path, is_parallel=True)
 
         assert "Parallel mode: YES" in result
 
@@ -198,7 +200,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(sample_task, plan_path)
+        result = build_task_prompt(sample_task, plan_path)
 
         assert str(plan_path) in result
         assert "codebase-retrieval" in result
@@ -206,7 +208,7 @@ class TestBuildTaskPrompt:
     def test_excludes_plan_path_when_not_exists(self, sample_task, tmp_path):
         plan_path = tmp_path / "nonexistent.md"
 
-        result = _build_task_prompt(sample_task, plan_path)
+        result = build_task_prompt(sample_task, plan_path)
 
         assert str(plan_path) not in result
         assert "codebase-retrieval" in result
@@ -215,7 +217,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("UNIQUE_PLAN_CONTENT_MARKER_12345")
 
-        result = _build_task_prompt(sample_task, plan_path)
+        result = build_task_prompt(sample_task, plan_path)
 
         # The actual content should NOT be in the prompt
         assert "UNIQUE_PLAN_CONTENT_MARKER_12345" not in result
@@ -225,7 +227,7 @@ class TestBuildTaskPrompt:
     def test_includes_no_commit_constraint(self, sample_task, tmp_path):
         plan_path = tmp_path / "plan.md"
 
-        result = _build_task_prompt(sample_task, plan_path)
+        result = build_task_prompt(sample_task, plan_path)
 
         assert "Do NOT commit" in result
 
@@ -234,7 +236,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(task, plan_path)
+        result = build_task_prompt(task, plan_path)
 
         assert "Target files for this task:" in result
         assert "- src/foo.py" in result
@@ -245,7 +247,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(sample_task, plan_path)
+        result = build_task_prompt(sample_task, plan_path)
 
         assert "Target files for this task:" not in result
 
@@ -253,7 +255,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(
+        result = build_task_prompt(
             sample_task, plan_path, user_context="Use the new API v2 endpoints"
         )
 
@@ -264,7 +266,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(sample_task, plan_path, user_context="")
+        result = build_task_prompt(sample_task, plan_path, user_context="")
 
         assert "Additional Context:" not in result
 
@@ -273,7 +275,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(task, plan_path, user_context="Follow REST conventions")
+        result = build_task_prompt(task, plan_path, user_context="Follow REST conventions")
 
         assert "Target files for this task:" in result
         assert "Additional Context:" in result
@@ -286,7 +288,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(sample_task, plan_path, user_context="   \n  ")
+        result = build_task_prompt(sample_task, plan_path, user_context="   \n  ")
 
         assert "Additional Context:" not in result
 
@@ -295,7 +297,7 @@ class TestBuildTaskPrompt:
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = _build_task_prompt(task, plan_path, user_context="Extra info")
+        result = build_task_prompt(task, plan_path, user_context="Extra info")
 
         assert "Do NOT commit" in result
         # No-commit constraint should be after user context
@@ -892,8 +894,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_with_tui")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_execute_with_tui_when_tui_mode(
         self,
@@ -921,8 +923,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_execute_fallback_when_non_tui_mode(
         self,
@@ -951,8 +953,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_prompts_user_on_task_failures(
         self,
@@ -982,8 +984,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_true_when_all_tasks_succeed(
         self,
@@ -1012,8 +1014,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_returns_false_when_user_declines_after_failures(
         self,
@@ -1043,8 +1045,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_show_summary(
         self,
@@ -1072,8 +1074,8 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_calls_run_post_implementation_tests(
         self,
@@ -1153,8 +1155,8 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_executes_fundamental_tasks_first(
         self,
@@ -1203,8 +1205,8 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_fundamental_tasks_run_sequentially(
         self,
@@ -1251,8 +1253,8 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_independent_tasks_run_in_parallel(
         self,
@@ -1300,8 +1302,8 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
     @patch("ingot.workflow.step3_execute._execute_fallback")
     @patch("ingot.ui.tui._should_use_tui")
-    @patch("ingot.workflow.step3_execute._cleanup_old_runs")
-    @patch("ingot.workflow.step3_execute._create_run_log_dir")
+    @patch("ingot.workflow.step3_execute.cleanup_old_runs")
+    @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
     def test_skips_parallel_phase_when_disabled(
         self,

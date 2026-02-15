@@ -141,7 +141,7 @@ def run_ingot_workflow(
             return WorkflowResult(success=False, error="Failed to install subagent files")
 
         # Display ticket information (already fetched via TicketService before workflow)
-        print_success(f"Ticket: {state.ticket.title}")
+        print_success(f"Ticket: {display_name}")
         if state.ticket.description:
             print_info(f"Description: {state.ticket.description[:200]}...")
 

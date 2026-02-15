@@ -58,21 +58,15 @@ from ingot.workflow.git_utils import (
     check_dirty_working_tree,
 )
 from ingot.workflow.log_management import (
-    cleanup_old_runs as _cleanup_old_runs,
-)
-from ingot.workflow.log_management import (
-    create_run_log_dir as _create_run_log_dir,
-)
-from ingot.workflow.log_management import (
-    get_log_base_dir as _get_log_base_dir,
+    cleanup_old_runs,
+    create_run_log_dir,
+    get_log_base_dir,
 )
 from ingot.workflow.prompts import (
     POST_IMPLEMENTATION_TEST_PROMPT,
+    build_task_prompt,
 )
-from ingot.workflow.prompts import (
-    build_task_prompt as _build_task_prompt,
-)
-from ingot.workflow.review import run_phase_review as _run_phase_review
+from ingot.workflow.review import run_phase_review
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import (
     Task,
@@ -192,8 +186,8 @@ def step_3_execute(
 
     # Setup (use safe_filename_stem for filesystem operations)
     plan_path = state.get_plan_path()
-    log_dir = _create_run_log_dir(state.ticket.safe_filename_stem)
-    _cleanup_old_runs(state.ticket.safe_filename_stem)
+    log_dir = create_run_log_dir(state.ticket.safe_filename_stem)
+    cleanup_old_runs(state.ticket.safe_filename_stem)
 
     failed_tasks: list[str] = []
 
@@ -287,7 +281,7 @@ def step_3_execute(
     # right before commit instructions. Validates complete implementation
     # against the Step 1 spec as a whole.
     if state.enable_phase_review:
-        review_passed = _run_phase_review(state, log_dir, phase="final", backend=backend)
+        review_passed = run_phase_review(state, log_dir, phase="final", backend=backend)
         if not review_passed:
             # User explicitly chose to stop
             print_warning(
@@ -542,7 +536,7 @@ def _execute_task(
     """
     # Build minimal prompt - pass plan path reference, not full content
     # The agent uses codebase-retrieval to read relevant sections
-    prompt = _build_task_prompt(task, plan_path, is_parallel=False, user_context=state.user_context)
+    prompt = build_task_prompt(task, plan_path, is_parallel=False, user_context=state.user_context)
 
     try:
         success, output = backend.run_with_callback(
@@ -586,7 +580,7 @@ def _execute_task_with_callback(
     """
     # Build minimal prompt - pass plan path reference, not full content
     # The agent uses codebase-retrieval to read relevant sections
-    prompt = _build_task_prompt(
+    prompt = build_task_prompt(
         task, plan_path, is_parallel=is_parallel, user_context=state.user_context
     )
 
@@ -733,7 +727,7 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
     print_step("Running Tests for Changed Code via AI")
 
     # Create log directory for test execution (use safe_filename_stem for paths)
-    log_dir = _get_log_base_dir() / state.ticket.safe_filename_stem / LOG_DIR_TEST_EXECUTION
+    log_dir = get_log_base_dir() / state.ticket.safe_filename_stem / LOG_DIR_TEST_EXECUTION
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 

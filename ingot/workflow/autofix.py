@@ -89,12 +89,6 @@ Do NOT commit any changes."""
         return False
 
 
-# Backwards-compatible alias (underscore-prefixed)
-_run_auto_fix = run_auto_fix
-
-
 __all__ = [
     "run_auto_fix",
-    # Backwards-compatible alias
-    "_run_auto_fix",
 ]

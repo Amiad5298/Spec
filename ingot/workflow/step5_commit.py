@@ -44,23 +44,22 @@ class Step5Result:
     artifacts_excluded: int = 0
 
 
-def _generate_commit_message(ticket_id: str, completed_tasks: list[str]) -> str:
+def _generate_commit_message(
+    ticket_id: str, completed_tasks: list[str], prefix: str = "feat"
+) -> str:
     """Generate a commit message from ticket ID and completed tasks.
-
-    Reuses the format from squash_commits() in git.py:
-    - Single task: feat(TICKET): task name
-    - Multiple: feat(TICKET): implement N tasks + body
 
     Args:
         ticket_id: The ticket identifier.
         completed_tasks: Non-empty list of completed task descriptions.
+        prefix: Conventional commit prefix (feat, fix, chore, refactor).
     """
     if len(completed_tasks) == 1:
-        return f"feat({ticket_id}): {completed_tasks[0]}"
+        return f"{prefix}({ticket_id}): {completed_tasks[0]}"
 
     task_list = "\n".join(f"- {t}" for t in completed_tasks)
     return (
-        f"feat({ticket_id}): implement {len(completed_tasks)} tasks\n\n"
+        f"{prefix}({ticket_id}): implement {len(completed_tasks)} tasks\n\n"
         f"Completed tasks:\n{task_list}"
     )
 
@@ -229,7 +228,8 @@ def step_5_commit(state: WorkflowState, backend: AIBackend | None = None) -> Ste
 
     # 4. Generate commit message (caller guarantees non-empty list)
     tasks = state.completed_tasks if state.completed_tasks else ["implement changes"]
-    full_message = _generate_commit_message(state.ticket.id, tasks)
+    prefix = state.ticket.semantic_branch_prefix
+    full_message = _generate_commit_message(state.ticket.id, tasks, prefix=prefix)
 
     # 5. Let user edit subject line
     subject_line = full_message.split("\n")[0]

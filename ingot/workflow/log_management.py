@@ -5,10 +5,14 @@ including creating timestamped directories and cleaning up old runs.
 """
 
 import os
+import re
 import shutil
 from pathlib import Path
 
 from ingot.workflow.events import format_run_directory
+
+# Matches timestamped run directory names: YYYYMMDD_HHMMSS
+_TIMESTAMP_DIR_RE = re.compile(r"^\d{8}_\d{6}$")
 
 # Default log retention count
 DEFAULT_LOG_RETENTION = 10
@@ -58,9 +62,10 @@ def cleanup_old_runs(safe_ticket_id: str, keep_count: int = DEFAULT_LOG_RETENTIO
     if not ticket_dir.exists():
         return
 
-    # Get all run directories sorted by name (timestamp order)
+    # Get only timestamped run directories (YYYYMMDD_HHMMSS), ignoring
+    # non-run subdirs like plan_generation/, test_execution/, doc_update/
     run_dirs = sorted(
-        [d for d in ticket_dir.iterdir() if d.is_dir()],
+        [d for d in ticket_dir.iterdir() if d.is_dir() and _TIMESTAMP_DIR_RE.match(d.name)],
         key=lambda d: d.name,
         reverse=True,
     )
@@ -73,19 +78,9 @@ def cleanup_old_runs(safe_ticket_id: str, keep_count: int = DEFAULT_LOG_RETENTIO
             pass  # Ignore cleanup errors
 
 
-# Backwards-compatible aliases (underscore-prefixed)
-_get_log_base_dir = get_log_base_dir
-_create_run_log_dir = create_run_log_dir
-_cleanup_old_runs = cleanup_old_runs
-
-
 __all__ = [
     "DEFAULT_LOG_RETENTION",
     "get_log_base_dir",
     "create_run_log_dir",
     "cleanup_old_runs",
-    # Backwards-compatible aliases
-    "_get_log_base_dir",
-    "_create_run_log_dir",
-    "_cleanup_old_runs",
 ]

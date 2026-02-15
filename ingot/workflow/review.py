@@ -389,19 +389,9 @@ def run_phase_review(
         return False
 
 
-# Backwards-compatible aliases (underscore-prefixed)
-_parse_review_status = parse_review_status
-_build_review_prompt = build_review_prompt
-_run_phase_review = run_phase_review
-
-
 __all__ = [
     "ReviewStatus",
     "parse_review_status",
     "build_review_prompt",
     "run_phase_review",
-    # Backwards-compatible aliases
-    "_parse_review_status",
-    "_build_review_prompt",
-    "_run_phase_review",
 ]

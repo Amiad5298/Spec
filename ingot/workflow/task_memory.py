@@ -79,8 +79,6 @@ def capture_task_memory(task: Task, state: WorkflowState) -> TaskMemory:
     )
 
     # Add to state
-    if not hasattr(state, "task_memories"):
-        state.task_memories = []
     state.task_memories.append(memory)
 
     log_message(f"Captured {len(patterns)} patterns from task")
@@ -92,7 +90,7 @@ def _get_modified_files() -> list[str]:
     """Get list of modified files from git diff."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", "--cached"], capture_output=True, text=True, check=True
+            ["git", "diff", "--name-only"], capture_output=True, text=True, check=True
         )
         files = [f.strip() for f in result.stdout.split("\n") if f.strip()]
         return files
@@ -143,9 +141,7 @@ def _identify_patterns_in_changes(files: list[str]) -> list[str]:
 
     # Analyze actual changes for more patterns
     try:
-        result = subprocess.run(
-            ["git", "diff", "--cached"], capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["git", "diff"], capture_output=True, text=True, check=True)
         diff_content = result.stdout
 
         # Look for common patterns in diff
@@ -238,7 +234,7 @@ def build_pattern_context(task: Task, state: WorkflowState) -> str:
     Returns:
         Formatted pattern context for prompt
     """
-    if not hasattr(state, "task_memories") or not state.task_memories:
+    if not state.task_memories:
         return ""
 
     # Find related memories

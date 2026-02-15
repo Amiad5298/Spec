@@ -75,7 +75,7 @@ class TestGetModifiedFiles:
 
         assert files == ["file1.py", "file2.py", "file3.ts"]
         mock_run.assert_called_once_with(
-            ["git", "diff", "--name-only", "--cached"],
+            ["git", "diff", "--name-only"],
             capture_output=True,
             text=True,
             check=True,

@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from ingot.workflow.autofix import _MAX_REVIEW_FEEDBACK_LENGTH, _run_auto_fix, run_auto_fix
+from ingot.workflow.autofix import _MAX_REVIEW_FEEDBACK_LENGTH, run_auto_fix
 from ingot.workflow.state import WorkflowState
 
 
@@ -142,8 +142,3 @@ class TestReviewFeedbackTruncation:
         prompt = call_args[0][0]
         assert short_feedback in prompt
         assert "truncated" not in prompt
-
-
-class TestBackwardsCompatibility:
-    def test_underscore_alias_is_same_function(self):
-        assert _run_auto_fix is run_auto_fix

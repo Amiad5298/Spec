@@ -700,12 +700,6 @@ Focus on files most critical to the implementation plan."""
     return filtered_output, False, False
 
 
-# Backwards-compatible aliases (underscore-prefixed)
-_parse_stat_total_lines = parse_stat_total_lines
-_parse_stat_file_count = parse_stat_file_count
-_get_smart_diff = get_smart_diff
-
-
 __all__ = [
     # Baseline-anchored diff functions
     "DirtyTreePolicy",
@@ -726,8 +720,4 @@ __all__ = [
     "parse_stat_total_lines",
     "parse_stat_file_count",
     "get_smart_diff",
-    # Backwards-compatible aliases
-    "_parse_stat_total_lines",
-    "_parse_stat_file_count",
-    "_get_smart_diff",
 ]

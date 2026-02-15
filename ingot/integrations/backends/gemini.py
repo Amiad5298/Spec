@@ -22,6 +22,7 @@ from ingot.integrations.gemini import (
     check_gemini_installed,
     looks_like_rate_limit,
 )
+from ingot.utils.logging import log_message
 
 
 class GeminiBackend(BaseBackend):
@@ -119,6 +120,12 @@ class GeminiBackend(BaseBackend):
         env, temp_path = self._build_system_prompt_env(subagent_prompt)
         approval_mode = "plan" if plan_mode else "yolo"
 
+        if plan_mode:
+            log_message(
+                "Gemini plan mode (--approval-mode=plan) requires "
+                "'experimental.plan: true' in ~/.gemini/settings.json"
+            )
+
         try:
             if timeout_seconds is not None:
                 cmd = self._client.build_command(
@@ -163,6 +170,12 @@ class GeminiBackend(BaseBackend):
         env, temp_path = self._build_system_prompt_env(subagent_prompt)
         approval_mode = "plan" if plan_mode else "yolo"
 
+        if plan_mode:
+            log_message(
+                "Gemini plan mode (--approval-mode=plan) requires "
+                "'experimental.plan: true' in ~/.gemini/settings.json"
+            )
+
         try:
             return self._client.run_print_with_output(
                 prompt,
@@ -198,6 +211,12 @@ class GeminiBackend(BaseBackend):
         resolved_model, subagent_prompt = self._resolve_subagent(subagent, model)
         env, temp_path = self._build_system_prompt_env(subagent_prompt)
         approval_mode = "plan" if plan_mode else "yolo"
+
+        if plan_mode:
+            log_message(
+                "Gemini plan mode (--approval-mode=plan) requires "
+                "'experimental.plan: true' in ~/.gemini/settings.json"
+            )
 
         try:
             return self._client.run_print_quiet(

@@ -10,6 +10,7 @@ from ingot.workflow.step1_plan import (
     _build_minimal_prompt,
     _create_plan_log_dir,
     _display_plan_summary,
+    _extract_plan_markdown,
     _generate_plan_with_tui,
     _get_log_base_dir,
     _save_plan_from_output,
@@ -265,6 +266,50 @@ class TestBuildMinimalPrompt:
         assert str(plan_path) in result
 
 
+class TestExtractPlanMarkdown:
+    def test_extracts_from_first_heading(self):
+        output = "Some preamble\nTool output\n# Plan Title\n\nPlan body here."
+        result = _extract_plan_markdown(output)
+        assert result == "# Plan Title\n\nPlan body here."
+
+    def test_falls_back_when_no_heading(self):
+        output = "Just some plain text output\nwith no headings"
+        result = _extract_plan_markdown(output)
+        assert result == output.strip()
+
+    def test_strips_ansi_codes(self):
+        output = "\x1b[32mSome colored preamble\x1b[0m\n# Plan\n\nContent"
+        result = _extract_plan_markdown(output)
+        assert result == "# Plan\n\nContent"
+        assert "\x1b" not in result
+
+    def test_handles_empty_input(self):
+        result = _extract_plan_markdown("")
+        assert result == ""
+
+    def test_handles_whitespace_only(self):
+        result = _extract_plan_markdown("   \n  \n   ")
+        assert result == ""
+
+    def test_strips_trailing_whitespace(self):
+        output = "# Plan\n\nContent\n\n\n  "
+        result = _extract_plan_markdown(output)
+        assert result == "# Plan\n\nContent"
+
+    def test_preserves_multiple_headings(self):
+        output = "preamble\n# Heading 1\nBody 1\n## Heading 2\nBody 2"
+        result = _extract_plan_markdown(output)
+        assert "# Heading 1" in result
+        assert "## Heading 2" in result
+        assert "preamble" not in result
+
+    def test_non_heading_hash_not_matched(self):
+        output = "#tag not a heading\nmore text\n# Real Heading\nBody"
+        result = _extract_plan_markdown(output)
+        assert result.startswith("# Real Heading")
+        assert "#tag" not in result
+
+
 class TestSavePlanFromOutput:
     def test_creates_template_with_ticket_id(self, workflow_state, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
@@ -304,6 +349,27 @@ class TestSavePlanFromOutput:
 
         content = plan_path.read_text()
         assert "Test Feature" in content
+
+    def test_saves_extracted_output_when_non_empty(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+
+        output = "Tool log line\n# Implementation Plan\n\n## Steps\n1. Do stuff"
+        _save_plan_from_output(plan_path, workflow_state, output=output)
+
+        content = plan_path.read_text()
+        assert content.startswith("# Implementation Plan")
+        assert "Tool log line" not in content
+
+    def test_saves_full_output_when_no_heading(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+
+        output = "Just plain text plan with no headings"
+        _save_plan_from_output(plan_path, workflow_state, output=output)
+
+        content = plan_path.read_text()
+        assert "Just plain text plan" in content
 
 
 class TestDisplayPlanSummary:

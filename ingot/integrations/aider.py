@@ -77,7 +77,7 @@ class AiderClient:
         *,
         model: str | None = None,
         message_file: str | None = None,
-        architect: bool = False,
+        chat_mode: str | None = None,
     ) -> list[str]:
         """Build aider command list.
 
@@ -89,7 +89,8 @@ class AiderClient:
             model: Resolved model name (None = use instance default)
             message_file: Path to a file containing the prompt. If provided,
                 uses --message-file instead of --message.
-            architect: If True, use --architect for two-model plan mode.
+            chat_mode: If set, use --chat-mode with the given value
+                (e.g., "ask" for read-only plan mode).
 
         Returns:
             List of command arguments for subprocess
@@ -100,8 +101,8 @@ class AiderClient:
         cmd.append("--no-auto-commits")
         cmd.append("--no-detect-urls")
 
-        if architect:
-            cmd.append("--architect")
+        if chat_mode:
+            cmd.extend(["--chat-mode", chat_mode])
 
         # Use explicit model or fall back to instance default
         effective_model = model or self.model
@@ -121,7 +122,7 @@ class AiderClient:
         *,
         output_callback: Callable[[str], None],
         model: str | None = None,
-        architect: bool = False,
+        chat_mode: str | None = None,
     ) -> tuple[bool, str]:
         """Run with streaming output callback.
 
@@ -131,7 +132,7 @@ class AiderClient:
             prompt: The prompt to send to Aider (pre-composed)
             output_callback: Callback function invoked for each output line
             model: Resolved model name
-            architect: If True, use --architect flag
+            chat_mode: If set, use --chat-mode with the given value
 
         Returns:
             Tuple of (success: bool, full_output: str)
@@ -147,7 +148,7 @@ class AiderClient:
 
         try:
             cmd = self.build_command(
-                prompt, model=model, message_file=message_file, architect=architect
+                prompt, model=model, message_file=message_file, chat_mode=chat_mode
             )
 
             process = subprocess.Popen(
@@ -179,7 +180,7 @@ class AiderClient:
         *,
         model: str | None = None,
         timeout_seconds: float | None = None,
-        architect: bool = False,
+        chat_mode: str | None = None,
     ) -> tuple[bool, str]:
         """Run and return success status and captured output.
 
@@ -189,7 +190,7 @@ class AiderClient:
             prompt: The prompt to send (pre-composed)
             model: Resolved model name
             timeout_seconds: Maximum execution time.
-            architect: If True, use --architect flag
+            chat_mode: If set, use --chat-mode with the given value
 
         Returns:
             Tuple of (success: bool, output: str)
@@ -208,7 +209,7 @@ class AiderClient:
 
         try:
             cmd = self.build_command(
-                prompt, model=model, message_file=message_file, architect=architect
+                prompt, model=model, message_file=message_file, chat_mode=chat_mode
             )
 
             result = subprocess.run(
@@ -236,7 +237,7 @@ class AiderClient:
         *,
         model: str | None = None,
         timeout_seconds: float | None = None,
-        architect: bool = False,
+        chat_mode: str | None = None,
     ) -> str:
         """Run quietly, return output only.
 
@@ -246,7 +247,7 @@ class AiderClient:
             prompt: The prompt to send (pre-composed)
             model: Resolved model name
             timeout_seconds: Maximum execution time.
-            architect: If True, use --architect flag
+            chat_mode: If set, use --chat-mode with the given value
 
         Returns:
             Command stdout (or stderr if stdout is empty and command failed)
@@ -265,7 +266,7 @@ class AiderClient:
 
         try:
             cmd = self.build_command(
-                prompt, model=model, message_file=message_file, architect=architect
+                prompt, model=model, message_file=message_file, chat_mode=chat_mode
             )
 
             result = subprocess.run(

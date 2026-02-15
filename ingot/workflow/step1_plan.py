@@ -5,6 +5,7 @@ an implementation plan based on the Jira ticket.
 """
 
 import os
+import re
 from pathlib import Path
 
 from ingot.config.fetch_config import AgentPlatform
@@ -22,6 +23,8 @@ from ingot.utils.console import (
 from ingot.utils.logging import log_message
 from ingot.workflow.events import format_run_directory
 from ingot.workflow.state import WorkflowState
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 # =============================================================================
 # Log Directory Management
@@ -159,10 +162,11 @@ Codebase context will be retrieved automatically."""
 def _extract_plan_markdown(output: str) -> str:
     """Extract clean markdown plan from CLI output.
 
-    Strips tool-call logs, headers, and other noise.
+    Strips tool-call logs, headers, ANSI escape codes, and other noise.
     Looks for the first markdown heading (any level) and returns everything
     from there. Falls back to full output if no headings found.
     """
+    output = _ANSI_RE.sub("", output)
     lines = output.splitlines()
 
     # Find first markdown heading (any level: #, ##, ###, etc.)

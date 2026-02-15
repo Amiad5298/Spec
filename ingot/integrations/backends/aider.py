@@ -86,7 +86,7 @@ class AiderBackend(BaseBackend):
             model: Optional model override.
             dont_save_session: Unused (Aider has no session persistence).
             timeout_seconds: Optional timeout in seconds (None = no timeout).
-            plan_mode: If True, use --architect for two-model plan mode.
+            plan_mode: If True, use --chat-mode ask for read-only mode.
 
         Returns:
             Tuple of (success, output).
@@ -108,7 +108,7 @@ class AiderBackend(BaseBackend):
                     composed_prompt,
                     model=resolved_model,
                     message_file=message_file,
-                    architect=plan_mode,
+                    chat_mode="ask" if plan_mode else None,
                 )
                 exit_code, output = self._run_streaming_with_timeout(
                     cmd,
@@ -124,7 +124,7 @@ class AiderBackend(BaseBackend):
                 composed_prompt,
                 output_callback=output_callback,
                 model=resolved_model,
-                architect=plan_mode,
+                chat_mode="ask" if plan_mode else None,
             )
 
     def run_print_with_output(
@@ -149,7 +149,7 @@ class AiderBackend(BaseBackend):
                 composed_prompt,
                 model=resolved_model,
                 timeout_seconds=timeout_seconds,
-                architect=plan_mode,
+                chat_mode="ask" if plan_mode else None,
             )
         except subprocess.TimeoutExpired:
             raise BackendTimeoutError(
@@ -179,7 +179,7 @@ class AiderBackend(BaseBackend):
                 composed_prompt,
                 model=resolved_model,
                 timeout_seconds=timeout_seconds,
-                architect=plan_mode,
+                chat_mode="ask" if plan_mode else None,
             )
         except subprocess.TimeoutExpired:
             raise BackendTimeoutError(

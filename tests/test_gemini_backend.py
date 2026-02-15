@@ -362,6 +362,60 @@ class TestGeminiBackendTimeout:
         assert exc_info.value.timeout_seconds == 15.0
 
 
+class TestGeminiBackendPlanMode:
+    def test_plan_mode_logs_experimental_warning(self):
+        backend = GeminiBackend()
+
+        with (
+            patch.object(backend._client, "run_with_callback", return_value=(True, "output")),
+            patch("ingot.integrations.backends.gemini.log_message") as mock_log,
+        ):
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=True,
+            )
+
+        # Find the warning call among potentially multiple log_message calls
+        warning_calls = [c for c in mock_log.call_args_list if "experimental.plan" in str(c)]
+        assert len(warning_calls) == 1
+        msg = warning_calls[0][0][0]
+        assert "--approval-mode=plan" in msg
+        assert "~/.gemini/settings.json" in msg
+
+    def test_plan_mode_passes_approval_mode_plan(self):
+        backend = GeminiBackend()
+
+        with patch.object(
+            backend._client, "run_with_callback", return_value=(True, "output")
+        ) as mock_run:
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=True,
+            )
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("approval_mode") == "plan"
+
+    def test_no_warning_when_plan_mode_false(self):
+        backend = GeminiBackend()
+
+        with (
+            patch.object(backend._client, "run_with_callback", return_value=(True, "output")),
+            patch("ingot.integrations.backends.gemini.log_message") as mock_log,
+        ):
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=False,
+            )
+
+        # No warning calls should contain experimental.plan
+        warning_calls = [c for c in mock_log.call_args_list if "experimental.plan" in str(c)]
+        assert len(warning_calls) == 0
+
+
 class TestGeminiBackendClose:
     def test_close_is_noop(self):
         backend = GeminiBackend()

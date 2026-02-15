@@ -249,8 +249,14 @@ class CursorClient:
         if no_save:
             cmd.append("--no-save")
 
-        if mode and self._supports_mode_flag():
-            cmd.extend(["--mode", mode])
+        if mode:
+            if self._supports_mode_flag():
+                cmd.extend(["--mode", mode])
+            else:
+                log_message(
+                    f"Warning: --mode {mode} requested but not supported by "
+                    f"detected Cursor CLI; falling back to default mode"
+                )
 
         # Prompt as final positional argument
         cmd.append(prompt)

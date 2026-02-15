@@ -410,6 +410,58 @@ class TestAiderDetectRateLimit:
         assert backend.detect_rate_limit(output) is False
 
 
+class TestAiderBackendPlanMode:
+    def test_plan_mode_true_passes_chat_mode_ask(self):
+        backend = AiderBackend()
+
+        with patch.object(
+            backend._client, "run_with_callback", return_value=(True, "output")
+        ) as mock_run:
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=True,
+            )
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("chat_mode") == "ask"
+
+    def test_plan_mode_false_passes_no_chat_mode(self):
+        backend = AiderBackend()
+
+        with patch.object(
+            backend._client, "run_with_callback", return_value=(True, "output")
+        ) as mock_run:
+            backend.run_with_callback(
+                "test prompt",
+                output_callback=MagicMock(),
+                plan_mode=False,
+            )
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("chat_mode") is None
+
+    def test_plan_mode_run_print_with_output(self):
+        backend = AiderBackend()
+
+        with patch.object(
+            backend._client, "run_print_with_output", return_value=(True, "output")
+        ) as mock_run:
+            backend.run_print_with_output("test prompt", plan_mode=True)
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("chat_mode") == "ask"
+
+    def test_plan_mode_run_print_quiet(self):
+        backend = AiderBackend()
+
+        with patch.object(backend._client, "run_print_quiet", return_value="output") as mock_run:
+            backend.run_print_quiet("test prompt", plan_mode=True)
+
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("chat_mode") == "ask"
+
+
 @pytest.mark.skipif(
     os.environ.get("INGOT_INTEGRATION_TESTS") != "1",
     reason="Integration tests require INGOT_INTEGRATION_TESTS=1",

@@ -315,13 +315,17 @@ def _display_replan_reason(output: str) -> None:
         print_info(f"  {line}")
 
 
-def _handle_needs_replan(state: WorkflowState, output: str) -> ReviewOutcome:
+def _handle_needs_replan(state: WorkflowState, output: str) -> tuple[ReviewOutcome, str]:
     """Handle NEEDS_REPLAN status with user interaction.
 
     Shows the replan reason and offers a menu with options:
     - Re-plan with AI
     - Edit plan manually
     - Continue anyway
+
+    Returns:
+        Tuple of (ReviewOutcome, feedback_str). The feedback string contains
+        the review output when REPLAN is chosen, empty string otherwise.
     """
     _display_replan_reason(output)
 
@@ -336,16 +340,14 @@ def _handle_needs_replan(state: WorkflowState, output: str) -> ReviewOutcome:
     )
 
     if choice == "Re-plan with AI":
-        state.replan_feedback = output
-        return ReviewOutcome.REPLAN
+        return (ReviewOutcome.REPLAN, output)
     elif choice == "Edit plan manually":
         plan_path = state.get_plan_path()
         print_info(f"Plan file: {plan_path}")
         prompt_enter("Press Enter after editing the plan...")
-        state.replan_feedback = output
-        return ReviewOutcome.REPLAN
+        return (ReviewOutcome.REPLAN, output)
     else:
-        return ReviewOutcome.CONTINUE
+        return (ReviewOutcome.CONTINUE, "")
 
 
 def _run_review_fix_loop(
@@ -482,7 +484,7 @@ def run_phase_review(
     phase: str,
     *,
     backend: AIBackend,
-) -> ReviewOutcome:
+) -> tuple[ReviewOutcome, str]:
     """Run review checkpoint and optionally auto-fix.
 
     Executes the ingot-reviewer agent to validate completed work.
@@ -501,9 +503,10 @@ def run_phase_review(
         backend: AI backend instance for agent interactions
 
     Returns:
-        ReviewOutcome.CONTINUE if review passed or user chose to continue,
-        ReviewOutcome.STOP if user explicitly chose to stop after failed review,
-        ReviewOutcome.REPLAN if reviewer recommends re-planning and user agrees
+        Tuple of (ReviewOutcome, feedback_str):
+        - ReviewOutcome.CONTINUE with empty string if review passed or user chose to continue
+        - ReviewOutcome.STOP with empty string if user explicitly chose to stop
+        - ReviewOutcome.REPLAN with review output if re-planning requested
     """
     print_step(f"Running {phase} phase review...")
 
@@ -515,14 +518,14 @@ def run_phase_review(
         print_warning("Could not retrieve git diff for review")
         print_info("The review cannot inspect code changes without git diff output.")
         if prompt_confirm("Continue workflow without code review?", default=True):
-            return ReviewOutcome.CONTINUE
+            return (ReviewOutcome.CONTINUE, "")
         else:
             print_info("Workflow stopped by user (could not retrieve diff for review)")
-            return ReviewOutcome.STOP
+            return (ReviewOutcome.STOP, "")
 
     if not diff_output.strip():
         print_info("No changes to review")
-        return ReviewOutcome.CONTINUE
+        return (ReviewOutcome.CONTINUE, "")
 
     # Build prompt
     prompt = build_review_prompt(state, phase, diff_output, is_truncated)
@@ -538,7 +541,7 @@ def run_phase_review(
     except Exception as e:
         print_warning(f"Review execution failed: {e}")
         print_info("Continuing workflow despite review failure")
-        return ReviewOutcome.CONTINUE  # Continue workflow on review crash (advisory behavior)
+        return (ReviewOutcome.CONTINUE, "")  # Continue on review crash (advisory behavior)
 
     # Check if execution succeeded before parsing output
     if not success:
@@ -546,17 +549,17 @@ def run_phase_review(
         print_info("Review output may be incomplete or unreliable")
         # Treat as NEEDS_ATTENTION for decision-making, but allow user to continue
         if prompt_confirm("Continue workflow despite review execution failure?", default=True):
-            return ReviewOutcome.CONTINUE
+            return (ReviewOutcome.CONTINUE, "")
         else:
             print_info("Workflow stopped by user after review execution failure")
-            return ReviewOutcome.STOP
+            return (ReviewOutcome.STOP, "")
 
     # Parse review result using robust parser (only when execution succeeded)
     status = parse_review_status(output)
 
     if status == ReviewStatus.PASS:
         print_success(f"{phase.capitalize()} review: PASS")
-        return ReviewOutcome.CONTINUE
+        return (ReviewOutcome.CONTINUE, "")
 
     # Review recommends re-planning
     if status == ReviewStatus.NEEDS_REPLAN:
@@ -572,12 +575,12 @@ def run_phase_review(
             loop_result = _run_review_fix_loop(state, output, log_dir, phase, backend)
             match loop_result.exit_reason:
                 case ExitReason.PASSED:
-                    return ReviewOutcome.CONTINUE
+                    return (ReviewOutcome.CONTINUE, "")
                 case ExitReason.NO_DIFF:
                     print_info(
                         "Working tree clean relative to baseline -- " "no changes remain after fix."
                     )
-                    return ReviewOutcome.CONTINUE
+                    return (ReviewOutcome.CONTINUE, "")
                 case ExitReason.EXHAUSTED:
                     print_info(
                         f"Auto-fix made {loop_result.fix_attempts} attempt(s) "
@@ -593,10 +596,10 @@ def run_phase_review(
 
     # Ask user if they want to continue or stop
     if prompt_confirm("Continue workflow despite review issues?", default=True):
-        return ReviewOutcome.CONTINUE
+        return (ReviewOutcome.CONTINUE, "")
     else:
         print_info("Workflow stopped by user after review")
-        return ReviewOutcome.STOP
+        return (ReviewOutcome.STOP, "")
 
 
 __all__ = [

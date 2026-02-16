@@ -415,7 +415,7 @@ class TestRunPhaseReview:
             with patch("ingot.workflow.review.print_info"):
                 result = run_phase_review(state, MagicMock(), "fundamental", backend=MagicMock())
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     def test_returns_continue_when_review_passes(self):
         from unittest.mock import MagicMock, patch
@@ -437,7 +437,7 @@ class TestRunPhaseReview:
                         state, MagicMock(), "fundamental", backend=mock_backend
                     )
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     def test_prompts_for_git_error(self):
         from unittest.mock import MagicMock, patch
@@ -458,7 +458,7 @@ class TestRunPhaseReview:
                                 state, MagicMock(), "final", backend=MagicMock()
                             )
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
         mock_confirm.assert_called_once()
 
     @patch("ingot.workflow.review.print_step")
@@ -479,7 +479,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "final", backend=MagicMock())
 
-        assert result == ReviewOutcome.STOP
+        assert result == (ReviewOutcome.STOP, "")
 
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
@@ -505,7 +505,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
         # Should be called twice: auto-fix prompt and continue prompt
         assert mock_confirm.call_count == 2
 
@@ -538,7 +538,7 @@ class TestRunPhaseReview:
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
         mock_loop.assert_called_once()
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
@@ -561,7 +561,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
         # Only one prompt: "Continue workflow despite review issues?"
         assert mock_confirm.call_count == 1
 
@@ -589,7 +589,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
         # Only auto-fix prompt, no continue prompt needed
         assert mock_confirm.call_count == 1
 
@@ -612,7 +612,7 @@ class TestRunPhaseReview:
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
         # Should continue workflow on review crash (advisory behavior)
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     @patch("ingot.workflow.review.print_info")
     @patch("ingot.workflow.review.print_warning")
@@ -634,7 +634,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
         mock_confirm.assert_called_once()
 
 
@@ -1019,7 +1019,6 @@ class TestWorkflowStateValidation:
             id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
         )
         state = WorkflowState(ticket=ticket)
-        assert state.replan_feedback == ""
         assert state.replan_count == 0
         assert state.max_replans == 2
 
@@ -1119,8 +1118,7 @@ class TestHandleNeedsReplan:
 
         result = _handle_needs_replan(state, "review output with replan reason")
 
-        assert result == ReviewOutcome.REPLAN
-        assert state.replan_feedback == "review output with replan reason"
+        assert result == (ReviewOutcome.REPLAN, "review output with replan reason")
 
     @patch("ingot.workflow.review.prompt_enter")
     @patch("ingot.workflow.review.prompt_select")
@@ -1134,8 +1132,7 @@ class TestHandleNeedsReplan:
 
         result = _handle_needs_replan(state, "review output")
 
-        assert result == ReviewOutcome.REPLAN
-        assert state.replan_feedback == "review output"
+        assert result == (ReviewOutcome.REPLAN, "review output")
 
     @patch("ingot.workflow.review.prompt_select")
     @patch("ingot.workflow.review.print_info")
@@ -1148,7 +1145,7 @@ class TestHandleNeedsReplan:
 
         result = _handle_needs_replan(state, "review output")
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
 
 
 class TestRunPhaseReviewNeedsReplan:
@@ -1170,11 +1167,11 @@ class TestRunPhaseReviewNeedsReplan:
         )
 
         mock_diff.return_value = ("diff content", False, False)
-        mock_handler.return_value = ReviewOutcome.REPLAN
+        mock_handler.return_value = (ReviewOutcome.REPLAN, "feedback")
 
         result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
-        assert result == ReviewOutcome.REPLAN
+        assert result == (ReviewOutcome.REPLAN, "feedback")
         mock_handler.assert_called_once()
 
     @patch("ingot.workflow.review.print_success")
@@ -1194,7 +1191,7 @@ class TestRunPhaseReviewNeedsReplan:
 
         result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
-        assert result == ReviewOutcome.CONTINUE
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
@@ -1216,7 +1213,7 @@ class TestRunPhaseReviewNeedsReplan:
 
         result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
-        assert result == ReviewOutcome.STOP
+        assert result == (ReviewOutcome.STOP, "")
 
 
 class TestDisplayReplanReason:

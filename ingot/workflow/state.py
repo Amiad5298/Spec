@@ -118,8 +118,7 @@ class WorkflowState:
     # Review configuration
     enable_phase_review: bool = False  # Enable phase reviews after task execution
 
-    # Re-planning state (set by review, consumed by runner)
-    replan_feedback: str = ""  # Reviewer output when NEEDS_REPLAN
+    # Re-planning state
     replan_count: int = 0  # Number of replans performed this workflow run
     max_replans: int = 2  # Maximum replan attempts (prevents infinite loops)
 

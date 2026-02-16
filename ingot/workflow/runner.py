@@ -32,7 +32,7 @@ from ingot.utils.console import (
 from ingot.utils.errors import IngotError, UserCancelledError
 from ingot.utils.logging import log_message
 from ingot.workflow.conflict_detection import detect_context_conflict
-from ingot.workflow.git_utils import DirtyTreePolicy
+from ingot.workflow.git_utils import DirtyTreePolicy, restore_to_baseline
 from ingot.workflow.state import RateLimitConfig, WorkflowState
 from ingot.workflow.step1_5_clarification import step_1_5_clarification
 from ingot.workflow.step1_plan import replan_with_feedback, step_1_create_plan
@@ -218,19 +218,28 @@ def run_ingot_workflow(
         # Step 3: Execute implementation (with replan loop)
         while state.current_step <= 3:
             print_info("Starting Step 3: Execute Implementation")
-            if not step_3_execute(state, backend=backend, use_tui=use_tui, verbose=verbose):
-                if state.replan_feedback and state.replan_count < state.max_replans:
+            step3_result = step_3_execute(state, backend=backend, use_tui=use_tui, verbose=verbose)
+            if not step3_result.success:
+                if step3_result.needs_replan and state.replan_count < state.max_replans:
                     state.replan_count += 1
+                    replan_feedback = step3_result.replan_feedback
                     print_info(f"Re-planning attempt {state.replan_count}/{state.max_replans}...")
-                    if not replan_with_feedback(state, backend, state.replan_feedback):
+                    if not replan_with_feedback(state, backend, replan_feedback):
                         return WorkflowResult(
                             success=False, error="Re-planning failed", steps_completed=2
                         )
-                    state.replan_feedback = ""
                     state.completed_tasks.clear()
-                    # Override dirty tree policy for re-execution
-                    # (tree has changes from previous flawed execution)
-                    state.dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
+                    # Restore working tree to baseline before re-execution
+                    if state.diff_baseline_ref:
+                        if not restore_to_baseline(state.diff_baseline_ref):
+                            print_warning(
+                                "Could not restore working tree to baseline. "
+                                "Continuing with dirty tree policy."
+                            )
+                            state.dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
+                    else:
+                        # No baseline ref — override dirty tree policy
+                        state.dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
                     # Regenerate task list with updated plan
                     if not step_2_create_tasklist(state, backend):
                         return WorkflowResult(
@@ -238,8 +247,10 @@ def run_ingot_workflow(
                             error="Task list regeneration failed",
                             steps_completed=2,
                         )
+                    # Explicit step reset for re-execution
+                    state.current_step = 3
                     continue  # Re-run step 3
-                elif state.replan_feedback:
+                elif step3_result.needs_replan:
                     print_warning(f"Maximum re-plan attempts ({state.max_replans}) reached.")
                     return WorkflowResult(
                         success=False, error="Max replans exhausted", steps_completed=2

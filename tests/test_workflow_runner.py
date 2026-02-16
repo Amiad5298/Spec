@@ -15,6 +15,7 @@ from ingot.workflow.runner import (
     workflow_cleanup,
 )
 from ingot.workflow.state import WorkflowState
+from ingot.workflow.step3_execute import Step3Result
 from ingot.workflow.step4_update_docs import Step4Result
 from ingot.workflow.step5_commit import Step5Result
 
@@ -434,7 +435,7 @@ class TestRunIngotWorkflowInit:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         result = run_ingot_workflow(
@@ -521,7 +522,7 @@ class TestRunIngotWorkflowUserContext:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
@@ -567,7 +568,7 @@ class TestRunIngotWorkflowBranchSetup:
         mock_commit.return_value = "abc123def456"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
@@ -635,7 +636,7 @@ class TestRunIngotWorkflowStepOrchestration:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
@@ -744,7 +745,7 @@ class TestRunIngotWorkflowStepOrchestration:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         result = run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
@@ -786,7 +787,7 @@ class TestRunIngotWorkflowCompletion:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
@@ -828,7 +829,7 @@ class TestRunIngotWorkflowStep3Arguments:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(
@@ -878,7 +879,7 @@ class TestRunIngotWorkflowStep3Arguments:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(
@@ -928,7 +929,7 @@ class TestRunIngotWorkflowStep3Arguments:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         # Call without specifying use_tui (defaults to None)
@@ -981,7 +982,7 @@ class TestRunIngotWorkflowResumeLogic:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         # Create a mock state with current_step = 2
@@ -1033,7 +1034,7 @@ class TestRunIngotWorkflowResumeLogic:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         # Create a mock state with current_step = 3
@@ -1146,7 +1147,7 @@ class TestRunIngotWorkflowStep4:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step4.return_value = Step4Result(success=True)
         mock_step5.return_value = Step5Result()
 
@@ -1194,7 +1195,7 @@ class TestRunIngotWorkflowStep4:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(
@@ -1241,7 +1242,7 @@ class TestRunIngotWorkflowStep4:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         # Step 4 result with error (non-blocking)
         mock_step4.return_value = Step4Result(success=True, error_message="Agent failed")
         mock_step5.return_value = Step5Result()
@@ -1292,7 +1293,7 @@ class TestRunIngotWorkflowStep5:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(
@@ -1337,7 +1338,7 @@ class TestRunIngotWorkflowStep5:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
 
         run_ingot_workflow(
             ticket=ticket,
@@ -1381,7 +1382,7 @@ class TestRunIngotWorkflowStep5:
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
         mock_step2.return_value = True
-        mock_step3.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
         mock_step5.return_value = Step5Result()
 
         run_ingot_workflow(

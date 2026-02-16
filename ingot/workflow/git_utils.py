@@ -112,6 +112,48 @@ def parse_porcelain_z_output(output: str) -> list[tuple[str, str]]:
     return entries
 
 
+def restore_to_baseline(baseline_ref: str) -> bool:
+    """Restore the working tree to the baseline state.
+
+    Resets tracked files to the baseline ref and removes untracked files
+    created during execution. Used before re-execution in the replan loop
+    to ensure a clean starting point.
+
+    Args:
+        baseline_ref: The baseline commit SHA to restore to.
+
+    Returns:
+        True on success, False on failure.
+    """
+    try:
+        # Reset tracked files to baseline state
+        result = subprocess.run(
+            ["git", "checkout", baseline_ref, "--", "."],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip() if result.stderr else "unknown error"
+            print_warning(f"Failed to restore tracked files to baseline: {stderr}")
+            return False
+
+        # Remove untracked files created during execution
+        result = subprocess.run(
+            ["git", "clean", "-fd"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip() if result.stderr else "unknown error"
+            print_warning(f"Failed to clean untracked files: {stderr}")
+            return False
+
+        return True
+    except Exception as e:
+        print_warning(f"Failed to restore working tree to baseline: {e}")
+        return False
+
+
 def capture_baseline() -> str:
     """Capture the current HEAD as the baseline for diff operations.
 
@@ -707,6 +749,7 @@ __all__ = [
     "WORKFLOW_ARTIFACT_PATHS",
     "is_workflow_artifact",
     "parse_porcelain_z_output",
+    "restore_to_baseline",
     "capture_baseline",
     "check_dirty_working_tree",
     "get_diff_from_baseline",

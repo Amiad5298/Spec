@@ -74,13 +74,13 @@ def print_step(message: str) -> None:
 def show_banner() -> None:
     """Display ASCII art banner."""
     banner = """
-[bold magenta]   _____ ____  ______ ______
-  / ___// __ \\/ ____// ____/
-  \\__ \\/ /_/ / __/  / /
- ___/ / ____/ /___ / /___
-/____/_/   /_____/ \\____/
+[bold magenta] ___ _   _  ____  ___ _____
+|_ _| \\ | |/ ___|/ _ \\_   _|
+ | ||  \\| | |  _| | | || |
+ | || |\\  | |_| | |_| || |
+|___|_| \\_|\\____|\\___/ |_|
 [/bold magenta]
-[bold cyan]Spec-driven Development Workflow[/bold cyan]
+[bold cyan]Spec-Driven Development Workflow[/bold cyan]
 [white]Version {version}[/white]
 """
     console.print(banner.format(version=__version__))

@@ -253,7 +253,7 @@ class AiderBackend(BaseBackend):
         BackendModel(id="deepseek/deepseek-chat", name="DeepSeek Chat"),
     )
 
-    def list_models(self) -> list[BackendModel]:
+    def _fetch_models(self) -> list[BackendModel]:
         """Return hardcoded model list for Aider.
 
         Aider's ``--list-models`` requires API keys for every configured

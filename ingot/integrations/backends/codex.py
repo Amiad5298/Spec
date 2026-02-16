@@ -212,7 +212,7 @@ class CodexBackend(BaseBackend):
         BackendModel(id="gpt-4.1", name="GPT-4.1"),
     )
 
-    def list_models(self) -> list[BackendModel]:
+    def _fetch_models(self) -> list[BackendModel]:
         """Return models via OpenAI API with hardcoded fallback."""
         from ingot.integrations.backends.model_discovery import fetch_openai_models
 

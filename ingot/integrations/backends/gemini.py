@@ -284,7 +284,7 @@ class GeminiBackend(BaseBackend):
         BackendModel(id="gemini-2.0-flash", name="Gemini 2.0 Flash"),
     )
 
-    def list_models(self) -> list[BackendModel]:
+    def _fetch_models(self) -> list[BackendModel]:
         """Return models via Gemini API with hardcoded fallback."""
         from ingot.integrations.backends.model_discovery import fetch_gemini_models
 

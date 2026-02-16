@@ -61,6 +61,85 @@ class TestBaseBackendListModels:
         assert backend.list_models() == []
 
 
+class TestListModelsCaching:
+    """Tests for list_models() caching logic on BaseBackend."""
+
+    def _make_backend(self, fetch_side_effects: list):
+        """Create a ConcreteBackend whose _fetch_models returns values in sequence."""
+        call_index = {"i": 0}
+        side_effects = fetch_side_effects
+
+        class ConcreteBackend(BaseBackend):
+            @property
+            def name(self):
+                return "Test"
+
+            @property
+            def platform(self):
+                from ingot.config.fetch_config import AgentPlatform
+
+                return AgentPlatform.AUGGIE
+
+            def run_with_callback(self, *a, **kw):
+                pass
+
+            def run_print_with_output(self, *a, **kw):
+                pass
+
+            def run_print_quiet(self, *a, **kw):
+                pass
+
+            def run_streaming(self, *a, **kw):
+                pass
+
+            def check_installed(self):
+                return True, "ok"
+
+            def detect_rate_limit(self, output):
+                return False
+
+            def _fetch_models(self):
+                idx = call_index["i"]
+                call_index["i"] += 1
+                return side_effects[idx]
+
+        return ConcreteBackend(), call_index
+
+    def test_empty_result_not_cached_and_retries(self):
+        """First call returns [] (transient failure) → second call retries."""
+        models = [BackendModel(id="m1", name="Model 1")]
+        backend, calls = self._make_backend([[], models])
+
+        first = backend.list_models()
+        assert first == []
+
+        second = backend.list_models()
+        assert second == models
+        assert calls["i"] == 2  # _fetch_models called twice
+
+    def test_non_empty_result_is_cached(self):
+        """Non-empty result is cached; subsequent calls do not re-fetch."""
+        models = [BackendModel(id="m1", name="Model 1")]
+        backend, calls = self._make_backend([models, []])
+
+        first = backend.list_models()
+        second = backend.list_models()
+
+        assert first == second == models
+        assert calls["i"] == 1  # _fetch_models called only once
+
+    def test_defensive_copy_prevents_cache_mutation(self):
+        """Mutating the returned list does not affect cached value."""
+        models = [BackendModel(id="m1", name="Model 1")]
+        backend, _ = self._make_backend([models])
+
+        first = backend.list_models()
+        first.clear()
+
+        second = backend.list_models()
+        assert second == models
+
+
 class TestClaudeBackendListModels:
     @patch.dict("os.environ", {}, clear=True)
     def test_no_api_key_returns_fallback(self):
@@ -93,6 +172,32 @@ class TestClaudeBackendListModels:
         models = backend.list_models()
         assert len(models) >= 1
         assert any("claude" in m.id for m in models)
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    @patch("ingot.integrations.backends.model_discovery.fetch_anthropic_models")
+    def test_caching_calls_fetch_only_once(self, mock_fetch):
+        """list_models() should cache: _fetch_models (via API) called only once."""
+        from ingot.integrations.backends.claude import ClaudeBackend
+
+        mock_fetch.return_value = [BackendModel(id="claude-cached", name="Cached")]
+        backend = ClaudeBackend()
+
+        first = backend.list_models()
+        second = backend.list_models()
+
+        assert first == second
+        mock_fetch.assert_called_once()
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_cache_returns_defensive_copy(self):
+        """Mutating returned list should not affect the cache."""
+        from ingot.integrations.backends.claude import ClaudeBackend
+
+        backend = ClaudeBackend()
+        first = backend.list_models()
+        first.clear()
+        second = backend.list_models()
+        assert len(second) >= 1
 
 
 class TestCursorBackendListModels:

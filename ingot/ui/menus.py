@@ -223,9 +223,7 @@ def show_model_selection(
 
     models: list[BackendModel] = []
     if backend is not None:
-        from rich.console import Console
-
-        with Console().status("Fetching available models...", spinner="dots"):
+        with console.status("Fetching available models...", spinner="dots"):
             models = backend.list_models()
 
     if backend is None:

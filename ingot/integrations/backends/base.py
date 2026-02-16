@@ -412,12 +412,16 @@ class BaseBackend(ABC):
         _fetch_models() and caches the result; subsequent calls return
         a copy of the cached list.
 
+        Empty results are not cached so that transient failures (network
+        timeouts, etc.) do not permanently prevent model discovery.
+
         Returns a defensive copy so callers cannot mutate the cache.
         """
         if self._models_cache is not None:
             return list(self._models_cache)
         result = self._fetch_models()
-        self._models_cache = result
+        if result:
+            self._models_cache = result
         return list(result)
 
     def _fetch_models(self) -> list[BackendModel]:

@@ -74,7 +74,7 @@ A structured approach that breaks complex features into manageable pieces:
 - **Step 1 - Plan**: AI-generated implementation plan based on ticket and codebase analysis
 - **Step 1.5 - Clarify** (optional): Interactive Q&A loop with conflict detection to resolve ambiguities before coding
 - **Step 2 - Task List**: Task list with dependency analysis and user approval loop (approve/edit/regenerate)
-- **Step 3 - Execute**: Dual-phase task execution with real-time progress tracking
+- **Step 3 - Execute**: Dual-phase task execution with self-correction loop, code review, and replan capability
 - **Step 4 - Update Docs** (optional): AI-driven documentation synchronization with guardrails
 - **Step 5 - Commit** (optional): Automated staging and commit with artifact exclusion
 
@@ -117,10 +117,26 @@ INGOT integrates with Git while giving you full control over your commits:
 Optional reviews that validate work quality:
 - Runs after task execution with baseline-anchored diffs
 - Smart diff handling (uses `--stat` for large changesets >2000 lines or >20 files)
-- **Auto-fix**: When reviews return NEEDS_ATTENTION, optionally run the implementer agent to address feedback
+- Three review statuses: `PASS`, `NEEDS_ATTENTION`, `NEEDS_REPLAN`
+- **Auto-fix**: When reviews return `NEEDS_ATTENTION`, the implementer agent addresses feedback automatically
+- Auto-fix loop is configurable via `--max-review-fix-attempts` (default: 3, 0 to disable)
 - **Re-review**: Automatically re-runs review after auto-fix to verify fixes
-- PASS/NEEDS_ATTENTION output format for clear status
+- **Replan**: When reviews return `NEEDS_REPLAN`, triggers the replan loop (see below)
 - Enable with `--enable-review` flag
+
+### Self-Correction Loop
+Automatic error recovery during task execution:
+- When a task fails, INGOT feeds the error output back to the AI in a fresh session
+- Each correction attempt starts a clean LLM session — only the error is embedded in the new prompt
+- Configurable max attempts via `--max-self-corrections` (default: 3, 0 to disable)
+- Distinct from rate-limit retry (which retries the same prompt after a delay)
+
+### Replan Loop
+Automatic re-planning when the implementation approach is fundamentally wrong:
+- When code review returns `NEEDS_REPLAN`, INGOT loops back to Step 1
+- Working tree is restored to the baseline state before re-planning
+- Two replan modes: **AI-driven** (regenerates plan with review feedback) or **Manual** (user edits plan)
+- Each iteration: restore working tree → update plan → regenerate task list → re-execute
 
 ### Documentation Enforcement (Step 4)
 Non-blocking documentation maintenance with guardrails:
@@ -309,10 +325,13 @@ That's it! INGOT will guide you through the entire workflow with interactive pro
 │  │  • Capture baseline commit for diff anchoring                │    │
 │  │  • Phase 1: Sequential execution of FUNDAMENTAL tasks        │    │
 │  │  • Phase 2: Parallel execution of INDEPENDENT tasks          │    │
+│  │  • Self-correction loop per task (up to N attempts)          │    │
 │  │  • Post-implementation targeted test execution               │    │
 │  │  • Optional code review with auto-fix                        │    │
+│  │  • NEEDS_REPLAN → restore tree → back to Step 1              │    │
 │  └─────────────────────────────────────────────────────────────┘    │
-│      │                                                               │
+│      │         ▲                                                     │
+│      │         └── replan loop ──────────────────────────────┘      │
 │      ▼                                                               │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │  STEP 4: UPDATE DOCS (optional)                              │    │
@@ -497,6 +516,10 @@ Parallel Execution:
   --max-parallel N            Maximum parallel tasks (1-5, default: from config)
   --fail-fast/--no-fail-fast  Stop on first task failure
 
+Self-Correction & Review:
+  --max-self-corrections N    Max self-correction attempts per task (0 to disable, default: 3)
+  --max-review-fix-attempts N Max auto-fix attempts during review (0 to disable, default: 3)
+
 Rate Limiting:
   --max-retries N             Max retries on rate limit (0 to disable, default: 5)
   --retry-base-delay SECS     Base delay for retry backoff (default: 2.0 seconds)
@@ -608,12 +631,15 @@ AUTO_COMMIT="true"
 PARALLEL_EXECUTION_ENABLED="true"
 MAX_PARALLEL_TASKS="3"
 FAIL_FAST="false"
+MAX_SELF_CORRECTIONS="3"
+MAX_REVIEW_FIX_ATTEMPTS="3"
 
 # Fetch Strategy
 FETCH_STRATEGY_DEFAULT="auto"      # Options: auto, agent, direct
 FETCH_CACHE_DURATION_HOURS="24"
 FETCH_TIMEOUT_SECONDS="30"
 FETCH_MAX_RETRIES="3"
+FETCH_RETRY_DELAY_SECONDS="1.0"
 
 # Custom Subagent Names
 SUBAGENT_PLANNER="ingot-planner"
@@ -641,10 +667,13 @@ SUBAGENT_DOC_UPDATER="ingot-doc-updater"
 | `PARALLEL_EXECUTION_ENABLED` | bool | `true` | Enable parallel task execution |
 | `MAX_PARALLEL_TASKS` | int | `3` | Max concurrent tasks (1-5) |
 | `FAIL_FAST` | bool | `false` | Stop on first task failure |
+| `MAX_SELF_CORRECTIONS` | int | `3` | Max self-correction attempts per task (0 to disable) |
+| `MAX_REVIEW_FIX_ATTEMPTS` | int | `3` | Max auto-fix attempts during review (0 to disable) |
 | `FETCH_STRATEGY_DEFAULT` | string | `"auto"` | Fetch strategy: auto, agent, or direct |
 | `FETCH_CACHE_DURATION_HOURS` | int | `24` | Ticket cache TTL in hours |
 | `FETCH_TIMEOUT_SECONDS` | int | `30` | Fetch timeout per request |
 | `FETCH_MAX_RETRIES` | int | `3` | Max fetch retry attempts |
+| `FETCH_RETRY_DELAY_SECONDS` | float | `1.0` | Retry delay between fetch attempts |
 | `SUBAGENT_PLANNER` | string | `"ingot-planner"` | Custom planner agent name |
 | `SUBAGENT_TASKLIST` | string | `"ingot-tasklist"` | Custom tasklist agent name |
 | `SUBAGENT_TASKLIST_REFINER` | string | `"ingot-tasklist-refiner"` | Custom tasklist refiner agent name |
@@ -744,12 +773,15 @@ ingot/
 │   ├── settings.py         # Settings dataclass
 │   ├── fetch_config.py     # Fetch strategy and backend config
 │   ├── backend_resolver.py # Backend resolution logic
+│   ├── compatibility.py    # Backward-compatible config migrations
 │   ├── validation.py       # Configuration validation
 │   └── display.py          # Configuration display
 ├── integrations/            # External integrations
 │   ├── backends/           # AI backend implementations
 │   │   ├── base.py        # AIBackend protocol and BaseBackend
 │   │   ├── factory.py     # BackendFactory for instantiation
+│   │   ├── errors.py      # Backend-specific error re-exports
+│   │   ├── model_discovery.py # Model detection and validation
 │   │   ├── auggie.py      # Auggie backend
 │   │   ├── claude.py      # Claude Code backend
 │   │   ├── cursor.py      # Cursor backend
@@ -760,6 +792,8 @@ ingot/
 │   │   ├── base.py        # IssueTrackerProvider ABC
 │   │   ├── registry.py    # Provider registry
 │   │   ├── detector.py    # Platform detection
+│   │   ├── exceptions.py  # Provider-specific exceptions
+│   │   ├── user_interaction.py # Interactive platform prompts
 │   │   ├── jira.py        # Jira provider
 │   │   ├── linear.py      # Linear provider
 │   │   ├── github.py      # GitHub provider
@@ -767,6 +801,27 @@ ingot/
 │   │   ├── monday.py      # Monday provider
 │   │   └── trello.py      # Trello provider
 │   ├── fetchers/           # Ticket fetching strategies
+│   │   ├── base.py        # Base fetcher ABC
+│   │   ├── auggie_fetcher.py  # Auggie MCP fetcher
+│   │   ├── claude_fetcher.py  # Claude MCP fetcher
+│   │   ├── cursor_fetcher.py  # Cursor MCP fetcher
+│   │   ├── direct_api_fetcher.py # Direct API fetcher
+│   │   ├── templates.py   # Fetch prompt templates
+│   │   ├── exceptions.py  # Fetcher-specific exceptions
+│   │   └── handlers/      # Per-platform API handlers
+│   │       ├── base.py    # Base handler ABC
+│   │       ├── jira.py    # Jira API handler
+│   │       ├── linear.py  # Linear API handler
+│   │       ├── github.py  # GitHub API handler
+│   │       ├── azure_devops.py # Azure DevOps API handler
+│   │       ├── monday.py  # Monday API handler
+│   │       └── trello.py  # Trello API handler
+│   ├── auggie.py           # Auggie client module
+│   ├── claude.py           # Claude client module
+│   ├── cursor.py           # Cursor client module
+│   ├── aider.py            # Aider client module
+│   ├── gemini.py           # Gemini client module
+│   ├── codex.py            # Codex client module
 │   ├── git.py             # Git operations
 │   ├── agents.py          # Agent file management
 │   ├── auth.py            # Authentication manager
@@ -789,7 +844,7 @@ ingot/
 │   └── error_analysis.py  # Error classification
 └── workflow/               # Workflow execution engine
     ├── runner.py           # Main workflow orchestrator
-    ├── state.py            # Workflow state management
+    ├── state.py            # Workflow state management (WorkflowState)
     ├── constants.py        # Agent names and timeout values
     ├── events.py           # Task execution events
     ├── tasks.py            # Task parsing, categories, metadata

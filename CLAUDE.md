@@ -17,8 +17,8 @@
 - **Architecture**: Domain-driven, optimized for Spec-Driven Development (SDD).
 - **Backend Patterns**: Prefer explicit over implicit, use Pydantic for data validation.
 - **Async**: Use `asyncio` where appropriate for AI agent calls.
-- **Error Handling**: Custom exceptions defined in `ingot/exceptions.py`.
+- **Error Handling**: Custom exceptions defined in `ingot/utils/errors.py` (`IngotError` base class).
 
 ## Project Context
 - This is a CLI tool named 'Ingot' designed to enhance the Spec-Driven Development (SDD) process for AI agents.
-- It interacts with AI agents (like Augment/Auggie) to automate development tasks.
+- It interacts with AI agents (Auggie, Claude Code, Cursor, Aider, Gemini, Codex) to automate development tasks.

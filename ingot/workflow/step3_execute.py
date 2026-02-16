@@ -70,7 +70,7 @@ from ingot.workflow.prompts import (
     build_self_correction_prompt,
     build_task_prompt,
 )
-from ingot.workflow.review import run_phase_review
+from ingot.workflow.review import ReviewOutcome, run_phase_review
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import (
     Task,
@@ -301,13 +301,16 @@ def step_3_execute(
     # right before commit instructions. Validates complete implementation
     # against the Step 1 spec as a whole.
     if state.enable_phase_review:
-        review_passed = run_phase_review(state, log_dir, phase="final", backend=backend)
-        if not review_passed:
-            # User explicitly chose to stop
+        review_outcome = run_phase_review(state, log_dir, phase="final", backend=backend)
+        if review_outcome == ReviewOutcome.STOP:
             print_warning(
                 "Workflow stopped after final review. Please address issues before committing."
             )
             return False
+        elif review_outcome == ReviewOutcome.REPLAN:
+            print_info("Re-planning requested. Restarting execution after plan update.")
+            return False  # Runner detects replan via state.replan_feedback
+        # CONTINUE falls through
 
     print_info(f"Task logs saved to: {log_dir}")
 

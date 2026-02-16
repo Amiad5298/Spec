@@ -35,7 +35,7 @@ from ingot.workflow.conflict_detection import detect_context_conflict
 from ingot.workflow.git_utils import DirtyTreePolicy
 from ingot.workflow.state import RateLimitConfig, WorkflowState
 from ingot.workflow.step1_5_clarification import step_1_5_clarification
-from ingot.workflow.step1_plan import step_1_create_plan
+from ingot.workflow.step1_plan import replan_with_feedback, step_1_create_plan
 from ingot.workflow.step2_tasklist import step_2_create_tasklist
 from ingot.workflow.step3_execute import step_3_execute
 from ingot.workflow.step4_update_docs import Step4Result, step_4_update_docs
@@ -215,13 +215,40 @@ def run_ingot_workflow(
                     success=False, error="Step 2 (tasklist) failed", steps_completed=1
                 )
 
-        # Step 3: Execute implementation
-        if state.current_step <= 3:
+        # Step 3: Execute implementation (with replan loop)
+        while state.current_step <= 3:
             print_info("Starting Step 3: Execute Implementation")
             if not step_3_execute(state, backend=backend, use_tui=use_tui, verbose=verbose):
-                return WorkflowResult(
-                    success=False, error="Step 3 (execute) failed", steps_completed=2
-                )
+                if state.replan_feedback and state.replan_count < state.max_replans:
+                    state.replan_count += 1
+                    print_info(f"Re-planning attempt {state.replan_count}/{state.max_replans}...")
+                    if not replan_with_feedback(state, backend, state.replan_feedback):
+                        return WorkflowResult(
+                            success=False, error="Re-planning failed", steps_completed=2
+                        )
+                    state.replan_feedback = ""
+                    state.completed_tasks.clear()
+                    # Override dirty tree policy for re-execution
+                    # (tree has changes from previous flawed execution)
+                    state.dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
+                    # Regenerate task list with updated plan
+                    if not step_2_create_tasklist(state, backend):
+                        return WorkflowResult(
+                            success=False,
+                            error="Task list regeneration failed",
+                            steps_completed=2,
+                        )
+                    continue  # Re-run step 3
+                elif state.replan_feedback:
+                    print_warning(f"Maximum re-plan attempts ({state.max_replans}) reached.")
+                    return WorkflowResult(
+                        success=False, error="Max replans exhausted", steps_completed=2
+                    )
+                else:
+                    return WorkflowResult(
+                        success=False, error="Step 3 (execute) failed", steps_completed=2
+                    )
+            break  # Step 3 succeeded
 
         # Step 4: Update documentation (optional, non-blocking)
         if auto_update_docs:

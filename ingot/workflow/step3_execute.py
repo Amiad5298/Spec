@@ -95,6 +95,7 @@ class Step3Result:
     success: bool
     needs_replan: bool = False
     replan_feedback: str = ""
+    replan_mode: ReviewOutcome = ReviewOutcome.CONTINUE
 
 
 @dataclass
@@ -318,9 +319,14 @@ def step_3_execute(
                 "Workflow stopped after final review. Please address issues before committing."
             )
             return Step3Result(success=False)
-        elif review_outcome == ReviewOutcome.REPLAN:
+        elif review_outcome in (ReviewOutcome.REPLAN_WITH_AI, ReviewOutcome.REPLAN_MANUAL):
             print_info("Re-planning requested. Restarting execution after plan update.")
-            return Step3Result(success=False, needs_replan=True, replan_feedback=review_feedback)
+            return Step3Result(
+                success=False,
+                needs_replan=True,
+                replan_feedback=review_feedback,
+                replan_mode=review_outcome,
+            )
         # CONTINUE falls through
 
     print_info(f"Task logs saved to: {log_dir}")

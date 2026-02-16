@@ -16,6 +16,7 @@ import pytest
 
 from ingot.integrations.providers import GenericTicket, Platform
 from ingot.workflow.git_utils import DirtyTreePolicy
+from ingot.workflow.review import ReviewOutcome
 from ingot.workflow.runner import run_ingot_workflow
 from ingot.workflow.step3_execute import Step3Result
 from ingot.workflow.step5_commit import Step5Result
@@ -90,7 +91,12 @@ class TestReplanSuccessfulCycle:
     ):
         # First call: fail with replan; second call: succeed
         mock_step3.side_effect = [
-            Step3Result(success=False, needs_replan=True, replan_feedback="Plan is wrong"),
+            Step3Result(
+                success=False,
+                needs_replan=True,
+                replan_feedback="Plan is wrong",
+                replan_mode=ReviewOutcome.REPLAN_WITH_AI,
+            ),
             Step3Result(success=True),
         ]
         mock_replan.return_value = True
@@ -130,7 +136,10 @@ class TestReplanMaxExhausted:
     ):
         # Always return needs_replan - will exhaust max_replans
         mock_step3.return_value = Step3Result(
-            success=False, needs_replan=True, replan_feedback="Plan is wrong"
+            success=False,
+            needs_replan=True,
+            replan_feedback="Plan is wrong",
+            replan_mode=ReviewOutcome.REPLAN_WITH_AI,
         )
 
         with patch("ingot.workflow.runner.replan_with_feedback", return_value=True):
@@ -163,7 +172,10 @@ class TestReplanFailure:
         mock_config,
     ):
         mock_step3.return_value = Step3Result(
-            success=False, needs_replan=True, replan_feedback="feedback"
+            success=False,
+            needs_replan=True,
+            replan_feedback="feedback",
+            replan_mode=ReviewOutcome.REPLAN_WITH_AI,
         )
         mock_replan.return_value = False  # Replan fails
 
@@ -197,7 +209,10 @@ class TestReplanTasklistFailure:
         mock_config,
     ):
         mock_step3.return_value = Step3Result(
-            success=False, needs_replan=True, replan_feedback="feedback"
+            success=False,
+            needs_replan=True,
+            replan_feedback="feedback",
+            replan_mode=ReviewOutcome.REPLAN_WITH_AI,
         )
         mock_replan.return_value = True
         mock_restore.return_value = True
@@ -271,7 +286,12 @@ class TestReplanRestoresWorkingTree:
             call_count[0] += 1
             if call_count[0] == 1:
                 state.diff_baseline_ref = "baseline123"
-                return Step3Result(success=False, needs_replan=True, replan_feedback="feedback")
+                return Step3Result(
+                    success=False,
+                    needs_replan=True,
+                    replan_feedback="feedback",
+                    replan_mode=ReviewOutcome.REPLAN_WITH_AI,
+                )
             return Step3Result(success=True)
 
         mock_step3.side_effect = step3_side_effect
@@ -314,7 +334,12 @@ class TestReplanRestoresWorkingTree:
             call_count[0] += 1
             if call_count[0] == 1:
                 state.diff_baseline_ref = "baseline123"
-                return Step3Result(success=False, needs_replan=True, replan_feedback="feedback")
+                return Step3Result(
+                    success=False,
+                    needs_replan=True,
+                    replan_feedback="feedback",
+                    replan_mode=ReviewOutcome.REPLAN_WITH_AI,
+                )
             return Step3Result(success=True)
 
         mock_step3.side_effect = step3_side_effect
@@ -366,7 +391,12 @@ class TestReplanResetsState:
             if call_count[0] == 1:
                 # Simulate some completed tasks
                 state.completed_tasks = ["Task 1", "Task 2"]
-                return Step3Result(success=False, needs_replan=True, replan_feedback="feedback")
+                return Step3Result(
+                    success=False,
+                    needs_replan=True,
+                    replan_feedback="feedback",
+                    replan_mode=ReviewOutcome.REPLAN_WITH_AI,
+                )
             else:
                 # On second call, verify state was reset
                 assert state.completed_tasks == []

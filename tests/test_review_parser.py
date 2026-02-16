@@ -1100,16 +1100,17 @@ class TestReviewOutcomeEnum:
     def test_review_outcome_values(self):
         assert ReviewOutcome.CONTINUE.value == "CONTINUE"
         assert ReviewOutcome.STOP.value == "STOP"
-        assert ReviewOutcome.REPLAN.value == "REPLAN"
+        assert ReviewOutcome.REPLAN_WITH_AI.value == "REPLAN_WITH_AI"
+        assert ReviewOutcome.REPLAN_MANUAL.value == "REPLAN_MANUAL"
 
     def test_review_outcome_members(self):
-        assert len(ReviewOutcome) == 3
+        assert len(ReviewOutcome) == 4
 
 
 class TestHandleNeedsReplan:
     @patch("ingot.workflow.review.prompt_select")
     @patch("ingot.workflow.review.print_info")
-    def test_replan_with_ai_returns_replan(self, _info, mock_select):
+    def test_replan_with_ai_returns_replan_with_ai(self, _info, mock_select):
         from ingot.workflow.review import _handle_needs_replan
 
         mock_select.return_value = "Re-plan with AI"
@@ -1118,12 +1119,11 @@ class TestHandleNeedsReplan:
 
         result = _handle_needs_replan(state, "review output with replan reason")
 
-        assert result == (ReviewOutcome.REPLAN, "review output with replan reason")
+        assert result == (ReviewOutcome.REPLAN_WITH_AI, "review output with replan reason")
 
-    @patch("ingot.workflow.review.prompt_enter")
     @patch("ingot.workflow.review.prompt_select")
     @patch("ingot.workflow.review.print_info")
-    def test_edit_manually_returns_replan(self, _info, mock_select, _enter):
+    def test_edit_manually_returns_replan_manual(self, _info, mock_select):
         from ingot.workflow.review import _handle_needs_replan
 
         mock_select.return_value = "Edit plan manually"
@@ -1132,7 +1132,7 @@ class TestHandleNeedsReplan:
 
         result = _handle_needs_replan(state, "review output")
 
-        assert result == (ReviewOutcome.REPLAN, "review output")
+        assert result == (ReviewOutcome.REPLAN_MANUAL, "review output")
 
     @patch("ingot.workflow.review.prompt_select")
     @patch("ingot.workflow.review.print_info")
@@ -1167,11 +1167,11 @@ class TestRunPhaseReviewNeedsReplan:
         )
 
         mock_diff.return_value = ("diff content", False, False)
-        mock_handler.return_value = (ReviewOutcome.REPLAN, "feedback")
+        mock_handler.return_value = (ReviewOutcome.REPLAN_WITH_AI, "feedback")
 
         result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
-        assert result == (ReviewOutcome.REPLAN, "feedback")
+        assert result == (ReviewOutcome.REPLAN_WITH_AI, "feedback")
         mock_handler.assert_called_once()
 
     @patch("ingot.workflow.review.print_success")

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ingot.integrations.backends.base import AIBackend
-from ingot.ui.prompts import prompt_confirm, prompt_enter, prompt_select
+from ingot.ui.prompts import prompt_confirm, prompt_select
 from ingot.utils.console import (
     print_info,
     print_step,
@@ -64,7 +64,8 @@ class ReviewOutcome(Enum):
 
     CONTINUE = "CONTINUE"
     STOP = "STOP"
-    REPLAN = "REPLAN"
+    REPLAN_WITH_AI = "REPLAN_WITH_AI"
+    REPLAN_MANUAL = "REPLAN_MANUAL"
 
 
 def parse_review_status(output: str) -> ReviewStatus:
@@ -325,7 +326,9 @@ def _handle_needs_replan(state: WorkflowState, output: str) -> tuple[ReviewOutco
 
     Returns:
         Tuple of (ReviewOutcome, feedback_str). The feedback string contains
-        the review output when REPLAN is chosen, empty string otherwise.
+        the review output when a replan mode is chosen, empty string otherwise.
+        The Runner is responsible for handling the actual replan flow (restore,
+        AI generation, or pausing for manual edit).
     """
     _display_replan_reason(output)
 
@@ -340,12 +343,9 @@ def _handle_needs_replan(state: WorkflowState, output: str) -> tuple[ReviewOutco
     )
 
     if choice == "Re-plan with AI":
-        return (ReviewOutcome.REPLAN, output)
+        return (ReviewOutcome.REPLAN_WITH_AI, output)
     elif choice == "Edit plan manually":
-        plan_path = state.get_plan_path()
-        print_info(f"Plan file: {plan_path}")
-        prompt_enter("Press Enter after editing the plan...")
-        return (ReviewOutcome.REPLAN, output)
+        return (ReviewOutcome.REPLAN_MANUAL, output)
     else:
         return (ReviewOutcome.CONTINUE, "")
 
@@ -506,7 +506,8 @@ def run_phase_review(
         Tuple of (ReviewOutcome, feedback_str):
         - ReviewOutcome.CONTINUE with empty string if review passed or user chose to continue
         - ReviewOutcome.STOP with empty string if user explicitly chose to stop
-        - ReviewOutcome.REPLAN with review output if re-planning requested
+        - ReviewOutcome.REPLAN_WITH_AI with review output if AI re-planning requested
+        - ReviewOutcome.REPLAN_MANUAL with review output if manual re-planning requested
     """
     print_step(f"Running {phase} phase review...")
 

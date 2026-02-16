@@ -10,7 +10,9 @@ Tests cover:
 
 from unittest.mock import MagicMock, call, patch
 
-from ingot.workflow.review import ReviewStatus, parse_review_status
+import pytest
+
+from ingot.workflow.review import ExitReason, ReviewStatus, parse_review_status
 
 
 class TestParseReviewStatusCanonical:
@@ -529,7 +531,9 @@ class TestRunPhaseReview:
         mock_diff.return_value = ("diff content", False, False)
         # auto-fix (Yes), then continue (Yes)
         mock_confirm.side_effect = [True, True]
-        mock_loop.return_value = ReviewFixResult(passed=False, fix_attempts=3, max_attempts=3)
+        mock_loop.return_value = ReviewFixResult(
+            passed=False, exit_reason=ExitReason.EXHAUSTED, fix_attempts=3, max_attempts=3
+        )
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
@@ -579,7 +583,9 @@ class TestRunPhaseReview:
 
         mock_diff.return_value = ("diff content", False, False)
         mock_confirm.return_value = True  # Accept auto-fix
-        mock_loop.return_value = ReviewFixResult(passed=True, fix_attempts=1, max_attempts=3)
+        mock_loop.return_value = ReviewFixResult(
+            passed=True, exit_reason=ExitReason.PASSED, fix_attempts=1, max_attempts=3
+        )
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
@@ -807,12 +813,13 @@ class TestRunReviewFixLoop:
         assert result.passed is False
         assert result.fix_attempts == 1
 
+    @patch("ingot.workflow.review.print_info")
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
     @patch("ingot.workflow.review.get_smart_diff")
     @patch("ingot.workflow.autofix.run_auto_fix")
-    def test_autofix_failure_returns_failed(self, mock_autofix, mock_diff, _step, _warn):
-        """When run_auto_fix reports failure, the loop short-circuits."""
+    def test_autofix_failure_proceeds_to_verify(self, mock_autofix, mock_diff, _step, _warn, _info):
+        """When run_auto_fix reports failure, the loop still proceeds to verify."""
         from ingot.workflow.review import _run_review_fix_loop
 
         state = MagicMock()
@@ -821,15 +828,19 @@ class TestRunReviewFixLoop:
         state.subagent_names = {"reviewer": "ingot-reviewer"}
 
         mock_backend = MagicMock()
+        # Autofix fails but reviewer passes (partial fix was sufficient)
         mock_autofix.return_value = False
         mock_diff.return_value = ("diff content", False, False)
+        mock_backend.run_with_callback.return_value = (
+            True,
+            "**Status**: NEEDS_ATTENTION\nStill has issues",
+        )
 
         result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
 
-        assert result.passed is False
-        assert result.fix_attempts == 1
-        # Should not proceed to verify since fix failed
-        mock_backend.run_with_callback.assert_not_called()
+        # Verify phase IS reached even when autofix fails
+        mock_backend.run_with_callback.assert_called()
+        assert result.fix_attempts >= 1
 
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
@@ -865,3 +876,102 @@ class TestRunReviewFixLoop:
             log_dir,
             mock_backend,
         )
+
+    @patch("ingot.workflow.review.print_step")
+    def test_zero_max_attempts_returns_failed_immediately(self, _step):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 0
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is False
+        assert result.exit_reason == ExitReason.EXHAUSTED
+        assert result.fix_attempts == 0
+        # No backend calls should have been made
+        mock_backend.run_with_callback.assert_not_called()
+
+    @patch("ingot.workflow.review.print_success")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_partial_fix_success_when_autofix_fails_but_reviewer_passes(
+        self, mock_autofix, mock_diff, _step, _warn, _success
+    ):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        # Autofix reports failure, but reviewer still passes
+        mock_autofix.return_value = False
+        mock_diff.return_value = ("diff content", False, False)
+        mock_backend.run_with_callback.return_value = (True, "**Status**: PASS")
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is True
+        assert result.exit_reason == ExitReason.PASSED
+        assert result.fix_attempts == 1
+
+
+class TestWorkflowStateValidation:
+    def test_max_review_fix_attempts_rejects_negative(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_review_fix_attempts must be 0-10"):
+            WorkflowState(ticket=ticket, max_review_fix_attempts=-1)
+
+    def test_max_review_fix_attempts_rejects_over_10(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_review_fix_attempts must be 0-10"):
+            WorkflowState(ticket=ticket, max_review_fix_attempts=11)
+
+    def test_max_review_fix_attempts_accepts_valid_range(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        for val in (0, 5, 10):
+            state = WorkflowState(ticket=ticket, max_review_fix_attempts=val)
+            assert state.max_review_fix_attempts == val
+
+    def test_max_self_corrections_rejects_negative(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_self_corrections must be 0-10"):
+            WorkflowState(ticket=ticket, max_self_corrections=-1)
+
+    def test_max_self_corrections_rejects_over_10(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_self_corrections must be 0-10"):
+            WorkflowState(ticket=ticket, max_self_corrections=11)

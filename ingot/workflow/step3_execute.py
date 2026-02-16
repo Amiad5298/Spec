@@ -25,6 +25,7 @@ Helper modules:
 """
 
 import functools
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -97,8 +98,8 @@ class SelfCorrectionResult:
     total_attempts: int = 1
 
 
-@functools.cache
-def _get_repo_root() -> Path:
+@functools.lru_cache(maxsize=8)
+def _get_repo_root(cwd: str | None = None) -> Path:
     """Get repository root, falling back to cwd if not in a git repo."""
     return find_repo_root() or Path.cwd()
 
@@ -560,7 +561,7 @@ def _execute_task(
         plan_path,
         is_parallel=False,
         user_context=state.user_context,
-        repo_root=_get_repo_root(),
+        repo_root=_get_repo_root(os.getcwd()),
     )
 
     try:
@@ -610,7 +611,7 @@ def _execute_task_with_callback(
         plan_path,
         is_parallel=is_parallel,
         user_context=state.user_context,
-        repo_root=_get_repo_root(),
+        repo_root=_get_repo_root(os.getcwd()),
     )
 
     try:
@@ -731,7 +732,7 @@ def _execute_task_with_self_correction(
         plan_path,
         is_parallel=is_parallel,
         user_context=state.user_context,
-        repo_root=_get_repo_root(),
+        repo_root=_get_repo_root(os.getcwd()),
     )
     success, output = _run_backend_capturing_output(
         state,
@@ -764,7 +765,7 @@ def _execute_task_with_self_correction(
             max_attempts=max_corrections,
             is_parallel=is_parallel,
             user_context=state.user_context,
-            repo_root=_get_repo_root(),
+            repo_root=_get_repo_root(os.getcwd()),
             ticket_title=state.ticket.title,
             ticket_description=state.ticket.description,
         )

@@ -142,6 +142,14 @@ class WorkflowState:
         }
     )
 
+    def __post_init__(self) -> None:
+        if self.max_review_fix_attempts < 0 or self.max_review_fix_attempts > 10:
+            raise ValueError(
+                f"max_review_fix_attempts must be 0-10, got {self.max_review_fix_attempts}"
+            )
+        if self.max_self_corrections < 0 or self.max_self_corrections > 10:
+            raise ValueError(f"max_self_corrections must be 0-10, got {self.max_self_corrections}")
+
     @property
     def specs_dir(self) -> Path:
         """Get the specs directory path."""

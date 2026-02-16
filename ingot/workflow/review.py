@@ -37,11 +37,23 @@ class ReviewStatus(Enum):
     NEEDS_ATTENTION = "NEEDS_ATTENTION"
 
 
+class ExitReason(Enum):
+    """Why the review-fix loop terminated."""
+
+    PASSED = "PASSED"
+    EXHAUSTED = "EXHAUSTED"
+    AUTOFIX_FAILED_INTERNAL = "AUTOFIX_FAILED_INTERNAL"
+    VERIFY_FAILED = "VERIFY_FAILED"
+    GIT_ERROR = "GIT_ERROR"
+    NO_DIFF = "NO_DIFF"
+
+
 @dataclass
 class ReviewFixResult:
     """Result of the review-fix loop."""
 
     passed: bool
+    exit_reason: ExitReason
     review_output: str = ""
     fix_attempts: int = 0
     max_attempts: int = 0
@@ -223,6 +235,34 @@ def _get_diff_for_review(state: WorkflowState) -> tuple[str, bool, bool]:
         return get_smart_diff()
 
 
+def _display_review_issues(output: str) -> None:
+    """Extract and display review issues from reviewer output.
+
+    Looks for a structured **Issues**: section. Falls back to showing
+    the last 10 non-status lines if no structured section is found.
+    """
+    # Try to extract structured issues section
+    issues_match = re.search(
+        r"\*\*Issues\*\*\s*:\s*\n((?:.*\n)*?)(?:\n\*\*|\Z)",
+        output,
+    )
+    if issues_match:
+        for line in issues_match.group(1).strip().splitlines():
+            stripped = line.strip()
+            if stripped:
+                print_info(f"  {stripped}")
+        return
+
+    # Fallback: show last 10 non-empty, non-status lines
+    lines = [
+        ln.strip()
+        for ln in output.splitlines()
+        if ln.strip() and not re.match(r"^\*?\*?Status\*?\*?\s*:", ln.strip(), re.IGNORECASE)
+    ]
+    for line in lines[-10:]:
+        print_info(f"  {line}")
+
+
 def _run_review_fix_loop(
     state: WorkflowState,
     review_output: str,
@@ -250,6 +290,15 @@ def _run_review_fix_loop(
     max_attempts = state.max_review_fix_attempts
     current_feedback = review_output
 
+    if max_attempts <= 0:
+        return ReviewFixResult(
+            passed=False,
+            exit_reason=ExitReason.EXHAUSTED,
+            review_output=review_output,
+            fix_attempts=0,
+            max_attempts=max_attempts,
+        )
+
     for attempt in range(1, max_attempts + 1):
         # --- FIX phase ---
         print_step(f"[AUTO-FIX {attempt}/{max_attempts}] Attempting fix for {phase} review...")
@@ -257,14 +306,9 @@ def _run_review_fix_loop(
 
         if not fix_success:
             print_warning(f"[AUTO-FIX {attempt}/{max_attempts}] Auto-fix reported failure")
-            return ReviewFixResult(
-                passed=False,
-                review_output=current_feedback,
-                fix_attempts=attempt,
-                max_attempts=max_attempts,
-            )
 
         # --- VERIFY phase ---
+        # Always verify, even after autofix failure — partial fixes may satisfy the reviewer
         print_step(f"[VERIFY {attempt}/{max_attempts}] Re-reviewing after fix...")
 
         diff_output, is_truncated, git_error = _get_diff_for_review(state)
@@ -273,15 +317,17 @@ def _run_review_fix_loop(
             print_warning("Could not retrieve git diff for verification")
             return ReviewFixResult(
                 passed=False,
+                exit_reason=ExitReason.GIT_ERROR,
                 review_output=current_feedback,
                 fix_attempts=attempt,
                 max_attempts=max_attempts,
             )
 
         if not diff_output.strip():
-            print_info("No changes remain after fix")
+            print_info("Working tree clean relative to baseline -- no changes remain")
             return ReviewFixResult(
                 passed=True,
+                exit_reason=ExitReason.NO_DIFF,
                 review_output="",
                 fix_attempts=attempt,
                 max_attempts=max_attempts,
@@ -300,6 +346,7 @@ def _run_review_fix_loop(
             print_warning(f"Verification review failed: {e}")
             return ReviewFixResult(
                 passed=False,
+                exit_reason=ExitReason.VERIFY_FAILED,
                 review_output=current_feedback,
                 fix_attempts=attempt,
                 max_attempts=max_attempts,
@@ -309,6 +356,7 @@ def _run_review_fix_loop(
             print_warning("Verification review returned failure")
             return ReviewFixResult(
                 passed=False,
+                exit_reason=ExitReason.VERIFY_FAILED,
                 review_output=current_feedback,
                 fix_attempts=attempt,
                 max_attempts=max_attempts,
@@ -320,20 +368,23 @@ def _run_review_fix_loop(
             print_success(f"[VERIFY {attempt}/{max_attempts}] {phase.capitalize()} review: PASS")
             return ReviewFixResult(
                 passed=True,
+                exit_reason=ExitReason.PASSED,
                 review_output=output,
                 fix_attempts=attempt,
                 max_attempts=max_attempts,
             )
 
-        # NEEDS_ATTENTION — feed new review output into next fix attempt
+        # NEEDS_ATTENTION — display issues and feed into next fix attempt
         print_warning(
             f"[VERIFY {attempt}/{max_attempts}] {phase.capitalize()} review: NEEDS_ATTENTION"
         )
+        _display_review_issues(output)
         current_feedback = output
 
     # All attempts exhausted
     return ReviewFixResult(
         passed=False,
+        exit_reason=ExitReason.EXHAUSTED,
         review_output=current_feedback,
         fix_attempts=max_attempts,
         max_attempts=max_attempts,
@@ -430,10 +481,25 @@ def run_phase_review(
             loop_result = _run_review_fix_loop(state, output, log_dir, phase, backend)
             if loop_result.passed:
                 return True
-            if loop_result.fix_attempts > 0:
-                print_info(
-                    f"Auto-fix made {loop_result.fix_attempts} attempt(s) but issues remain."
-                )
+            match loop_result.exit_reason:
+                case ExitReason.EXHAUSTED:
+                    print_info(
+                        f"Auto-fix made {loop_result.fix_attempts} attempt(s) "
+                        "but review issues remain."
+                    )
+                case ExitReason.GIT_ERROR:
+                    print_info("Auto-fix aborted: could not retrieve git diff for verification.")
+                case ExitReason.VERIFY_FAILED:
+                    print_info(
+                        f"Auto-fix attempt {loop_result.fix_attempts}: "
+                        "verification review failed to execute."
+                    )
+                case ExitReason.NO_DIFF:
+                    print_info(
+                        "Working tree clean relative to baseline -- " "no changes remain after fix."
+                    )
+                case _:
+                    pass
 
     # Ask user if they want to continue or stop
     if prompt_confirm("Continue workflow despite review issues?", default=True):
@@ -444,9 +510,10 @@ def run_phase_review(
 
 
 __all__ = [
+    "ExitReason",
     "ReviewFixResult",
     "ReviewStatus",
-    "parse_review_status",
     "build_review_prompt",
+    "parse_review_status",
     "run_phase_review",
 ]

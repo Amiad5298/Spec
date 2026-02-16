@@ -81,6 +81,7 @@ class Settings:
     parallel_execution_enabled: bool = True
     max_parallel_tasks: int = 3
     fail_fast: bool = False
+    max_self_corrections: int = 3  # Max self-correction attempts per task (0 = disable)
 
     # Subagent settings (customizable agent names)
     # Defaults use local constants to avoid circular imports
@@ -129,6 +130,7 @@ class Settings:
             "PARALLEL_EXECUTION_ENABLED": "parallel_execution_enabled",
             "MAX_PARALLEL_TASKS": "max_parallel_tasks",
             "FAIL_FAST": "fail_fast",
+            "MAX_SELF_CORRECTIONS": "max_self_corrections",
             "SUBAGENT_PLANNER": "subagent_planner",
             "SUBAGENT_TASKLIST": "subagent_tasklist",
             "SUBAGENT_TASKLIST_REFINER": "subagent_tasklist_refiner",

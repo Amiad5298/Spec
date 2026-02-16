@@ -136,6 +136,13 @@ def main(
             help="Stop on first task failure (default: from config)",
         ),
     ] = None,
+    max_self_corrections: Annotated[
+        int | None,
+        typer.Option(
+            "--max-self-corrections",
+            help="Max self-correction attempts per task (0 to disable, default: 3)",
+        ),
+    ] = None,
     max_retries: Annotated[
         int,
         typer.Option(
@@ -263,6 +270,7 @@ def main(
                 parallel=parallel,
                 max_parallel=max_parallel,
                 fail_fast=fail_fast,
+                max_self_corrections=max_self_corrections,
                 max_retries=max_retries,
                 retry_base_delay=retry_base_delay,
                 enable_review=enable_review,

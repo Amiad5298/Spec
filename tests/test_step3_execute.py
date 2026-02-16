@@ -11,12 +11,13 @@ from ingot.workflow.log_management import (
     create_run_log_dir,
     get_log_base_dir,
 )
-from ingot.workflow.prompts import build_task_prompt
+from ingot.workflow.prompts import build_self_correction_prompt, build_task_prompt
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step3_execute import (
     _execute_fallback,
     _execute_task,
     _execute_task_with_callback,
+    _execute_task_with_self_correction,
     _execute_with_tui,
     _run_post_implementation_tests,
     _show_summary,
@@ -43,6 +44,10 @@ def workflow_state(ticket, tmp_path):
     """Create a workflow state for testing."""
     state = WorkflowState(ticket=ticket)
     state.implementation_model = "test-model"
+    # Disable self-correction by default so existing tests that mock
+    # _execute_task/_execute_task_with_callback directly still work.
+    # Tests for self-correction override this.
+    state.max_self_corrections = 0
 
     # Create specs directory and tasklist
     specs_dir = tmp_path / "specs"
@@ -1894,3 +1899,238 @@ class TestCaptureBaselineForDiffs:
 
         assert result is False
         mock_error.assert_called_once()
+
+
+class TestBuildSelfCorrectionPrompt:
+    def test_includes_attempt_info(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(
+            sample_task, plan_path, "some error", attempt=2, max_attempts=3
+        )
+
+        assert "Self-correction attempt 2/3" in result
+
+    def test_includes_error_output(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(
+            sample_task, plan_path, "TypeError: cannot add int and str", attempt=1, max_attempts=3
+        )
+
+        assert "TypeError: cannot add int and str" in result
+
+    def test_truncates_long_output(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        long_output = "x" * 5000
+        result = build_self_correction_prompt(
+            sample_task, plan_path, long_output, attempt=1, max_attempts=3
+        )
+
+        assert "output truncated" in result
+        assert len(result) < len(long_output) + 1000  # Prompt overhead
+
+    def test_includes_no_commit_constraint(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(
+            sample_task, plan_path, "error", attempt=1, max_attempts=3
+        )
+
+        assert "Do NOT commit" in result
+
+    def test_includes_target_files(self, tmp_path):
+        task = Task(name="Fix module", target_files=["src/foo.py", "src/bar.py"])
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(task, plan_path, "error", attempt=1, max_attempts=3)
+
+        assert "src/foo.py" in result
+        assert "src/bar.py" in result
+
+    def test_includes_user_context(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(
+            sample_task,
+            plan_path,
+            "error",
+            attempt=1,
+            max_attempts=3,
+            user_context="Use the v2 API",
+        )
+
+        assert "Additional Context:" in result
+        assert "Use the v2 API" in result
+
+    def test_includes_task_name(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(
+            sample_task, plan_path, "error", attempt=1, max_attempts=3
+        )
+
+        assert "Implement feature" in result
+
+    def test_includes_parallel_mode(self, sample_task, tmp_path):
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        result = build_self_correction_prompt(
+            sample_task, plan_path, "error", attempt=1, max_attempts=3, is_parallel=True
+        )
+
+        assert "Parallel mode: YES" in result
+
+
+class TestSelfCorrection:
+    def test_succeeds_on_first_try(self, mock_backend, workflow_state, sample_task):
+        """When first attempt succeeds, no correction is triggered."""
+        mock_backend.run_with_callback.return_value = (True, "Success output")
+        workflow_state.max_self_corrections = 3
+
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+        )
+
+        assert result is True
+        assert mock_backend.run_with_callback.call_count == 1
+
+    def test_correction_succeeds_on_second_attempt(self, mock_backend, workflow_state, sample_task):
+        """Task fails first, then correction succeeds."""
+        mock_backend.run_with_callback.side_effect = [
+            (False, "Error: undefined variable"),
+            (True, "Fixed and succeeded"),
+        ]
+        workflow_state.max_self_corrections = 3
+
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+        )
+
+        assert result is True
+        assert mock_backend.run_with_callback.call_count == 2
+
+    def test_all_corrections_exhausted(self, mock_backend, workflow_state, sample_task):
+        """All correction attempts fail, returns False."""
+        mock_backend.run_with_callback.return_value = (False, "Still broken")
+        workflow_state.max_self_corrections = 2
+
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+        )
+
+        assert result is False
+        # 1 initial + 2 corrections = 3 total calls
+        assert mock_backend.run_with_callback.call_count == 3
+
+    def test_disabled_with_zero(self, mock_backend, workflow_state, sample_task):
+        """When max_self_corrections=0, single call, no correction loop."""
+        mock_backend.run_with_callback.return_value = (False, "Error")
+        workflow_state.max_self_corrections = 0
+
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+        )
+
+        assert result is False
+        assert mock_backend.run_with_callback.call_count == 1
+
+    def test_rate_limit_propagates(self, mock_backend, workflow_state, sample_task):
+        """BackendRateLimitError propagates through correction loop."""
+        from ingot.integrations.backends.errors import BackendRateLimitError
+
+        mock_backend.run_with_callback.return_value = (False, "429 Too Many Requests")
+        mock_backend.detect_rate_limit.return_value = True
+        workflow_state.max_self_corrections = 3
+
+        with pytest.raises(BackendRateLimitError):
+            _execute_task_with_self_correction(
+                workflow_state,
+                sample_task,
+                workflow_state.get_plan_path(),
+                backend=mock_backend,
+            )
+
+    def test_correction_prompt_contains_error_output(
+        self, mock_backend, workflow_state, sample_task
+    ):
+        """Correction prompt includes the error output from previous attempt."""
+        error_output = "NameError: name 'foo' is not defined"
+        mock_backend.run_with_callback.side_effect = [
+            (False, error_output),
+            (True, "Fixed"),
+        ]
+        workflow_state.max_self_corrections = 1
+
+        _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+        )
+
+        # Second call should contain the error output in the prompt
+        second_call_prompt = mock_backend.run_with_callback.call_args_list[1][0][0]
+        assert error_output in second_call_prompt
+        assert "Self-correction attempt" in second_call_prompt
+
+    def test_works_without_callback(self, mock_backend, workflow_state, sample_task):
+        """Works when callback is None."""
+        mock_backend.run_with_callback.side_effect = [
+            (False, "Error"),
+            (True, "Fixed"),
+        ]
+        workflow_state.max_self_corrections = 1
+
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+            callback=None,
+        )
+
+        assert result is True
+
+    def test_works_with_callback(self, mock_backend, workflow_state, sample_task):
+        """Callback receives self-correction messages."""
+        mock_backend.run_with_callback.side_effect = [
+            (False, "Error"),
+            (True, "Fixed"),
+        ]
+        workflow_state.max_self_corrections = 1
+
+        callback = MagicMock()
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+            callback=callback,
+        )
+
+        assert result is True
+        # Callback should have been called with self-correction info messages
+        callback_calls = [str(c) for c in callback.call_args_list]
+        assert any("SELF-CORRECTION" in c for c in callback_calls)

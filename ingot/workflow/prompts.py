@@ -133,7 +133,102 @@ If you cannot reliably map changed source files to specific tests AND cannot run
 If NO production files were changed AND NO test files were changed, report "No code changes detected that require testing" and STOP."""
 
 
+_MAX_ERROR_OUTPUT_LENGTH = 3000
+
+
+def build_self_correction_prompt(
+    task: Task,
+    plan_path: Path,
+    error_output: str,
+    attempt: int,
+    max_attempts: int,
+    *,
+    is_parallel: bool = False,
+    user_context: str = "",
+) -> str:
+    """Build a prompt for self-correction after a failed task attempt.
+
+    Feeds the agent's error output back as a new prompt so it can
+    analyze and fix its own mistakes.
+
+    Args:
+        task: Task that failed
+        plan_path: Path to the implementation plan file
+        error_output: Output from the failed attempt
+        attempt: Current correction attempt number (1-based)
+        max_attempts: Maximum correction attempts allowed
+        is_parallel: Whether this task runs in parallel with others
+        user_context: Optional additional context provided by the user
+
+    Returns:
+        Correction prompt string
+    """
+    parallel_mode = "YES" if is_parallel else "NO"
+
+    # Truncate long error output (same pattern as autofix.py)
+    truncated_output = error_output
+    if len(truncated_output) > _MAX_ERROR_OUTPUT_LENGTH:
+        cut = truncated_output[:_MAX_ERROR_OUTPUT_LENGTH].rfind("\n")
+        if cut <= 0:
+            cut = _MAX_ERROR_OUTPUT_LENGTH
+        truncated_output = (
+            truncated_output[:cut] + "\n\n... [output truncated — focus on the errors listed above]"
+        )
+
+    prompt = f"""Self-correction attempt {attempt}/{max_attempts} for task: {task.name}
+
+Parallel mode: {parallel_mode}
+
+Your previous attempt failed. Output from that attempt:
+---
+{truncated_output}
+---"""
+
+    # Add plan reference if file exists
+    if plan_path.exists():
+        prompt += f"""
+
+Implementation plan: {plan_path}"""
+
+    # Add target files if task has them (validate paths to prevent traversal)
+    if task.target_files:
+        repo_root = Path.cwd()
+        safe_files = []
+        for f in task.target_files:
+            try:
+                safe_files.append(normalize_path(f, repo_root))
+            except PathSecurityError:
+                logger.warning("Skipping target file with unsafe path: %s", f)
+        if safe_files:
+            files_list = "\n".join(f"- {f}" for f in safe_files)
+            prompt += f"""
+
+Target files:
+{files_list}"""
+
+    # Add user-provided context if available
+    if user_context and user_context.strip():
+        prompt += f"""
+
+Additional Context:
+{user_context.strip()}"""
+
+    prompt += """
+
+Instructions:
+1. Analyze the error output to understand what went wrong
+2. Re-read relevant plan sections if needed
+3. Fix the issues and complete the task
+4. Build on work already done - do NOT start from scratch unless necessary
+5. Focus on fixing specific errors, not unrelated refactoring
+
+Do NOT commit, git add, or push any changes."""
+
+    return prompt
+
+
 __all__ = [
+    "build_self_correction_prompt",
     "build_task_prompt",
     "POST_IMPLEMENTATION_TEST_PROMPT",
 ]

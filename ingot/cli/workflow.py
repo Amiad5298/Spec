@@ -55,6 +55,7 @@ def _run_workflow(
     parallel: bool | None = None,
     max_parallel: int | None = None,
     fail_fast: bool | None = None,
+    max_self_corrections: int | None = None,
     max_retries: int = 5,
     retry_base_delay: float = 2.0,
     enable_review: bool = False,
@@ -93,6 +94,11 @@ def _run_workflow(
         max_parallel if max_parallel is not None else config.settings.max_parallel_tasks
     )
     effective_fail_fast = fail_fast if fail_fast is not None else config.settings.fail_fast
+    effective_max_self_corrections = (
+        max_self_corrections
+        if max_self_corrections is not None
+        else config.settings.max_self_corrections
+    )
 
     # Validate effective_max_parallel (catches invalid config values too)
     if effective_max_parallel < 1 or effective_max_parallel > 5:
@@ -141,6 +147,7 @@ def _run_workflow(
         parallel_execution_enabled=effective_parallel,
         max_parallel_tasks=effective_max_parallel,
         fail_fast=effective_fail_fast,
+        max_self_corrections=effective_max_self_corrections,
         rate_limit_config=rate_limit_config,
         enable_phase_review=enable_review,
         dirty_tree_policy=effective_dirty_tree_policy,

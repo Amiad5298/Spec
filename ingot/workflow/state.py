@@ -81,6 +81,7 @@ class WorkflowState:
     skip_clarification: bool = False
     squash_at_end: bool = True
     fail_fast: bool = False  # Stop execution on first task failure
+    max_self_corrections: int = 3  # Max self-correction attempts per task (0 = disable)
 
     # User-provided additional context
     user_context: str = ""

@@ -100,8 +100,8 @@ class SelfCorrectionResult:
 
 @functools.lru_cache(maxsize=8)
 def _get_repo_root(cwd: str | None = None) -> Path:
-    """Get repository root, falling back to cwd if not in a git repo."""
-    return find_repo_root() or Path.cwd()
+    """Get repository root, falling back to the provided cwd or Path.cwd()."""
+    return find_repo_root() or (Path(cwd) if cwd else Path.cwd())
 
 
 def _capture_baseline_for_diffs(state: WorkflowState) -> bool:

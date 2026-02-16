@@ -819,7 +819,11 @@ class TestRunReviewFixLoop:
     @patch("ingot.workflow.review.get_smart_diff")
     @patch("ingot.workflow.autofix.run_auto_fix")
     def test_autofix_failure_proceeds_to_verify(self, mock_autofix, mock_diff, _step, _warn, _info):
-        """When run_auto_fix reports failure, the loop still proceeds to verify."""
+        """When run_auto_fix reports failure, the loop still proceeds to verify.
+
+        Autofix fails and the reviewer still reports NEEDS_ATTENTION,
+        but the key assertion is that verification was attempted at all.
+        """
         from ingot.workflow.review import _run_review_fix_loop
 
         state = MagicMock()
@@ -828,7 +832,7 @@ class TestRunReviewFixLoop:
         state.subagent_names = {"reviewer": "ingot-reviewer"}
 
         mock_backend = MagicMock()
-        # Autofix fails but reviewer passes (partial fix was sufficient)
+        # Autofix fails; reviewer still reports issues (no partial fix helped)
         mock_autofix.return_value = False
         mock_diff.return_value = ("diff content", False, False)
         mock_backend.run_with_callback.return_value = (

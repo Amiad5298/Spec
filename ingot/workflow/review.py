@@ -42,7 +42,6 @@ class ExitReason(Enum):
 
     PASSED = "PASSED"
     EXHAUSTED = "EXHAUSTED"
-    AUTOFIX_FAILED_INTERNAL = "AUTOFIX_FAILED_INTERNAL"
     VERIFY_FAILED = "VERIFY_FAILED"
     GIT_ERROR = "GIT_ERROR"
     NO_DIFF = "NO_DIFF"
@@ -241,9 +240,12 @@ def _display_review_issues(output: str) -> None:
     Looks for a structured **Issues**: section. Falls back to showing
     the last 10 non-status lines if no structured section is found.
     """
-    # Try to extract structured issues section
+    # Try to extract structured issues section.
+    # The header may be followed by issues on the same line or the next line.
+    # We stop at a blank-line-then-bold-header boundary (e.g. "\n\n**Status**")
+    # but NOT at inline bold markers within issue text.
     issues_match = re.search(
-        r"\*\*Issues\*\*\s*:\s*\n((?:.*\n)*?)(?:\n\*\*|\Z)",
+        r"\*\*Issues\*\*\s*:\s*\n?((?:.*\n)*?)(?=\n\n\*\*[A-Z]|\Z)",
         output,
     )
     if issues_match:
@@ -479,9 +481,14 @@ def run_phase_review(
     if state.max_review_fix_attempts > 0:
         if prompt_confirm("Would you like to attempt auto-fix?", default=False):
             loop_result = _run_review_fix_loop(state, output, log_dir, phase, backend)
-            if loop_result.passed:
-                return True
             match loop_result.exit_reason:
+                case ExitReason.PASSED:
+                    return True
+                case ExitReason.NO_DIFF:
+                    print_info(
+                        "Working tree clean relative to baseline -- " "no changes remain after fix."
+                    )
+                    return True
                 case ExitReason.EXHAUSTED:
                     print_info(
                         f"Auto-fix made {loop_result.fix_attempts} attempt(s) "
@@ -494,12 +501,6 @@ def run_phase_review(
                         f"Auto-fix attempt {loop_result.fix_attempts}: "
                         "verification review failed to execute."
                     )
-                case ExitReason.NO_DIFF:
-                    print_info(
-                        "Working tree clean relative to baseline -- " "no changes remain after fix."
-                    )
-                case _:
-                    pass
 
     # Ask user if they want to continue or stop
     if prompt_confirm("Continue workflow despite review issues?", default=True):

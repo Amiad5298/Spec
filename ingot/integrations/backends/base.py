@@ -93,7 +93,7 @@ class SubagentMetadata:
     temperature: float | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class BackendModel:
     """A model available from a backend.
 
@@ -352,6 +352,7 @@ class BaseBackend(ABC):
     def __init__(self, model: str = "") -> None:
         """Initialize the backend with optional default model."""
         self._model = model
+        self._models_cache: list[BackendModel] | None = None
 
     @property
     def model(self) -> str:
@@ -405,10 +406,25 @@ class BaseBackend(ABC):
         pass
 
     def list_models(self) -> list[BackendModel]:
-        """Return the list of models available for this backend.
+        """Return the list of models available for this backend (cached).
 
-        Default returns empty list. Override in subclasses to provide
-        backend-specific model listings.
+        Caching wrapper around _fetch_models(). The first call invokes
+        _fetch_models() and caches the result; subsequent calls return
+        a copy of the cached list.
+
+        Returns a defensive copy so callers cannot mutate the cache.
+        """
+        if self._models_cache is not None:
+            return list(self._models_cache)
+        result = self._fetch_models()
+        self._models_cache = result
+        return list(result)
+
+    def _fetch_models(self) -> list[BackendModel]:
+        """Fetch models from the backend provider.
+
+        Override in subclasses to provide backend-specific model listings.
+        Default returns empty list.
         """
         return []
 

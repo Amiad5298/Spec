@@ -21,6 +21,8 @@ from ingot.utils.logging import log_message
 if TYPE_CHECKING:
     from ingot.integrations.backends.base import AIBackend
 
+_MANUAL_ENTRY = object()
+
 
 class MainMenuChoice(Enum):
     """Main menu choices."""
@@ -221,7 +223,16 @@ def show_model_selection(
 
     models: list[BackendModel] = []
     if backend is not None:
-        models = backend.list_models()
+        from rich.console import Console
+
+        with Console().status("Fetching available models...", spinner="dots"):
+            models = backend.list_models()
+
+    if backend is None:
+        print_info("No backend configured. Enter model ID manually.")
+        from ingot.ui.prompts import prompt_input
+
+        return prompt_input("Enter model ID", default=current_model)
 
     if not models:
         print_info("Could not retrieve model list. Enter model ID manually.")
@@ -236,7 +247,7 @@ def show_model_selection(
             label += " (current)"
         choices.append(questionary.Choice(label, value=model.id))
 
-    choices.append(questionary.Choice("Enter model ID manually...", value="__manual__"))
+    choices.append(questionary.Choice("Enter model ID manually...", value=_MANUAL_ENTRY))
     choices.append(questionary.Choice("Keep current / Skip", value=None))
 
     try:
@@ -249,7 +260,7 @@ def show_model_selection(
         if result is None:
             return current_model or None
 
-        if result == "__manual__":
+        if result is _MANUAL_ENTRY:
             from ingot.ui.prompts import prompt_input
 
             return prompt_input("Enter model ID", default=current_model)

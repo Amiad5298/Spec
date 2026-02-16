@@ -5,11 +5,14 @@ Provides the main menu loop and interactive configuration.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from ingot.config.manager import ConfigManager
 from ingot.ui.menus import MainMenuChoice, show_main_menu
 from ingot.utils.console import print_error, print_header, print_info
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ingot.integrations.backends.base import AIBackend
@@ -93,6 +96,7 @@ def _get_current_backend(config: ConfigManager) -> AIBackend | None:
         platform = resolve_backend_platform(config)
         return BackendFactory.create(platform)
     except Exception:
+        logger.debug("Failed to resolve backend for model listing", exc_info=True)
         return None
 
 

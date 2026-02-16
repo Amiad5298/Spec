@@ -94,6 +94,32 @@ class TestClaudeBackendListModels:
         assert len(models) >= 1
         assert any("claude" in m.id for m in models)
 
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    @patch("ingot.integrations.backends.model_discovery.fetch_anthropic_models")
+    def test_caching_calls_fetch_only_once(self, mock_fetch):
+        """list_models() should cache: _fetch_models (via API) called only once."""
+        from ingot.integrations.backends.claude import ClaudeBackend
+
+        mock_fetch.return_value = [BackendModel(id="claude-cached", name="Cached")]
+        backend = ClaudeBackend()
+
+        first = backend.list_models()
+        second = backend.list_models()
+
+        assert first == second
+        mock_fetch.assert_called_once()
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_cache_returns_defensive_copy(self):
+        """Mutating returned list should not affect the cache."""
+        from ingot.integrations.backends.claude import ClaudeBackend
+
+        backend = ClaudeBackend()
+        first = backend.list_models()
+        first.clear()
+        second = backend.list_models()
+        assert len(second) >= 1
+
 
 class TestCursorBackendListModels:
     def test_returns_hardcoded_models(self):

@@ -287,7 +287,7 @@ class ClaudeBackend(BaseBackend):
         BackendModel(id="claude-opus-4-thinking", name="Claude Opus 4 (Thinking)"),
     )
 
-    def list_models(self) -> list[BackendModel]:
+    def _fetch_models(self) -> list[BackendModel]:
         """Return models via Anthropic API with hardcoded fallback."""
         from ingot.integrations.backends.model_discovery import fetch_anthropic_models
 

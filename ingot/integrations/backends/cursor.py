@@ -260,7 +260,7 @@ class CursorBackend(BaseBackend):
         BackendModel(id="cursor-small", name="Cursor Small"),
     )
 
-    def list_models(self) -> list[BackendModel]:
+    def _fetch_models(self) -> list[BackendModel]:
         """Return hardcoded model list for Cursor.
 
         Cursor is an IDE wrapper routing to multiple providers with no

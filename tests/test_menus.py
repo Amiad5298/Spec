@@ -152,7 +152,9 @@ class TestShowModelSelection:
             [],
             models=[BackendModel(name="Claude 3", id="claude-3")],
         )
-        mock_select.return_value.ask.return_value = "__manual__"
+        from ingot.ui.menus import _MANUAL_ENTRY
+
+        mock_select.return_value.ask.return_value = _MANUAL_ENTRY
         mock_input.return_value = "my-custom-model"
 
         result = show_model_selection(backend=backend)

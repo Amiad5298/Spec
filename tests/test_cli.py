@@ -423,6 +423,7 @@ class TestDirtyTreePolicy:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -452,6 +453,7 @@ class TestDirtyTreePolicy:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -481,6 +483,7 @@ class TestDirtyTreePolicy:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         with pytest.raises(click.exceptions.Exit) as exc_info:
             _run_workflow(
@@ -533,6 +536,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -563,6 +567,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -593,6 +598,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -621,6 +627,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -651,6 +658,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         with pytest.raises(click.exceptions.Exit) as exc_info:
             _run_workflow(
@@ -680,6 +688,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True  # Config says True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -710,6 +719,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = False  # Config says False
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",

@@ -11,6 +11,7 @@ introduced by the current workflow, not pre-existing dirty changes.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -34,6 +35,16 @@ class ReviewStatus(Enum):
 
     PASS = "PASS"
     NEEDS_ATTENTION = "NEEDS_ATTENTION"
+
+
+@dataclass
+class ReviewFixResult:
+    """Result of the review-fix loop."""
+
+    passed: bool
+    review_output: str = ""
+    fix_attempts: int = 0
+    max_attempts: int = 0
 
 
 def parse_review_status(output: str) -> ReviewStatus:
@@ -212,73 +223,112 @@ def _get_diff_for_review(state: WorkflowState) -> tuple[str, bool, bool]:
         return get_smart_diff()
 
 
-def _run_rereview_after_fix(
+def _run_review_fix_loop(
     state: WorkflowState,
+    review_output: str,
     log_dir: Path,
     phase: str,
     backend: AIBackend,
-) -> bool | None:
-    """Re-run review after auto-fix attempt.
+) -> ReviewFixResult:
+    """Run the review-fix loop up to max_review_fix_attempts times.
 
-    Offers the user the option to re-run the review after auto-fix
-    has been applied. This helper centralizes the re-review logic
-    to keep run_phase_review() simpler.
+    Each iteration: (1) run auto-fix with the latest review feedback,
+    (2) re-review the result. Stops early on PASS or if no diff remains.
 
     Args:
-        state: Current workflow state
+        state: Current workflow state (reads max_review_fix_attempts)
+        review_output: Initial review feedback to fix
         log_dir: Directory for log files
         phase: Phase identifier for the review (e.g., "final")
         backend: AI backend instance for agent interactions
 
     Returns:
-        True if re-review passed (workflow should continue),
-        False if user wants to stop,
-        None if re-review failed or user skipped (caller should fall through)
+        ReviewFixResult with pass/fail status and attempt counts.
     """
-    if not prompt_confirm("Run review again after auto-fix?", default=True):
-        return None  # User skipped re-review, fall through to continue prompt
+    from ingot.workflow.autofix import run_auto_fix
 
-    print_step(f"Re-running {phase} phase review after auto-fix...")
+    max_attempts = state.max_review_fix_attempts
+    current_feedback = review_output
 
-    # Get updated diff using baseline if available
-    diff_output, is_truncated, git_error = _get_diff_for_review(state)
+    for attempt in range(1, max_attempts + 1):
+        # --- FIX phase ---
+        print_step(f"[AUTO-FIX {attempt}/{max_attempts}] Attempting fix for {phase} review...")
+        run_auto_fix(state, current_feedback, log_dir, backend)
 
-    if git_error:
-        print_warning("Could not retrieve git diff for re-review")
-        return None  # Fall through to continue prompt
+        # --- VERIFY phase ---
+        print_step(f"[VERIFY {attempt}/{max_attempts}] Re-reviewing after fix...")
 
-    if not diff_output.strip():
-        print_info("No changes to review after auto-fix")
-        return True  # No changes = pass
+        diff_output, is_truncated, git_error = _get_diff_for_review(state)
 
-    # Build new prompt and run review
-    prompt = build_review_prompt(state, phase, diff_output, is_truncated)
+        if git_error:
+            print_warning("Could not retrieve git diff for verification")
+            return ReviewFixResult(
+                passed=False,
+                review_output=current_feedback,
+                fix_attempts=attempt,
+                max_attempts=max_attempts,
+            )
 
-    try:
-        success, output = backend.run_with_callback(
-            prompt,
-            subagent=state.subagent_names["reviewer"],
-            output_callback=lambda _line: None,
-            dont_save_session=True,
-        )
+        if not diff_output.strip():
+            print_info("No changes remain after fix")
+            return ReviewFixResult(
+                passed=True,
+                review_output="",
+                fix_attempts=attempt,
+                max_attempts=max_attempts,
+            )
+
+        prompt = build_review_prompt(state, phase, diff_output, is_truncated)
+
+        try:
+            success, output = backend.run_with_callback(
+                prompt,
+                subagent=state.subagent_names["reviewer"],
+                output_callback=lambda _line: None,
+                dont_save_session=True,
+            )
+        except Exception as e:
+            print_warning(f"Verification review failed: {e}")
+            return ReviewFixResult(
+                passed=False,
+                review_output=current_feedback,
+                fix_attempts=attempt,
+                max_attempts=max_attempts,
+            )
 
         if not success:
-            print_warning("Re-review execution returned failure")
-            return None  # Fall through to continue prompt
+            print_warning("Verification review returned failure")
+            return ReviewFixResult(
+                passed=False,
+                review_output=current_feedback,
+                fix_attempts=attempt,
+                max_attempts=max_attempts,
+            )
 
         status = parse_review_status(output)
 
         if status == ReviewStatus.PASS:
-            print_success(f"{phase.capitalize()} review after auto-fix: PASS")
-            return True
+            print_success(f"[VERIFY {attempt}/{max_attempts}] {phase.capitalize()} review: PASS")
+            return ReviewFixResult(
+                passed=True,
+                review_output=output,
+                fix_attempts=attempt,
+                max_attempts=max_attempts,
+            )
 
-        print_warning(f"{phase.capitalize()} review after auto-fix: NEEDS_ATTENTION")
-        print_info("Issues remain after auto-fix. Please review manually.")
-        return None  # Fall through to continue prompt
+        # NEEDS_ATTENTION — feed new review output into next fix attempt
+        print_warning(
+            f"[VERIFY {attempt}/{max_attempts}] {phase.capitalize()} review: NEEDS_ATTENTION"
+        )
+        current_feedback = output
 
-    except Exception as e:
-        print_warning(f"Re-review execution failed: {e}")
-        return None  # Fall through to continue prompt
+    # All attempts exhausted
+    return ReviewFixResult(
+        passed=False,
+        review_output=current_feedback,
+        fix_attempts=max_attempts,
+        max_attempts=max_attempts,
+    )
 
 
 def run_phase_review(
@@ -309,9 +359,6 @@ def run_phase_review(
         True if review passed or user chose to continue,
         False if user explicitly chose to stop after failed review
     """
-    # Import here to avoid circular dependency
-    from ingot.workflow.autofix import run_auto_fix
-
     print_step(f"Running {phase} phase review...")
 
     # Get smart diff using baseline if available
@@ -368,18 +415,16 @@ def run_phase_review(
     # Review found issues
     print_warning(f"{phase.capitalize()} review: NEEDS_ATTENTION")
 
-    # Offer auto-fix
-    if prompt_confirm("Would you like to attempt auto-fix?", default=False):
-        fix_success = run_auto_fix(state, output, log_dir, backend)
-
-        if fix_success:
-            # Offer to re-run review after auto-fix
-            re_review_result = _run_rereview_after_fix(state, log_dir, phase, backend)
-            if re_review_result is not None:
-                return re_review_result
-            # re_review_result is None means fall through to continue prompt
-        else:
-            print_warning("Auto-fix reported issues")
+    # Offer auto-fix loop when max_review_fix_attempts > 0
+    if state.max_review_fix_attempts > 0:
+        if prompt_confirm("Would you like to attempt auto-fix?", default=False):
+            loop_result = _run_review_fix_loop(state, output, log_dir, phase, backend)
+            if loop_result.passed:
+                return True
+            if loop_result.fix_attempts > 0:
+                print_info(
+                    f"Auto-fix made {loop_result.fix_attempts} attempt(s) but issues remain."
+                )
 
     # Ask user if they want to continue or stop
     if prompt_confirm("Continue workflow despite review issues?", default=True):
@@ -390,6 +435,7 @@ def run_phase_review(
 
 
 __all__ = [
+    "ReviewFixResult",
     "ReviewStatus",
     "parse_review_status",
     "build_review_prompt",

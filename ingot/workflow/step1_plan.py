@@ -46,6 +46,10 @@ _THINKING_BLOCK_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+# Maximum character limits for replan prompt sections to keep prompt size reasonable.
+_REPLAN_PLAN_EXCERPT_LIMIT = 4000
+_REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
+
 # =============================================================================
 # Log Directory Management
 # =============================================================================
@@ -328,12 +332,12 @@ def _build_replan_prompt(
         review_feedback: Reviewer output explaining why replan is needed.
     """
     # Truncate to keep prompt reasonable
-    plan_excerpt = existing_plan[:4000]
-    if len(existing_plan) > 4000:
+    plan_excerpt = existing_plan[:_REPLAN_PLAN_EXCERPT_LIMIT]
+    if len(existing_plan) > _REPLAN_PLAN_EXCERPT_LIMIT:
         plan_excerpt += "\n\n... [truncated] ..."
 
-    feedback_excerpt = review_feedback[:3000]
-    if len(review_feedback) > 3000:
+    feedback_excerpt = review_feedback[:_REPLAN_FEEDBACK_EXCERPT_LIMIT]
+    if len(review_feedback) > _REPLAN_FEEDBACK_EXCERPT_LIMIT:
         feedback_excerpt += "\n\n... [truncated] ..."
 
     prompt = f"""Revise the implementation plan based on reviewer feedback.
@@ -389,10 +393,13 @@ def replan_with_feedback(
 
     plan_path = state.get_plan_path()
 
-    # Read existing plan
+    # Read existing plan and create backup before overwriting
     existing_plan = ""
     if plan_path.exists():
         existing_plan = plan_path.read_text()
+        backup_path = plan_path.with_suffix(f".pre-replan-{state.replan_count}.md")
+        backup_path.write_text(existing_plan)
+        log_message(f"Backed up previous plan to {backup_path}")
 
     # Build replan prompt
     use_plan_mode = backend.supports_plan_mode
@@ -405,6 +412,8 @@ Output the complete revised implementation plan in Markdown format to stdout.
 Do not attempt to create or write any files."""
 
     # Run the planner subagent
+    # dont_save_session=True: Replan attempts are transient and should not
+    # pollute the session history, which is reserved for the main plan run.
     print_step("Generating revised implementation plan...")
     try:
         success, output = backend.run_with_callback(

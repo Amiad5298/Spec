@@ -59,6 +59,7 @@ from ingot.workflow.git_utils import (
     DirtyWorkingTreeError,
     capture_baseline,
     check_dirty_working_tree,
+    get_untracked_files,
 )
 from ingot.workflow.log_management import (
     cleanup_old_runs,
@@ -144,6 +145,9 @@ def _capture_baseline_for_diffs(state: WorkflowState) -> bool:
     try:
         baseline_ref = capture_baseline()
         state.diff_baseline_ref = baseline_ref
+        # Snapshot untracked files so restore_to_baseline can avoid deleting
+        # pre-existing untracked files during a replan restore.
+        state.pre_execution_untracked = frozenset(get_untracked_files())
         print_info(f"Captured baseline for diff operations: {baseline_ref[:8]}")
         return True
     except Exception as e:

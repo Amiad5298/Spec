@@ -15,6 +15,7 @@ Key features:
 import re
 import subprocess
 from enum import Enum
+from pathlib import Path
 
 from ingot.utils.console import print_warning
 
@@ -112,15 +113,21 @@ def parse_porcelain_z_output(output: str) -> list[tuple[str, str]]:
     return entries
 
 
-def restore_to_baseline(baseline_ref: str) -> bool:
+def restore_to_baseline(
+    baseline_ref: str,
+    pre_execution_untracked: frozenset[str] | None = None,
+) -> bool:
     """Restore the working tree to the baseline state.
 
-    Resets tracked files to the baseline ref and removes untracked files
-    created during execution. Used before re-execution in the replan loop
-    to ensure a clean starting point.
+    Resets tracked files to the baseline ref and removes only untracked
+    files created during execution. Pre-existing untracked files are
+    preserved to avoid accidental data loss.
 
     Args:
         baseline_ref: The baseline commit SHA to restore to.
+        pre_execution_untracked: Set of untracked file paths that existed
+            before execution started. These will NOT be deleted. When None,
+            no untracked files are removed (safe default).
 
     Returns:
         True on success, False on failure.
@@ -137,16 +144,16 @@ def restore_to_baseline(baseline_ref: str) -> bool:
             print_warning(f"Failed to restore tracked files to baseline: {stderr}")
             return False
 
-        # Remove untracked files created during execution
-        result = subprocess.run(
-            ["git", "clean", "-fd"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            stderr = result.stderr.strip() if result.stderr else "unknown error"
-            print_warning(f"Failed to clean untracked files: {stderr}")
-            return False
+        # Remove only untracked files created during execution
+        current_untracked = get_untracked_files()
+        safe_set = pre_execution_untracked or frozenset()
+        new_files = [f for f in current_untracked if f not in safe_set]
+
+        for filepath in new_files:
+            try:
+                Path(filepath).unlink(missing_ok=True)
+            except OSError as e:
+                print_warning(f"Could not remove {filepath}: {e}")
 
         return True
     except Exception as e:

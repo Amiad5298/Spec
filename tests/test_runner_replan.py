@@ -302,7 +302,7 @@ class TestReplanRestoresWorkingTree:
         result = run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
 
         assert result.success is True
-        mock_restore.assert_called_once_with("baseline123")
+        mock_restore.assert_called_once_with("baseline123", pre_execution_untracked=frozenset())
 
     @_workflow_patches
     @patch("ingot.workflow.runner._show_completion")

@@ -122,6 +122,10 @@ class WorkflowState:
     replan_count: int = 0  # Number of replans performed this workflow run
     max_replans: int = 2  # Maximum replan attempts (prevents infinite loops)
 
+    # Snapshot of untracked files before step 3 execution, used by
+    # restore_to_baseline to avoid deleting pre-existing untracked files.
+    pre_execution_untracked: frozenset[str] = field(default_factory=frozenset)
+
     # Dirty tree policy for baseline diff operations
     dirty_tree_policy: DirtyTreePolicy = DirtyTreePolicy.FAIL_FAST
 

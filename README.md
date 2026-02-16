@@ -13,6 +13,7 @@ Transform tickets from any supported platform into implemented features with a s
 ## Table of Contents
 
 - [What is INGOT?](#what-is-ingot)
+- [Why INGOT is Different](#why-ingot-is-different-context-engineering--git-sterility)
 - [Features](#features)
 - [AI Backends](#ai-backends)
 - [Supported Platforms](#supported-platforms)
@@ -39,6 +40,32 @@ INGOT is a command-line tool that orchestrates AI agents to implement software f
 6. **Commits** - Stages and commits implementation files with a generated commit message
 
 INGOT orchestrates AI coding assistants with specialized AI agents to deliver a structured, reproducible development workflow.
+
+## Why INGOT is Different: Context Engineering & Git Sterility
+
+Most AI orchestration tools accumulate chat history across tasks — the planner's conversation bleeds into the implementer's, one task's context leaks into the next, and the reviewer sees diffs polluted by pre-existing changes. The result is **Context Rot**: hallucinated references to prior tasks, stale instructions, and token bloat that degrades output quality over time. INGOT takes a fundamentally different approach by treating context as a first-class engineering concern.
+
+| Dimension | Typical AI Tools | INGOT |
+|-----------|-----------------|-------|
+| Session management | Accumulated chat history across tasks | Fresh, isolated session per task |
+| Git diff scope | `git diff` of entire working tree | Baseline-anchored diffs scoped to workflow changes only |
+| Dirty tree handling | Hope for the best | Fail-fast policy — refuses to start with uncommitted changes |
+| Parallel agent isolation | Shared context, shared session | Fresh backend instance + fresh session + file-level scoping per worker |
+| Review determinism | Reviews polluted by pre-existing changes | Reviewer sees only changes introduced by the current workflow |
+
+### Context Sterility
+
+Every task execution — implementation, review, self-correction, testing — starts a completely fresh LLM session with zero prior conversation history. Self-correction attempts don't even share context with the original failed attempt; the error output is embedded in a new prompt, not appended to a conversation. This eliminates "context rot" where the LLM hallucinates references to work done in prior tasks.
+
+### Fail-Fast Git Baselines
+
+Before any code changes, INGOT pins the current HEAD as a baseline and verifies the working tree is clean. All subsequent diffs — including the final code review — are scoped to changes since that baseline. The reviewer never sees pre-existing noise. If the working tree is dirty, INGOT refuses to proceed (configurable via `--dirty-tree-policy`). For replan loops, the working tree is restored to the baseline state, ensuring each attempt starts from a known-good state.
+
+### Parallel Isolation
+
+When running up to 5 agents concurrently, each worker gets three layers of isolation: (1) a fresh backend instance with no shared process state, (2) a fresh session with no shared conversation history, and (3) file-level scoping via task annotations that prevent parallel tasks from touching overlapping files. Even the cross-task memory system is disabled during parallel execution to prevent contamination.
+
+> **Bottom line:** INGOT treats context as a first-class engineering concern, not an afterthought. Every architectural decision — session isolation, baseline anchoring, file-level scoping — exists to ensure that each agent invocation operates on exactly the information it needs and nothing more.
 
 ## Features
 

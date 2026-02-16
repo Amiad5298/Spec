@@ -10,6 +10,7 @@ AuggieBackend is the reference implementation demonstrating how concrete backend
 - Map parameters between protocol and client APIs
 """
 
+import logging
 import subprocess
 from collections.abc import Callable
 
@@ -19,8 +20,13 @@ from ingot.integrations.auggie import (
     check_auggie_installed,
     looks_like_rate_limit,
 )
-from ingot.integrations.backends.base import BaseBackend
+from ingot.integrations.auggie import (
+    list_models as auggie_list_models,
+)
+from ingot.integrations.backends.base import BackendModel, BaseBackend
 from ingot.integrations.backends.errors import BackendTimeoutError
+
+logger = logging.getLogger(__name__)
 
 
 class AuggieBackend(BaseBackend):
@@ -291,5 +297,16 @@ class AuggieBackend(BaseBackend):
             True if output looks like a rate limit error.
         """
         return looks_like_rate_limit(output)
+
+    def _fetch_models(self) -> list[BackendModel]:
+        """Return models from the Auggie CLI ``auggie models list`` command."""
+        try:
+            auggie_models = auggie_list_models()
+            return [
+                BackendModel(id=m.id, name=m.name, description=m.description) for m in auggie_models
+            ]
+        except Exception:
+            logger.debug("Failed to fetch Auggie models", exc_info=True)
+            return []
 
     # close() inherited from BaseBackend

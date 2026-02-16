@@ -4,16 +4,24 @@ This module provides menu functions for the main menu, task review,
 git dirty state handling, and model selection.
 """
 
+from __future__ import annotations
+
 from enum import Enum
+from typing import TYPE_CHECKING
 
 import questionary
 
-from ingot.integrations.auggie import list_models
+from ingot.integrations.backends.base import BackendModel
 from ingot.integrations.git import DirtyStateAction
 from ingot.ui.prompts import custom_style
 from ingot.utils.console import console, print_header, print_info
 from ingot.utils.errors import UserCancelledError
 from ingot.utils.logging import log_message
+
+if TYPE_CHECKING:
+    from ingot.integrations.backends.base import AIBackend
+
+_MANUAL_ENTRY = object()
 
 
 class MainMenuChoice(Enum):
@@ -194,12 +202,16 @@ def show_commit_failure_menu(error_message: str) -> CommitFailureChoice:
 def show_model_selection(
     current_model: str = "",
     purpose: str = "default",
+    backend: AIBackend | None = None,
 ) -> str | None:
     """Display model selection menu.
 
     Args:
         current_model: Currently selected model
         purpose: Purpose description (e.g., "planning", "implementation")
+        backend: Optional backend instance to fetch models from.
+            If provided, uses backend.list_models(). Falls back to
+            manual text input when no models are available.
 
     Returns:
         Selected model ID or None if cancelled
@@ -209,7 +221,16 @@ def show_model_selection(
     """
     print_header(f"Select Model for {purpose.title()}")
 
-    models = list_models()
+    models: list[BackendModel] = []
+    if backend is not None:
+        with console.status("Fetching available models...", spinner="dots"):
+            models = backend.list_models()
+
+    if backend is None:
+        print_info("No backend configured. Enter model ID manually.")
+        from ingot.ui.prompts import prompt_input
+
+        return prompt_input("Enter model ID", default=current_model)
 
     if not models:
         print_info("Could not retrieve model list. Enter model ID manually.")
@@ -224,6 +245,7 @@ def show_model_selection(
             label += " (current)"
         choices.append(questionary.Choice(label, value=model.id))
 
+    choices.append(questionary.Choice("Enter model ID manually...", value=_MANUAL_ENTRY))
     choices.append(questionary.Choice("Keep current / Skip", value=None))
 
     try:
@@ -235,6 +257,11 @@ def show_model_selection(
 
         if result is None:
             return current_model or None
+
+        if result is _MANUAL_ENTRY:
+            from ingot.ui.prompts import prompt_input
+
+            return prompt_input("Enter model ID", default=current_model)
 
         log_message(f"Model selection for {purpose}: {result}")
         return str(result)

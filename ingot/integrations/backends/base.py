@@ -93,6 +93,21 @@ class SubagentMetadata:
     temperature: float | None = None
 
 
+@dataclass(frozen=True)
+class BackendModel:
+    """A model available from a backend.
+
+    Attributes:
+        id: Model identifier for CLI usage (e.g., "claude-sonnet-4")
+        name: Human-readable display name (e.g., "Claude Sonnet 4")
+        description: Optional description of the model
+    """
+
+    id: str
+    name: str
+    description: str = ""
+
+
 @runtime_checkable
 class AIBackend(Protocol):
     """Protocol for AI backend integrations.
@@ -296,6 +311,19 @@ class AIBackend(Protocol):
         """
         ...
 
+    def list_models(self) -> list[BackendModel]:
+        """Return the list of models available for this backend.
+
+        Backends may fetch models dynamically from provider APIs
+        (with graceful fallback to hardcoded lists) or return a
+        static list of known models.
+
+        Returns:
+            List of BackendModel instances. Empty list if no models
+            are known or discovery fails.
+        """
+        ...
+
 
 class BaseBackend(ABC):
     """Abstract base class with common functionality for all backends.
@@ -324,6 +352,7 @@ class BaseBackend(ABC):
     def __init__(self, model: str = "") -> None:
         """Initialize the backend with optional default model."""
         self._model = model
+        self._models_cache: list[BackendModel] | None = None
 
     @property
     def model(self) -> str:
@@ -375,6 +404,33 @@ class BaseBackend(ABC):
         - Clean up temporary files
         """
         pass
+
+    def list_models(self) -> list[BackendModel]:
+        """Return the list of models available for this backend (cached).
+
+        Caching wrapper around _fetch_models(). The first call invokes
+        _fetch_models() and caches the result; subsequent calls return
+        a copy of the cached list.
+
+        Empty results are not cached so that transient failures (network
+        timeouts, etc.) do not permanently prevent model discovery.
+
+        Returns a defensive copy so callers cannot mutate the cache.
+        """
+        if self._models_cache is not None:
+            return list(self._models_cache)
+        result = self._fetch_models()
+        if result:
+            self._models_cache = result
+        return list(result)
+
+    def _fetch_models(self) -> list[BackendModel]:
+        """Fetch models from the backend provider.
+
+        Override in subclasses to provide backend-specific model listings.
+        Default returns empty list.
+        """
+        return []
 
     def _parse_subagent_prompt(self, subagent: str) -> tuple[SubagentMetadata, str]:
         """Parse subagent prompt file and extract frontmatter.

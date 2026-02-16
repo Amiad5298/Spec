@@ -165,15 +165,14 @@ def build_self_correction_prompt(
     """
     parallel_mode = "YES" if is_parallel else "NO"
 
-    # Truncate long error output (same pattern as autofix.py)
+    # Truncate long error output — keep the tail where stack traces / errors live
     truncated_output = error_output
     if len(truncated_output) > _MAX_ERROR_OUTPUT_LENGTH:
-        cut = truncated_output[:_MAX_ERROR_OUTPUT_LENGTH].rfind("\n")
+        tail = truncated_output[-_MAX_ERROR_OUTPUT_LENGTH:]
+        cut = tail.find("\n")
         if cut <= 0:
-            cut = _MAX_ERROR_OUTPUT_LENGTH
-        truncated_output = (
-            truncated_output[:cut] + "\n\n... [output truncated — focus on the errors listed above]"
-        )
+            cut = 0
+        truncated_output = "... [earlier output truncated]\n\n" + tail[cut:]
 
     prompt = f"""Self-correction attempt {attempt}/{max_attempts} for task: {task.name}
 

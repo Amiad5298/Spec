@@ -105,6 +105,11 @@ def _run_workflow(
         print_error(f"Invalid max_parallel={effective_max_parallel} (must be 1-5)")
         raise typer.Exit(ExitCode.GENERAL_ERROR)
 
+    # Validate effective_max_self_corrections
+    if effective_max_self_corrections < 0:
+        print_error(f"Invalid max_self_corrections={effective_max_self_corrections} (must be >= 0)")
+        raise typer.Exit(ExitCode.GENERAL_ERROR)
+
     # Parse dirty tree policy
     effective_dirty_tree_policy = DirtyTreePolicy.FAIL_FAST  # default
     if dirty_tree_policy:

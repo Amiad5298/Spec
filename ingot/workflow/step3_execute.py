@@ -604,27 +604,27 @@ def _execute_task_with_callback(
         return False
 
 
-def _execute_task_capturing_output(
+def _run_backend_capturing_output(
     state: WorkflowState,
-    task: Task,
-    plan_path: Path,
+    prompt: str,
     *,
     backend: AIBackend,
     callback: Callable[[str], None] | None = None,
-    is_parallel: bool = False,
+    error_label: str = "Task execution",
 ) -> tuple[bool, str]:
-    """Execute a single task and capture its output.
+    """Run a prompt via the backend and capture its output.
 
-    Wraps backend.run_with_callback() to always return (success, output)
-    while still streaming to the callback if provided.
+    Shared helper for initial task execution and correction attempts.
+    Each invocation uses dont_save_session=True, so the agent starts a
+    fresh session — correction attempts rely solely on the prompt text
+    for context about previous failures.
+
+    Returns:
+        Tuple of (success, output).
 
     Raises:
         BackendRateLimitError: If the output indicates a rate limit error.
     """
-    prompt = build_task_prompt(
-        task, plan_path, is_parallel=is_parallel, user_context=state.user_context
-    )
-
     try:
         success, output = backend.run_with_callback(
             prompt,
@@ -640,43 +640,7 @@ def _execute_task_capturing_output(
     except BackendRateLimitError:
         raise
     except Exception as e:
-        error_msg = f"[ERROR] Task execution crashed: {e}"
-        if callback:
-            callback(error_msg)
-        return False, error_msg
-
-
-def _execute_correction_attempt(
-    state: WorkflowState,
-    correction_prompt: str,
-    *,
-    backend: AIBackend,
-    callback: Callable[[str], None] | None = None,
-) -> tuple[bool, str]:
-    """Execute a correction attempt with the given prompt.
-
-    Returns:
-        Tuple of (success, output).
-
-    Raises:
-        BackendRateLimitError: If the output indicates a rate limit error.
-    """
-    try:
-        success, output = backend.run_with_callback(
-            correction_prompt,
-            subagent=state.subagent_names["implementer"],
-            output_callback=callback or (lambda _line: None),
-            dont_save_session=True,
-        )
-        if not success and backend.detect_rate_limit(output):
-            raise BackendRateLimitError(
-                "Rate limit detected", output=output, backend_name=backend.name
-            )
-        return success, output
-    except BackendRateLimitError:
-        raise
-    except Exception as e:
-        error_msg = f"[ERROR] Correction attempt crashed: {e}"
+        error_msg = f"[ERROR] {error_label} crashed: {e}"
         if callback:
             callback(error_msg)
         return False, error_msg
@@ -697,6 +661,10 @@ def _execute_task_with_self_correction(
     giving it another chance to fix its mistakes. This is distinct from
     rate-limit retry (which retries the same prompt after a delay).
 
+    Note: Each attempt (initial + corrections) runs in a fresh session
+    (dont_save_session=True), so the agent has no conversation memory
+    across attempts — only the error output embedded in the prompt.
+
     BackendRateLimitError propagates through to the outer retry handler.
     """
     max_corrections = state.max_self_corrections
@@ -716,13 +684,14 @@ def _execute_task_with_self_correction(
             return _execute_task(state, task, plan_path, backend)
 
     # First attempt — capture output for potential correction
-    success, output = _execute_task_capturing_output(
+    prompt = build_task_prompt(
+        task, plan_path, is_parallel=is_parallel, user_context=state.user_context
+    )
+    success, output = _run_backend_capturing_output(
         state,
-        task,
-        plan_path,
+        prompt,
         backend=backend,
         callback=callback,
-        is_parallel=is_parallel,
     )
 
     if success:
@@ -748,11 +717,12 @@ def _execute_task_with_self_correction(
             user_context=state.user_context,
         )
 
-        success, output = _execute_correction_attempt(
+        success, output = _run_backend_capturing_output(
             state,
             correction_prompt,
             backend=backend,
             callback=callback,
+            error_label="Correction attempt",
         )
 
         if success:

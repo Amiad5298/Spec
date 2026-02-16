@@ -1922,16 +1922,19 @@ class TestBuildSelfCorrectionPrompt:
 
         assert "TypeError: cannot add int and str" in result
 
-    def test_truncates_long_output(self, sample_task, tmp_path):
+    def test_truncates_long_output_keeps_tail(self, sample_task, tmp_path):
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        long_output = "x" * 5000
+        # Build output where the important error is at the end
+        long_output = "x\n" * 2500 + "ImportError: critical failure"
         result = build_self_correction_prompt(
             sample_task, plan_path, long_output, attempt=1, max_attempts=3
         )
 
-        assert "output truncated" in result
+        assert "earlier output truncated" in result
+        # The tail (with the error) should be preserved
+        assert "ImportError: critical failure" in result
         assert len(result) < len(long_output) + 1000  # Prompt overhead
 
     def test_includes_no_commit_constraint(self, sample_task, tmp_path):
@@ -2134,3 +2137,27 @@ class TestSelfCorrection:
         # Callback should have been called with self-correction info messages
         callback_calls = [str(c) for c in callback.call_args_list]
         assert any("SELF-CORRECTION" in c for c in callback_calls)
+
+    def test_correction_attempt_crash_returns_false(
+        self, mock_backend, workflow_state, sample_task
+    ):
+        """Non-rate-limit exception during correction returns False."""
+        mock_backend.run_with_callback.side_effect = [
+            (False, "Initial error"),
+            RuntimeError("connection lost"),
+        ]
+        workflow_state.max_self_corrections = 1
+
+        callback = MagicMock()
+        result = _execute_task_with_self_correction(
+            workflow_state,
+            sample_task,
+            workflow_state.get_plan_path(),
+            backend=mock_backend,
+            callback=callback,
+        )
+
+        assert result is False
+        # Callback should have received the crash error
+        callback_calls = [str(c) for c in callback.call_args_list]
+        assert any("Correction attempt crashed" in c for c in callback_calls)

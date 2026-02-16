@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from ingot.workflow.review import ExitReason, ReviewStatus, parse_review_status
+from ingot.workflow.review import ExitReason, ReviewOutcome, ReviewStatus, parse_review_status
 
 
 class TestParseReviewStatusCanonical:
@@ -402,7 +402,7 @@ class TestGetDiffForReview:
 
 
 class TestRunPhaseReview:
-    def test_returns_true_when_no_changes(self):
+    def test_returns_continue_when_no_changes(self):
         from unittest.mock import MagicMock, patch
 
         from ingot.workflow.review import run_phase_review
@@ -415,9 +415,9 @@ class TestRunPhaseReview:
             with patch("ingot.workflow.review.print_info"):
                 result = run_phase_review(state, MagicMock(), "fundamental", backend=MagicMock())
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
 
-    def test_returns_true_when_review_passes(self):
+    def test_returns_continue_when_review_passes(self):
         from unittest.mock import MagicMock, patch
 
         from ingot.workflow.review import run_phase_review
@@ -437,7 +437,7 @@ class TestRunPhaseReview:
                         state, MagicMock(), "fundamental", backend=mock_backend
                     )
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     def test_prompts_for_git_error(self):
         from unittest.mock import MagicMock, patch
@@ -458,7 +458,7 @@ class TestRunPhaseReview:
                                 state, MagicMock(), "final", backend=MagicMock()
                             )
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
         mock_confirm.assert_called_once()
 
     @patch("ingot.workflow.review.print_step")
@@ -466,7 +466,7 @@ class TestRunPhaseReview:
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.prompt_confirm")
     @patch("ingot.workflow.review.get_smart_diff")
-    def test_returns_false_when_user_stops_after_git_error(
+    def test_returns_stop_when_user_stops_after_git_error(
         self, mock_diff, mock_confirm, _warn, _info, _step
     ):
         from ingot.workflow.review import run_phase_review
@@ -479,7 +479,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "final", backend=MagicMock())
 
-        assert result is False
+        assert result == (ReviewOutcome.STOP, "")
 
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
@@ -505,7 +505,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
         # Should be called twice: auto-fix prompt and continue prompt
         assert mock_confirm.call_count == 2
 
@@ -538,7 +538,7 @@ class TestRunPhaseReview:
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
         mock_loop.assert_called_once()
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     @patch("ingot.workflow.review.print_warning")
     @patch("ingot.workflow.review.print_step")
@@ -561,7 +561,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
         # Only one prompt: "Continue workflow despite review issues?"
         assert mock_confirm.call_count == 1
 
@@ -570,7 +570,7 @@ class TestRunPhaseReview:
     @patch("ingot.workflow.review._run_review_fix_loop")
     @patch("ingot.workflow.review.prompt_confirm")
     @patch("ingot.workflow.review.get_smart_diff")
-    def test_loop_passes_returns_true(self, mock_diff, mock_confirm, mock_loop, _step, _warn):
+    def test_loop_passes_returns_continue(self, mock_diff, mock_confirm, mock_loop, _step, _warn):
         from ingot.workflow.review import ReviewFixResult, run_phase_review
 
         state = MagicMock()
@@ -589,7 +589,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
         # Only auto-fix prompt, no continue prompt needed
         assert mock_confirm.call_count == 1
 
@@ -612,7 +612,7 @@ class TestRunPhaseReview:
         result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
         # Should continue workflow on review crash (advisory behavior)
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
 
     @patch("ingot.workflow.review.print_info")
     @patch("ingot.workflow.review.print_warning")
@@ -634,7 +634,7 @@ class TestRunPhaseReview:
 
         result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
-        assert result is True
+        assert result == (ReviewOutcome.CONTINUE, "")
         mock_confirm.assert_called_once()
 
 
@@ -979,3 +979,287 @@ class TestWorkflowStateValidation:
         )
         with pytest.raises(ValueError, match="max_self_corrections must be 0-10"):
             WorkflowState(ticket=ticket, max_self_corrections=11)
+
+    def test_max_replans_rejects_negative(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_replans must be 0-5"):
+            WorkflowState(ticket=ticket, max_replans=-1)
+
+    def test_max_replans_rejects_over_5(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_replans must be 0-5"):
+            WorkflowState(ticket=ticket, max_replans=6)
+
+    def test_max_replans_accepts_valid_range(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        for val in (0, 2, 5):
+            state = WorkflowState(ticket=ticket, max_replans=val)
+            assert state.max_replans == val
+
+    def test_replan_fields_default_values(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        state = WorkflowState(ticket=ticket)
+        assert state.replan_count == 0
+        assert state.max_replans == 2
+
+
+class TestParseReviewStatusNeedsReplan:
+    def test_parse_needs_replan_canonical(self):
+        output = """## Review
+
+**Status**: NEEDS_REPLAN
+
+**Replan Reason**: The architecture is wrong.
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_parse_needs_replan_without_bold(self):
+        output = """## Review
+
+Status: NEEDS_REPLAN
+
+Replan Reason: Missing requirements.
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_parse_needs_replan_bullet_format(self):
+        output = """## Review
+
+- **NEEDS_REPLAN** - Plan is fundamentally flawed
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_parse_needs_replan_bullet_without_trailing_dash(self):
+        output = """## Review
+
+- **NEEDS_REPLAN**
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_parse_needs_replan_standalone_fallback(self):
+        output = """## Review
+
+The plan has fundamental issues.
+
+NEEDS_REPLAN
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_parse_needs_replan_standalone_bold_fallback(self):
+        output = """## Review
+
+The plan needs revision.
+
+**NEEDS_REPLAN**
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_parse_needs_replan_case_insensitive(self):
+        assert parse_review_status("**Status**: needs_replan\n") == ReviewStatus.NEEDS_REPLAN
+
+    def test_needs_replan_overrides_earlier_pass(self):
+        output = """**Status**: PASS
+
+Wait, actually the plan is wrong.
+
+**Status**: NEEDS_REPLAN
+"""
+        assert parse_review_status(output) == ReviewStatus.NEEDS_REPLAN
+
+    def test_pass_overrides_earlier_needs_replan(self):
+        output = """**Status**: NEEDS_REPLAN
+
+After reconsideration:
+
+**Status**: PASS
+"""
+        assert parse_review_status(output) == ReviewStatus.PASS
+
+
+class TestReviewOutcomeEnum:
+    def test_review_outcome_values(self):
+        assert ReviewOutcome.CONTINUE.value == "CONTINUE"
+        assert ReviewOutcome.STOP.value == "STOP"
+        assert ReviewOutcome.REPLAN_WITH_AI.value == "REPLAN_WITH_AI"
+        assert ReviewOutcome.REPLAN_MANUAL.value == "REPLAN_MANUAL"
+
+    def test_review_outcome_members(self):
+        assert len(ReviewOutcome) == 4
+
+
+class TestHandleNeedsReplan:
+    @patch("ingot.workflow.review.prompt_select")
+    @patch("ingot.workflow.review.print_info")
+    def test_replan_with_ai_returns_replan_with_ai(self, _info, mock_select):
+        from ingot.workflow.review import _handle_needs_replan
+
+        mock_select.return_value = "Re-plan with AI"
+        state = MagicMock()
+        state.get_plan_path.return_value = "specs/TEST-plan.md"
+
+        result = _handle_needs_replan(state, "review output with replan reason")
+
+        assert result == (ReviewOutcome.REPLAN_WITH_AI, "review output with replan reason")
+
+    @patch("ingot.workflow.review.prompt_select")
+    @patch("ingot.workflow.review.print_info")
+    def test_edit_manually_returns_replan_manual(self, _info, mock_select):
+        from ingot.workflow.review import _handle_needs_replan
+
+        mock_select.return_value = "Edit plan manually"
+        state = MagicMock()
+        state.get_plan_path.return_value = "specs/TEST-plan.md"
+
+        result = _handle_needs_replan(state, "review output")
+
+        assert result == (ReviewOutcome.REPLAN_MANUAL, "review output")
+
+    @patch("ingot.workflow.review.prompt_select")
+    @patch("ingot.workflow.review.print_info")
+    def test_continue_anyway_returns_continue(self, _info, mock_select):
+        from ingot.workflow.review import _handle_needs_replan
+
+        mock_select.return_value = "Continue anyway"
+        state = MagicMock()
+        state.get_plan_path.return_value = "specs/TEST-plan.md"
+
+        result = _handle_needs_replan(state, "review output")
+
+        assert result == (ReviewOutcome.CONTINUE, "")
+
+
+class TestRunPhaseReviewNeedsReplan:
+    @patch("ingot.workflow.review._handle_needs_replan")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_needs_replan_delegates_to_handler(self, mock_diff, _step, _warn, mock_handler):
+        from ingot.workflow.review import run_phase_review
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (
+            True,
+            "**Status**: NEEDS_REPLAN\n**Replan Reason**: Architecture wrong",
+        )
+
+        mock_diff.return_value = ("diff content", False, False)
+        mock_handler.return_value = (ReviewOutcome.REPLAN_WITH_AI, "feedback")
+
+        result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
+
+        assert result == (ReviewOutcome.REPLAN_WITH_AI, "feedback")
+        mock_handler.assert_called_once()
+
+    @patch("ingot.workflow.review.print_success")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_pass_returns_continue(self, mock_diff, _step, _success):
+        from ingot.workflow.review import run_phase_review
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (True, "**Status**: PASS")
+
+        mock_diff.return_value = ("diff content", False, False)
+
+        result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
+
+        assert result == (ReviewOutcome.CONTINUE, "")
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_needs_attention_stop_returns_stop(self, mock_diff, mock_confirm, _step, _warn):
+        from ingot.workflow.review import run_phase_review
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+        state.max_review_fix_attempts = 0
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (True, "**Status**: NEEDS_ATTENTION")
+
+        mock_diff.return_value = ("diff content", False, False)
+        mock_confirm.return_value = False  # User stops
+
+        result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
+
+        assert result == (ReviewOutcome.STOP, "")
+
+
+class TestDisplayReplanReason:
+    def test_extracts_structured_replan_reason(self):
+        from ingot.workflow.review import _display_replan_reason
+
+        output = """**Status**: NEEDS_REPLAN
+
+**Replan Reason**: The architecture uses synchronous calls but the requirement
+needs async processing for scalability.
+
+**Status**: NEEDS_REPLAN
+"""
+        with patch("ingot.workflow.review.print_info") as mock_info:
+            _display_replan_reason(output)
+            # Should have printed the reason lines
+            assert mock_info.call_count >= 1
+
+    def test_fallback_when_no_structured_reason(self):
+        from ingot.workflow.review import _display_replan_reason
+
+        output = """The plan is wrong because it uses the wrong database.
+We need PostgreSQL not SQLite.
+
+**Status**: NEEDS_REPLAN
+"""
+        with patch("ingot.workflow.review.print_info") as mock_info:
+            _display_replan_reason(output)
+            assert mock_info.call_count >= 1
+
+
+class TestBuildReviewPromptNeedsReplan:
+    def test_prompt_includes_needs_replan_status(self):
+        from ingot.workflow.review import build_review_prompt
+
+        state = MagicMock()
+        state.get_plan_path.return_value = "specs/TEST-plan.md"
+        state.user_context = ""
+
+        result = build_review_prompt(
+            state=state,
+            phase="final",
+            diff_output="some diff",
+            is_truncated=False,
+        )
+
+        assert "NEEDS_REPLAN" in result
+        assert "Replan Reason" in result
+        assert "plan needs revision" in result

@@ -867,7 +867,7 @@ class TestStep3Execute:
 
         result = step_3_execute(state, backend=MagicMock(), use_tui=False)
 
-        assert result is False
+        assert result.success is False
 
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
@@ -894,7 +894,7 @@ class TestStep3Execute:
 
         result = step_3_execute(workflow_state, backend=mock_backend, use_tui=False)
 
-        assert result is True
+        assert result.success is True
 
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
@@ -1013,7 +1013,7 @@ class TestStep3Execute:
 
         result = step_3_execute(workflow_state, backend=mock_backend, use_tui=False)
 
-        assert result is True
+        assert result.success is True
 
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
@@ -1045,7 +1045,7 @@ class TestStep3Execute:
 
         result = step_3_execute(workflow_state, backend=mock_backend, use_tui=False)
 
-        assert result is False
+        assert result.success is False
 
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")

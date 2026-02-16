@@ -19,7 +19,7 @@ from ingot.integrations.git import (
 )
 from ingot.integrations.providers import GenericTicket
 from ingot.ui.menus import show_git_dirty_menu
-from ingot.ui.prompts import prompt_confirm, prompt_input
+from ingot.ui.prompts import prompt_confirm, prompt_enter, prompt_input
 from ingot.utils.console import (
     console,
     print_error,
@@ -32,12 +32,13 @@ from ingot.utils.console import (
 from ingot.utils.errors import IngotError, UserCancelledError
 from ingot.utils.logging import log_message
 from ingot.workflow.conflict_detection import detect_context_conflict
-from ingot.workflow.git_utils import DirtyTreePolicy
+from ingot.workflow.git_utils import DirtyTreePolicy, restore_to_baseline
+from ingot.workflow.review import ReviewOutcome
 from ingot.workflow.state import RateLimitConfig, WorkflowState
 from ingot.workflow.step1_5_clarification import step_1_5_clarification
-from ingot.workflow.step1_plan import step_1_create_plan
+from ingot.workflow.step1_plan import replan_with_feedback, step_1_create_plan
 from ingot.workflow.step2_tasklist import step_2_create_tasklist
-from ingot.workflow.step3_execute import step_3_execute
+from ingot.workflow.step3_execute import Step3Result, step_3_execute
 from ingot.workflow.step4_update_docs import Step4Result, step_4_update_docs
 from ingot.workflow.step5_commit import Step5Result, step_5_commit
 
@@ -215,13 +216,26 @@ def run_ingot_workflow(
                     success=False, error="Step 2 (tasklist) failed", steps_completed=1
                 )
 
-        # Step 3: Execute implementation
-        if state.current_step <= 3:
+        # Step 3: Execute implementation (with replan loop)
+        while state.current_step <= 3:
             print_info("Starting Step 3: Execute Implementation")
-            if not step_3_execute(state, backend=backend, use_tui=use_tui, verbose=verbose):
-                return WorkflowResult(
-                    success=False, error="Step 3 (execute) failed", steps_completed=2
-                )
+            step3_result = step_3_execute(state, backend=backend, use_tui=use_tui, verbose=verbose)
+            if not step3_result.success:
+                if step3_result.needs_replan and state.replan_count < state.max_replans:
+                    replan_error = _handle_replan(state, step3_result, backend)
+                    if replan_error is not None:
+                        return replan_error
+                    continue
+                elif step3_result.needs_replan:
+                    print_warning(f"Maximum re-plan attempts ({state.max_replans}) reached.")
+                    return WorkflowResult(
+                        success=False, error="Max replans exhausted", steps_completed=2
+                    )
+                else:
+                    return WorkflowResult(
+                        success=False, error="Step 3 (execute) failed", steps_completed=2
+                    )
+            break  # Step 3 succeeded
 
         # Step 4: Update documentation (optional, non-blocking)
         if auto_update_docs:
@@ -245,6 +259,69 @@ def run_ingot_workflow(
         # Workflow complete
         _show_completion(state)
         return WorkflowResult(success=True, steps_completed=5)
+
+
+def _handle_replan(
+    state: WorkflowState,
+    step3_result: Step3Result,
+    backend: AIBackend,
+) -> WorkflowResult | None:
+    """Handle a single replan iteration.
+
+    Restores working tree, applies the chosen replan mode (AI or manual),
+    and regenerates the task list.
+
+    Returns:
+        None on success (caller should ``continue`` the loop).
+        A ``WorkflowResult`` on failure (caller should return it).
+    """
+    state.replan_count += 1
+    print_info(f"Re-planning attempt {state.replan_count}/{state.max_replans}...")
+    state.completed_tasks = []
+
+    # 1. Restore working tree FIRST (before any plan changes)
+    restored = False
+    if state.diff_baseline_ref:
+        restored = restore_to_baseline(
+            state.diff_baseline_ref,
+            pre_execution_untracked=state.pre_execution_untracked,
+        )
+        if not restored:
+            print_warning(
+                "Could not restore working tree to baseline. Continuing with dirty tree policy."
+            )
+            state.dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
+    else:
+        state.dirty_tree_policy = DirtyTreePolicy.WARN_AND_CONTINUE
+
+    # 2. Branch by replan mode
+    replan_mode = step3_result.replan_mode
+    if replan_mode == ReviewOutcome.REPLAN_WITH_AI:
+        if not replan_with_feedback(state, backend, step3_result.replan_feedback):
+            return WorkflowResult(success=False, error="Re-planning failed", steps_completed=2)
+    elif replan_mode == ReviewOutcome.REPLAN_MANUAL:
+        plan_path = state.get_plan_path()
+        if restored:
+            print_info("Workspace has been reset to baseline. The plan file is ready for editing.")
+        else:
+            print_warning(
+                "Workspace could not be fully reset to baseline. "
+                "The plan file is ready for editing, but some changes may remain."
+            )
+        print_info(f"Plan file: {plan_path}")
+        prompt_enter("Press Enter when you have finished editing the plan...")
+
+    # 3. Regenerate task list with updated plan
+    if not step_2_create_tasklist(state, backend):
+        return WorkflowResult(
+            success=False,
+            error="Task list regeneration failed",
+            steps_completed=2,
+        )
+
+    # 4. Loop — re-run step 3
+    state.current_step = 3
+    return None
 
 
 def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:

@@ -46,6 +46,10 @@ _THINKING_BLOCK_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+# Maximum character limits for replan prompt sections to keep prompt size reasonable.
+_REPLAN_PLAN_EXCERPT_LIMIT = 4000
+_REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
+
 # =============================================================================
 # Log Directory Management
 # =============================================================================
@@ -313,6 +317,138 @@ def _display_plan_summary(plan_path: Path) -> None:
     console.print()
 
 
+def _build_replan_prompt(
+    state: WorkflowState,
+    plan_path: Path,
+    existing_plan: str,
+    review_feedback: str,
+) -> str:
+    """Build the prompt for re-planning based on reviewer feedback.
+
+    Args:
+        state: Current workflow state.
+        plan_path: Path where the plan should be saved.
+        existing_plan: Current plan content (truncated for prompt size).
+        review_feedback: Reviewer output explaining why replan is needed.
+    """
+    # Truncate to keep prompt reasonable
+    plan_excerpt = existing_plan[:_REPLAN_PLAN_EXCERPT_LIMIT]
+    if len(existing_plan) > _REPLAN_PLAN_EXCERPT_LIMIT:
+        plan_excerpt += "\n\n... [truncated] ..."
+
+    feedback_excerpt = review_feedback[:_REPLAN_FEEDBACK_EXCERPT_LIMIT]
+    if len(review_feedback) > _REPLAN_FEEDBACK_EXCERPT_LIMIT:
+        feedback_excerpt += "\n\n... [truncated] ..."
+
+    prompt = f"""Revise the implementation plan based on reviewer feedback.
+
+## Ticket
+ID: {state.ticket.id}
+Title: {state.ticket.title or state.ticket.branch_summary or "Not available"}
+Description: {state.ticket.description or "Not available"}
+
+## Current Plan (needs revision)
+{plan_excerpt}
+
+## Reviewer Feedback
+The reviewer determined the current plan is flawed and needs revision:
+{feedback_excerpt}
+
+## Instructions
+1. Analyze the reviewer's feedback carefully
+2. Identify what needs to change in the plan
+3. Write a revised implementation plan that addresses the reviewer's concerns
+4. Save the revised plan to: {plan_path}
+
+Codebase context will be retrieved automatically."""
+
+    if state.user_context:
+        prompt += f"""
+
+## Additional Context
+{state.user_context}"""
+
+    return prompt
+
+
+def replan_with_feedback(
+    state: WorkflowState,
+    backend: AIBackend,
+    review_feedback: str,
+) -> bool:
+    """Re-generate the implementation plan based on reviewer feedback.
+
+    Reads the existing plan, combines it with reviewer feedback, and asks
+    the planner subagent to produce a revised plan.
+
+    Args:
+        state: Current workflow state.
+        backend: AI backend for agent calls.
+        review_feedback: The reviewer's output explaining why replan is needed.
+
+    Returns:
+        True if plan was successfully updated, False otherwise.
+    """
+    print_header("Re-planning: Revising Implementation Plan")
+
+    plan_path = state.get_plan_path()
+
+    # Read existing plan and create backup before overwriting
+    existing_plan = ""
+    if plan_path.exists():
+        existing_plan = plan_path.read_text()
+        backup_path = plan_path.with_suffix(f".pre-replan-{state.replan_count}.md")
+        backup_path.write_text(existing_plan)
+        log_message(f"Backed up previous plan to {backup_path}")
+
+    # Build replan prompt
+    use_plan_mode = backend.supports_plan_mode
+    prompt = _build_replan_prompt(state, plan_path, existing_plan, review_feedback)
+
+    if use_plan_mode:
+        prompt += """
+
+Output the complete revised implementation plan in Markdown format to stdout.
+Do not attempt to create or write any files."""
+
+    # Run the planner subagent
+    # dont_save_session=True: Replan attempts are transient and should not
+    # pollute the session history, which is reserved for the main plan run.
+    print_step("Generating revised implementation plan...")
+    try:
+        success, output = backend.run_with_callback(
+            prompt,
+            subagent=state.subagent_names["planner"],
+            output_callback=lambda _line: None,
+            dont_save_session=True,
+            plan_mode=use_plan_mode,
+        )
+    except Exception as e:
+        print_error(f"Re-planning failed: {e}")
+        return False
+
+    if not success:
+        print_error("Re-planning agent returned failure")
+        return False
+
+    # Handle plan mode output (save from stdout)
+    if not plan_path.exists() or use_plan_mode:
+        if output.strip():
+            plan_content = _extract_plan_markdown(output)
+            plan_path.write_text(plan_content)
+            log_message(f"Saved revised plan from output at {plan_path}")
+
+    if plan_path.exists():
+        print_success(f"Revised plan saved to: {plan_path}")
+        state.plan_file = plan_path
+        _display_plan_summary(plan_path)
+        return True
+    else:
+        print_error("Revised plan file was not created")
+        return False
+
+
 __all__ = [
+    "replan_with_feedback",
     "step_1_create_plan",
 ]

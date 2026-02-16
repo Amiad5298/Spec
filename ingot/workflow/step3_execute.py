@@ -59,6 +59,7 @@ from ingot.workflow.git_utils import (
     DirtyWorkingTreeError,
     capture_baseline,
     check_dirty_working_tree,
+    get_untracked_files,
 )
 from ingot.workflow.log_management import (
     cleanup_old_runs,
@@ -70,7 +71,7 @@ from ingot.workflow.prompts import (
     build_self_correction_prompt,
     build_task_prompt,
 )
-from ingot.workflow.review import run_phase_review
+from ingot.workflow.review import ReviewOutcome, run_phase_review
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import (
     Task,
@@ -86,6 +87,16 @@ TaskStatus = Literal["success", "failed", "skipped"]
 
 # Log directory names for workflow steps
 LOG_DIR_TEST_EXECUTION = "test_execution"
+
+
+@dataclass
+class Step3Result:
+    """Result of Step 3 execution."""
+
+    success: bool
+    needs_replan: bool = False
+    replan_feedback: str = ""
+    replan_mode: ReviewOutcome = ReviewOutcome.CONTINUE
 
 
 @dataclass
@@ -134,6 +145,9 @@ def _capture_baseline_for_diffs(state: WorkflowState) -> bool:
     try:
         baseline_ref = capture_baseline()
         state.diff_baseline_ref = baseline_ref
+        # Snapshot untracked files so restore_to_baseline can avoid deleting
+        # pre-existing untracked files during a replan restore.
+        state.pre_execution_untracked = frozenset(get_untracked_files())
         print_info(f"Captured baseline for diff operations: {baseline_ref[:8]}")
         return True
     except Exception as e:
@@ -147,7 +161,7 @@ def step_3_execute(
     backend: AIBackend,
     use_tui: bool | None = None,
     verbose: bool = False,
-) -> bool:
+) -> Step3Result:
     """Execute Step 3: Two-phase task execution.
 
     Phase 1: Sequential execution of fundamental tasks
@@ -169,13 +183,13 @@ def step_3_execute(
     if not _capture_baseline_for_diffs(state):
         print_error("Cannot proceed with dirty working tree.")
         print_info("Please commit or stash uncommitted changes first.")
-        return False
+        return Step3Result(success=False)
 
     # Verify task list exists
     tasklist_path = state.get_tasklist_path()
     if not tasklist_path.exists():
         print_error(f"Task list not found: {tasklist_path}")
-        return False
+        return Step3Result(success=False)
 
     # Parse all tasks
     tasks = parse_task_list(tasklist_path.read_text())
@@ -197,7 +211,7 @@ def step_3_execute(
     total_pending = len(pending_fundamental) + len(pending_independent)
     if total_pending == 0:
         print_success("All tasks already completed!")
-        return True
+        return Step3Result(success=True)
 
     print_info(
         f"Found {len(pending_fundamental)} fundamental + "
@@ -241,7 +255,7 @@ def step_3_execute(
         # If fail_fast and we had failures, stop here
         if failed_tasks and state.fail_fast:
             print_error("Phase 1 failures with fail_fast enabled. Stopping.")
-            return False
+            return Step3Result(success=False)
 
     # PHASE 2: Execute independent tasks in parallel
     if pending_independent and state.parallel_execution_enabled:
@@ -290,7 +304,7 @@ def step_3_execute(
             default=True,
         ):
             print_info("Exiting Step 3 early due to task failures.")
-            return False
+            return Step3Result(success=False)
 
     # Post-execution steps
     _show_summary(state, failed_tasks)
@@ -301,17 +315,27 @@ def step_3_execute(
     # right before commit instructions. Validates complete implementation
     # against the Step 1 spec as a whole.
     if state.enable_phase_review:
-        review_passed = run_phase_review(state, log_dir, phase="final", backend=backend)
-        if not review_passed:
-            # User explicitly chose to stop
+        review_outcome, review_feedback = run_phase_review(
+            state, log_dir, phase="final", backend=backend
+        )
+        if review_outcome == ReviewOutcome.STOP:
             print_warning(
                 "Workflow stopped after final review. Please address issues before committing."
             )
-            return False
+            return Step3Result(success=False)
+        elif review_outcome in (ReviewOutcome.REPLAN_WITH_AI, ReviewOutcome.REPLAN_MANUAL):
+            print_info("Re-planning requested. Restarting execution after plan update.")
+            return Step3Result(
+                success=False,
+                needs_replan=True,
+                replan_feedback=review_feedback,
+                replan_mode=review_outcome,
+            )
+        # CONTINUE falls through
 
     print_info(f"Task logs saved to: {log_dir}")
 
-    return len(failed_tasks) == 0
+    return Step3Result(success=len(failed_tasks) == 0)
 
 
 def _execute_with_tui(
@@ -971,6 +995,7 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
 
 __all__ = [
     "SelfCorrectionResult",
+    "Step3Result",
     "step_3_execute",
     "LOG_DIR_TEST_EXECUTION",
 ]

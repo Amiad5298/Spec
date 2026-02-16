@@ -118,6 +118,14 @@ class WorkflowState:
     # Review configuration
     enable_phase_review: bool = False  # Enable phase reviews after task execution
 
+    # Re-planning state
+    replan_count: int = 0  # Number of replans performed this workflow run
+    max_replans: int = 2  # Maximum replan attempts (prevents infinite loops)
+
+    # Snapshot of untracked files before step 3 execution, used by
+    # restore_to_baseline to avoid deleting pre-existing untracked files.
+    pre_execution_untracked: frozenset[str] = field(default_factory=frozenset)
+
     # Dirty tree policy for baseline diff operations
     dirty_tree_policy: DirtyTreePolicy = DirtyTreePolicy.FAIL_FAST
 
@@ -149,6 +157,8 @@ class WorkflowState:
             )
         if self.max_self_corrections < 0 or self.max_self_corrections > 10:
             raise ValueError(f"max_self_corrections must be 0-10, got {self.max_self_corrections}")
+        if self.max_replans < 0 or self.max_replans > 5:
+            raise ValueError(f"max_replans must be 0-5, got {self.max_replans}")
 
     @property
     def specs_dir(self) -> Path:

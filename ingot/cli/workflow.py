@@ -56,6 +56,7 @@ def _run_workflow(
     max_parallel: int | None = None,
     fail_fast: bool | None = None,
     max_self_corrections: int | None = None,
+    max_review_fix_attempts: int | None = None,
     max_retries: int = 5,
     retry_base_delay: float = 2.0,
     enable_review: bool = False,
@@ -106,8 +107,21 @@ def _run_workflow(
         raise typer.Exit(ExitCode.GENERAL_ERROR)
 
     # Validate effective_max_self_corrections
-    if effective_max_self_corrections < 0:
-        print_error(f"Invalid max_self_corrections={effective_max_self_corrections} (must be >= 0)")
+    if effective_max_self_corrections < 0 or effective_max_self_corrections > 10:
+        print_error(f"Invalid max_self_corrections={effective_max_self_corrections} (must be 0-10)")
+        raise typer.Exit(ExitCode.GENERAL_ERROR)
+
+    effective_max_review_fix_attempts = (
+        max_review_fix_attempts
+        if max_review_fix_attempts is not None
+        else config.settings.max_review_fix_attempts
+    )
+
+    # Validate effective_max_review_fix_attempts
+    if effective_max_review_fix_attempts < 0 or effective_max_review_fix_attempts > 10:
+        print_error(
+            f"Invalid max_review_fix_attempts={effective_max_review_fix_attempts} (must be 0-10)"
+        )
         raise typer.Exit(ExitCode.GENERAL_ERROR)
 
     # Parse dirty tree policy
@@ -153,6 +167,7 @@ def _run_workflow(
         max_parallel_tasks=effective_max_parallel,
         fail_fast=effective_fail_fast,
         max_self_corrections=effective_max_self_corrections,
+        max_review_fix_attempts=effective_max_review_fix_attempts,
         rate_limit_config=rate_limit_config,
         enable_phase_review=enable_review,
         dirty_tree_policy=effective_dirty_tree_policy,

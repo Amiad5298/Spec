@@ -8,7 +8,11 @@ Tests cover:
 - False positive prevention (PASS in normal prose)
 """
 
-from ingot.workflow.review import ReviewStatus, parse_review_status
+from unittest.mock import MagicMock, call, patch
+
+import pytest
+
+from ingot.workflow.review import ExitReason, ReviewStatus, parse_review_status
 
 
 class TestParseReviewStatusCanonical:
@@ -457,35 +461,37 @@ class TestRunPhaseReview:
         assert result is True
         mock_confirm.assert_called_once()
 
-    def test_returns_false_when_user_stops_after_git_error(self):
-        from unittest.mock import MagicMock, patch
-
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.print_info")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_returns_false_when_user_stops_after_git_error(
+        self, mock_diff, mock_confirm, _warn, _info, _step
+    ):
         from ingot.workflow.review import run_phase_review
 
         state = MagicMock()
         state.diff_baseline_ref = None
 
-        with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-            mock_diff.return_value = ("", False, True)  # git_error=True
-            with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-                mock_confirm.return_value = False  # User stops
-                with patch("ingot.workflow.review.print_warning"):
-                    with patch("ingot.workflow.review.print_info"):
-                        with patch("ingot.workflow.review.print_step"):
-                            result = run_phase_review(
-                                state, MagicMock(), "final", backend=MagicMock()
-                            )
+        mock_diff.return_value = ("", False, True)  # git_error=True
+        mock_confirm.return_value = False  # User stops
+
+        result = run_phase_review(state, MagicMock(), "final", backend=MagicMock())
 
         assert result is False
 
-    def test_offers_autofix_on_needs_attention(self):
-        from unittest.mock import MagicMock, patch
-
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_offers_autofix_on_needs_attention(self, mock_diff, mock_confirm, _step, _warn):
         from ingot.workflow.review import run_phase_review
 
         state = MagicMock()
         state.diff_baseline_ref = None
         state.subagent_names = {"reviewer": "ingot-reviewer"}
+        state.max_review_fix_attempts = 3
 
         mock_backend = MagicMock()
         mock_backend.run_with_callback.return_value = (
@@ -493,56 +499,105 @@ class TestRunPhaseReview:
             "**Status**: NEEDS_ATTENTION\n**Issues**: 1. Bug",
         )
 
-        with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-            mock_diff.return_value = ("diff content", False, False)
-            with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-                # First confirm = auto-fix (No), second = continue (Yes)
-                mock_confirm.side_effect = [False, True]
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_warning"):
-                        result = run_phase_review(
-                            state, MagicMock(), "fundamental", backend=mock_backend
-                        )
+        mock_diff.return_value = ("diff content", False, False)
+        # First confirm = auto-fix (No), second = continue (Yes)
+        mock_confirm.side_effect = [False, True]
+
+        result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
         assert result is True
         # Should be called twice: auto-fix prompt and continue prompt
         assert mock_confirm.call_count == 2
 
-    def test_runs_autofix_when_user_accepts(self):
-        from unittest.mock import MagicMock, patch
+    @patch("ingot.workflow.review.print_info")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review._run_review_fix_loop")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_runs_autofix_loop_when_user_accepts(
+        self, mock_diff, mock_confirm, mock_loop, _step, _warn, _info
+    ):
+        from ingot.workflow.review import ReviewFixResult, run_phase_review
 
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+        state.max_review_fix_attempts = 3
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (True, "**Status**: NEEDS_ATTENTION")
+
+        mock_diff.return_value = ("diff content", False, False)
+        # auto-fix (Yes), then continue (Yes)
+        mock_confirm.side_effect = [True, True]
+        mock_loop.return_value = ReviewFixResult(
+            passed=False, exit_reason=ExitReason.EXHAUSTED, fix_attempts=3, max_attempts=3
+        )
+
+        result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
+
+        mock_loop.assert_called_once()
+        assert result is True
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_no_autofix_offer_when_max_attempts_zero(self, mock_diff, mock_confirm, _step, _warn):
         from ingot.workflow.review import run_phase_review
 
         state = MagicMock()
         state.diff_baseline_ref = None
         state.subagent_names = {"reviewer": "ingot-reviewer"}
+        state.max_review_fix_attempts = 0
 
         mock_backend = MagicMock()
-        mock_backend.run_with_callback.return_value = (
-            True,
-            "**Status**: NEEDS_ATTENTION",
+        mock_backend.run_with_callback.return_value = (True, "**Status**: NEEDS_ATTENTION")
+
+        mock_diff.return_value = ("diff content", False, False)
+        # Only continue prompt (no auto-fix offered)
+        mock_confirm.return_value = True
+
+        result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
+
+        assert result is True
+        # Only one prompt: "Continue workflow despite review issues?"
+        assert mock_confirm.call_count == 1
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review._run_review_fix_loop")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_loop_passes_returns_true(self, mock_diff, mock_confirm, mock_loop, _step, _warn):
+        from ingot.workflow.review import ReviewFixResult, run_phase_review
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+        state.max_review_fix_attempts = 3
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (True, "**Status**: NEEDS_ATTENTION")
+
+        mock_diff.return_value = ("diff content", False, False)
+        mock_confirm.return_value = True  # Accept auto-fix
+        mock_loop.return_value = ReviewFixResult(
+            passed=True, exit_reason=ExitReason.PASSED, fix_attempts=1, max_attempts=3
         )
 
-        with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-            mock_diff.return_value = ("diff content", False, False)
-            with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-                # auto-fix (Yes), re-review (No), continue (Yes)
-                mock_confirm.side_effect = [True, False, True]
-                # Patch autofix in its source module since it's imported inside the function
-                with patch("ingot.workflow.autofix.run_auto_fix") as mock_autofix:
-                    mock_autofix.return_value = True
-                    with patch("ingot.workflow.review.print_step"):
-                        with patch("ingot.workflow.review.print_warning"):
-                            result = run_phase_review(
-                                state, MagicMock(), "fundamental", backend=mock_backend
-                            )
+        result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
-        mock_autofix.assert_called_once()
         assert result is True
+        # Only auto-fix prompt, no continue prompt needed
+        assert mock_confirm.call_count == 1
 
-    def test_handles_review_execution_exception(self):
-        from unittest.mock import MagicMock, patch
-
+    @patch("ingot.workflow.review.print_info")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_handles_review_execution_exception(self, mock_diff, _step, _warn, _info):
         from ingot.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -552,21 +607,19 @@ class TestRunPhaseReview:
         mock_backend = MagicMock()
         mock_backend.run_with_callback.side_effect = Exception("Network error")
 
-        with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-            mock_diff.return_value = ("diff content", False, False)
-            with patch("ingot.workflow.review.print_step"):
-                with patch("ingot.workflow.review.print_warning"):
-                    with patch("ingot.workflow.review.print_info"):
-                        result = run_phase_review(
-                            state, MagicMock(), "fundamental", backend=mock_backend
-                        )
+        mock_diff.return_value = ("diff content", False, False)
+
+        result = run_phase_review(state, MagicMock(), "fundamental", backend=mock_backend)
 
         # Should continue workflow on review crash (advisory behavior)
         assert result is True
 
-    def test_prompts_user_on_execution_failure(self):
-        from unittest.mock import MagicMock, patch
-
+    @patch("ingot.workflow.review.print_info")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.prompt_confirm")
+    @patch("ingot.workflow.review.get_smart_diff")
+    def test_prompts_user_on_execution_failure(self, mock_diff, mock_confirm, _step, _warn, _info):
         from ingot.workflow.review import run_phase_review
 
         state = MagicMock()
@@ -576,167 +629,353 @@ class TestRunPhaseReview:
         mock_backend = MagicMock()
         mock_backend.run_with_callback.return_value = (False, "Error output")
 
-        with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-            mock_diff.return_value = ("diff content", False, False)
-            with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-                mock_confirm.return_value = True
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_warning"):
-                        with patch("ingot.workflow.review.print_info"):
-                            result = run_phase_review(
-                                state, MagicMock(), "final", backend=mock_backend
-                            )
+        mock_diff.return_value = ("diff content", False, False)
+        mock_confirm.return_value = True
+
+        result = run_phase_review(state, MagicMock(), "final", backend=mock_backend)
 
         assert result is True
         mock_confirm.assert_called_once()
 
 
-class TestRunRereviewAfterFix:
-    def test_returns_none_when_user_skips(self):
-        from unittest.mock import MagicMock, patch
-
-        from ingot.workflow.review import _run_rereview_after_fix
-
-        state = MagicMock()
-        auggie_client = MagicMock()
-
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = False
-            result = _run_rereview_after_fix(state, MagicMock(), "fundamental", auggie_client)
-
-        assert result is None
-
-    def test_returns_true_when_no_changes_after_fix(self):
-        from unittest.mock import MagicMock, patch
-
-        from ingot.workflow.review import _run_rereview_after_fix
+class TestRunReviewFixLoop:
+    @patch("ingot.workflow.review.print_success")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_passes_on_first_attempt(self, mock_autofix, mock_diff, _step, _success):
+        from ingot.workflow.review import _run_review_fix_loop
 
         state = MagicMock()
         state.diff_baseline_ref = None
-        auggie_client = MagicMock()
-
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = True
-            with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-                mock_diff.return_value = ("", False, False)  # No changes
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_info"):
-                        result = _run_rereview_after_fix(
-                            state, MagicMock(), "fundamental", auggie_client
-                        )
-
-        assert result is True
-
-    def test_returns_true_when_rereview_passes(self):
-        from unittest.mock import MagicMock, patch
-
-        from ingot.workflow.review import _run_rereview_after_fix
-
-        state = MagicMock()
-        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
         state.subagent_names = {"reviewer": "ingot-reviewer"}
-        auggie_client = MagicMock()
-        auggie_client.run_with_callback.return_value = (True, "**Status**: PASS")
 
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = True
-            with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-                mock_diff.return_value = ("diff content", False, False)
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_success"):
-                        result = _run_rereview_after_fix(
-                            state, MagicMock(), "fundamental", auggie_client
-                        )
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (True, "**Status**: PASS")
 
-        assert result is True
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("diff content", False, False)
 
-    def test_returns_none_when_rereview_fails(self):
-        from unittest.mock import MagicMock, patch
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
 
-        from ingot.workflow.review import _run_rereview_after_fix
+        assert result.passed is True
+        assert result.fix_attempts == 1
+        assert result.max_attempts == 3
+        mock_autofix.assert_called_once()
+
+    @patch("ingot.workflow.review.print_success")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_passes_on_second_attempt(self, mock_autofix, mock_diff, _step, _warn, _success):
+        from ingot.workflow.review import _run_review_fix_loop
 
         state = MagicMock()
         state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
         state.subagent_names = {"reviewer": "ingot-reviewer"}
-        auggie_client = MagicMock()
-        auggie_client.run_with_callback.return_value = (True, "**Status**: NEEDS_ATTENTION")
 
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = True
-            with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-                mock_diff.return_value = ("diff content", False, False)
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_warning"):
-                        with patch("ingot.workflow.review.print_info"):
-                            result = _run_rereview_after_fix(
-                                state, MagicMock(), "fundamental", auggie_client
-                            )
+        mock_backend = MagicMock()
+        # First verify: NEEDS_ATTENTION, second verify: PASS
+        mock_backend.run_with_callback.side_effect = [
+            (True, "**Status**: NEEDS_ATTENTION\nStill has bugs"),
+            (True, "**Status**: PASS"),
+        ]
 
-        assert result is None
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("diff content", False, False)
 
-    def test_returns_none_on_git_error(self):
-        from unittest.mock import MagicMock, patch
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
 
-        from ingot.workflow.review import _run_rereview_after_fix
+        assert result.passed is True
+        assert result.fix_attempts == 2
+        assert mock_autofix.call_count == 2
 
-        state = MagicMock()
-        state.diff_baseline_ref = None
-        auggie_client = MagicMock()
-
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = True
-            with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-                mock_diff.return_value = ("", False, True)  # git_error=True
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_warning"):
-                        result = _run_rereview_after_fix(
-                            state, MagicMock(), "fundamental", auggie_client
-                        )
-
-        assert result is None
-
-    def test_returns_none_on_execution_failure(self):
-        from unittest.mock import MagicMock, patch
-
-        from ingot.workflow.review import _run_rereview_after_fix
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_all_attempts_exhausted(self, mock_autofix, mock_diff, _step, _warn):
+        from ingot.workflow.review import _run_review_fix_loop
 
         state = MagicMock()
         state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 2
         state.subagent_names = {"reviewer": "ingot-reviewer"}
-        auggie_client = MagicMock()
-        auggie_client.run_with_callback.return_value = (False, "error")
 
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = True
-            with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-                mock_diff.return_value = ("diff content", False, False)
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_warning"):
-                        result = _run_rereview_after_fix(
-                            state, MagicMock(), "fundamental", auggie_client
-                        )
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (
+            True,
+            "**Status**: NEEDS_ATTENTION\nBugs remain",
+        )
 
-        assert result is None
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("diff content", False, False)
 
-    def test_returns_none_on_exception(self):
-        from unittest.mock import MagicMock, patch
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
 
-        from ingot.workflow.review import _run_rereview_after_fix
+        assert result.passed is False
+        assert result.fix_attempts == 2
+        assert result.max_attempts == 2
+        assert mock_autofix.call_count == 2
+
+    @patch("ingot.workflow.review.print_info")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_no_diff_after_fix_returns_passed(self, mock_autofix, mock_diff, _step, _info):
+        from ingot.workflow.review import _run_review_fix_loop
 
         state = MagicMock()
         state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
         state.subagent_names = {"reviewer": "ingot-reviewer"}
-        auggie_client = MagicMock()
-        auggie_client.run_with_callback.side_effect = Exception("Network error")
 
-        with patch("ingot.workflow.review.prompt_confirm") as mock_confirm:
-            mock_confirm.return_value = True
-            with patch("ingot.workflow.review.get_smart_diff") as mock_diff:
-                mock_diff.return_value = ("diff content", False, False)
-                with patch("ingot.workflow.review.print_step"):
-                    with patch("ingot.workflow.review.print_warning"):
-                        result = _run_rereview_after_fix(
-                            state, MagicMock(), "fundamental", auggie_client
-                        )
+        mock_backend = MagicMock()
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("", False, False)  # No diff after fix
 
-        assert result is None
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is True
+        assert result.fix_attempts == 1
+        # No review call since no diff
+        mock_backend.run_with_callback.assert_not_called()
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_git_error_during_verify_returns_failed(self, mock_autofix, mock_diff, _step, _warn):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("", False, True)  # git_error=True
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is False
+        assert result.fix_attempts == 1
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_review_exception_during_verify_returns_failed(
+        self, mock_autofix, mock_diff, _step, _warn
+    ):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.side_effect = Exception("Network error")
+
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("diff content", False, False)
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is False
+        assert result.fix_attempts == 1
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_verify_execution_failure_returns_failed(self, mock_autofix, mock_diff, _step, _warn):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.return_value = (False, "error")
+
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("diff content", False, False)
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is False
+        assert result.fix_attempts == 1
+
+    @patch("ingot.workflow.review.print_info")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_autofix_failure_proceeds_to_verify(self, mock_autofix, mock_diff, _step, _warn, _info):
+        """When run_auto_fix reports failure, the loop still proceeds to verify.
+
+        Autofix fails and the reviewer still reports NEEDS_ATTENTION,
+        but the key assertion is that verification was attempted at all.
+        """
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        # Autofix fails; reviewer still reports issues (no partial fix helped)
+        mock_autofix.return_value = False
+        mock_diff.return_value = ("diff content", False, False)
+        mock_backend.run_with_callback.return_value = (
+            True,
+            "**Status**: NEEDS_ATTENTION\nStill has issues",
+        )
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        # Verify phase IS reached even when autofix fails
+        mock_backend.run_with_callback.assert_called()
+        assert result.fix_attempts >= 1
+
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_feedback_propagation_across_attempts(self, mock_autofix, mock_diff, _step, _warn):
+        """Review output from attempt N feeds into fix attempt N+1."""
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 2
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        mock_backend.run_with_callback.side_effect = [
+            (True, "**Status**: NEEDS_ATTENTION\nNew issues from attempt 1"),
+            (True, "**Status**: NEEDS_ATTENTION\nNew issues from attempt 2"),
+        ]
+
+        mock_autofix.return_value = True
+        mock_diff.return_value = ("diff content", False, False)
+
+        log_dir = MagicMock()
+        _run_review_fix_loop(state, "initial feedback", log_dir, "final", mock_backend)
+
+        # First call uses initial feedback, second uses output from first verify
+        autofix_calls = mock_autofix.call_args_list
+        assert autofix_calls[0] == call(state, "initial feedback", log_dir, mock_backend)
+        assert autofix_calls[1] == call(
+            state,
+            "**Status**: NEEDS_ATTENTION\nNew issues from attempt 1",
+            log_dir,
+            mock_backend,
+        )
+
+    @patch("ingot.workflow.review.print_step")
+    def test_zero_max_attempts_returns_failed_immediately(self, _step):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 0
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is False
+        assert result.exit_reason == ExitReason.EXHAUSTED
+        assert result.fix_attempts == 0
+        # No backend calls should have been made
+        mock_backend.run_with_callback.assert_not_called()
+
+    @patch("ingot.workflow.review.print_success")
+    @patch("ingot.workflow.review.print_warning")
+    @patch("ingot.workflow.review.print_step")
+    @patch("ingot.workflow.review.get_smart_diff")
+    @patch("ingot.workflow.autofix.run_auto_fix")
+    def test_partial_fix_success_when_autofix_fails_but_reviewer_passes(
+        self, mock_autofix, mock_diff, _step, _warn, _success
+    ):
+        from ingot.workflow.review import _run_review_fix_loop
+
+        state = MagicMock()
+        state.diff_baseline_ref = None
+        state.max_review_fix_attempts = 3
+        state.subagent_names = {"reviewer": "ingot-reviewer"}
+
+        mock_backend = MagicMock()
+        # Autofix reports failure, but reviewer still passes
+        mock_autofix.return_value = False
+        mock_diff.return_value = ("diff content", False, False)
+        mock_backend.run_with_callback.return_value = (True, "**Status**: PASS")
+
+        result = _run_review_fix_loop(state, "initial feedback", MagicMock(), "final", mock_backend)
+
+        assert result.passed is True
+        assert result.exit_reason == ExitReason.PASSED
+        assert result.fix_attempts == 1
+
+
+class TestWorkflowStateValidation:
+    def test_max_review_fix_attempts_rejects_negative(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_review_fix_attempts must be 0-10"):
+            WorkflowState(ticket=ticket, max_review_fix_attempts=-1)
+
+    def test_max_review_fix_attempts_rejects_over_10(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_review_fix_attempts must be 0-10"):
+            WorkflowState(ticket=ticket, max_review_fix_attempts=11)
+
+    def test_max_review_fix_attempts_accepts_valid_range(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        for val in (0, 5, 10):
+            state = WorkflowState(ticket=ticket, max_review_fix_attempts=val)
+            assert state.max_review_fix_attempts == val
+
+    def test_max_self_corrections_rejects_negative(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_self_corrections must be 0-10"):
+            WorkflowState(ticket=ticket, max_self_corrections=-1)
+
+    def test_max_self_corrections_rejects_over_10(self):
+        from ingot.integrations.providers import GenericTicket, Platform
+        from ingot.workflow.state import WorkflowState
+
+        ticket = GenericTicket(
+            id="TEST-1", title="t", description="d", platform=Platform.JIRA, url=""
+        )
+        with pytest.raises(ValueError, match="max_self_corrections must be 0-10"):
+            WorkflowState(ticket=ticket, max_self_corrections=11)

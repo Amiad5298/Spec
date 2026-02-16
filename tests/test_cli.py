@@ -423,6 +423,7 @@ class TestDirtyTreePolicy:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -452,6 +453,7 @@ class TestDirtyTreePolicy:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -481,6 +483,7 @@ class TestDirtyTreePolicy:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         with pytest.raises(click.exceptions.Exit) as exc_info:
             _run_workflow(
@@ -533,6 +536,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -563,6 +567,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -593,6 +598,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -621,6 +627,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -651,6 +658,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         with pytest.raises(click.exceptions.Exit) as exc_info:
             _run_workflow(
@@ -680,6 +688,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = True  # Config says True
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -710,6 +719,7 @@ class TestEffectiveValueOverrides:
         mock_config.settings.squash_at_end = True
         mock_config.settings.auto_update_docs = False  # Config says False
         mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
 
         _run_workflow(
             ticket="TEST-123",
@@ -1478,6 +1488,68 @@ class TestCreateTicketServiceFromConfig:
         # Should pass the provided auth_manager to create_ticket_service
         call_kwargs = mock_create.call_args[1]
         assert call_kwargs["auth_manager"] == mock_auth
+
+
+class TestMaxReviewFixAttemptsFlags:
+    @patch("ingot.cli.workflow._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.ticket.run_async")
+    def test_max_review_fix_attempts_override_cli_beats_config(
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
+    ):
+        from ingot.cli import _run_workflow
+
+        mock_run_async.return_value = (MagicMock(), MagicMock())
+        mock_config = MagicMock()
+        mock_config.settings.max_parallel_tasks = 3
+        mock_config.settings.parallel_execution_enabled = True
+        mock_config.settings.fail_fast = False
+        mock_config.settings.default_model = "test-model"
+        mock_config.settings.planning_model = ""
+        mock_config.settings.implementation_model = ""
+        mock_config.settings.skip_clarification = False
+        mock_config.settings.squash_at_end = True
+        mock_config.settings.auto_update_docs = True
+        mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3  # Config default
+
+        _run_workflow(
+            ticket="TEST-123",
+            config=mock_config,
+            max_review_fix_attempts=7,  # CLI overrides to 7
+        )
+
+        call_kwargs = mock_run_workflow.call_args[1]
+        assert call_kwargs["max_review_fix_attempts"] == 7
+
+    @patch("ingot.cli.workflow._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.cli.ticket.run_async")
+    def test_max_review_fix_attempts_rejects_over_10(self, mock_run_async, mock_is_ambiguous):
+        import click
+
+        from ingot.cli import _run_workflow
+
+        mock_run_async.return_value = (MagicMock(), MagicMock())
+        mock_config = MagicMock()
+        mock_config.settings.max_parallel_tasks = 3
+        mock_config.settings.parallel_execution_enabled = True
+        mock_config.settings.fail_fast = False
+        mock_config.settings.default_model = "test-model"
+        mock_config.settings.planning_model = ""
+        mock_config.settings.implementation_model = ""
+        mock_config.settings.skip_clarification = False
+        mock_config.settings.squash_at_end = True
+        mock_config.settings.auto_update_docs = True
+        mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
+
+        with pytest.raises(click.exceptions.Exit) as exc_info:
+            _run_workflow(
+                ticket="TEST-123",
+                config=mock_config,
+                max_review_fix_attempts=11,
+            )
+        assert exc_info.value.exit_code == ExitCode.GENERAL_ERROR
 
 
 class TestBackendFlag:

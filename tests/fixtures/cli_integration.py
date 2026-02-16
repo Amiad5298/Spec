@@ -255,6 +255,7 @@ def mock_config_for_cli():
     mock_config.settings.parallel_execution_enabled = True
     mock_config.settings.fail_fast = False
     mock_config.settings.max_self_corrections = 3
+    mock_config.settings.max_review_fix_attempts = 3
     # Support backend resolution: resolve_backend_platform calls config.get("AI_BACKEND", "")
     # Use side_effect so only AI_BACKEND returns "auggie"; other keys return their defaults
     mock_config.get.side_effect = lambda key, default="": {"AI_BACKEND": "auggie"}.get(key, default)

@@ -82,6 +82,7 @@ class WorkflowState:
     squash_at_end: bool = True
     fail_fast: bool = False  # Stop execution on first task failure
     max_self_corrections: int = 3  # Max self-correction attempts per task (0 = disable)
+    max_review_fix_attempts: int = 3  # Max auto-fix attempts during review (0 = disable)
 
     # User-provided additional context
     user_context: str = ""
@@ -140,6 +141,14 @@ class WorkflowState:
             "doc_updater": INGOT_AGENT_DOC_UPDATER,
         }
     )
+
+    def __post_init__(self) -> None:
+        if self.max_review_fix_attempts < 0 or self.max_review_fix_attempts > 10:
+            raise ValueError(
+                f"max_review_fix_attempts must be 0-10, got {self.max_review_fix_attempts}"
+            )
+        if self.max_self_corrections < 0 or self.max_self_corrections > 10:
+            raise ValueError(f"max_self_corrections must be 0-10, got {self.max_self_corrections}")
 
     @property
     def specs_dir(self) -> Path:

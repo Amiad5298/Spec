@@ -24,6 +24,7 @@ Helper modules:
 - prompts: Task execution prompt templates
 """
 
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -96,6 +97,7 @@ class SelfCorrectionResult:
     total_attempts: int = 1
 
 
+@functools.cache
 def _get_repo_root() -> Path:
     """Get repository root, falling back to cwd if not in a git repo."""
     return find_repo_root() or Path.cwd()

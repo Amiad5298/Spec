@@ -107,8 +107,8 @@ def _run_workflow(
         raise typer.Exit(ExitCode.GENERAL_ERROR)
 
     # Validate effective_max_self_corrections
-    if effective_max_self_corrections < 0:
-        print_error(f"Invalid max_self_corrections={effective_max_self_corrections} (must be >= 0)")
+    if effective_max_self_corrections < 0 or effective_max_self_corrections > 10:
+        print_error(f"Invalid max_self_corrections={effective_max_self_corrections} (must be 0-10)")
         raise typer.Exit(ExitCode.GENERAL_ERROR)
 
     effective_max_review_fix_attempts = (
@@ -118,9 +118,9 @@ def _run_workflow(
     )
 
     # Validate effective_max_review_fix_attempts
-    if effective_max_review_fix_attempts < 0:
+    if effective_max_review_fix_attempts < 0 or effective_max_review_fix_attempts > 10:
         print_error(
-            f"Invalid max_review_fix_attempts={effective_max_review_fix_attempts} (must be >= 0)"
+            f"Invalid max_review_fix_attempts={effective_max_review_fix_attempts} (must be 0-10)"
         )
         raise typer.Exit(ExitCode.GENERAL_ERROR)
 

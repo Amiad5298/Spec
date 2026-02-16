@@ -253,7 +253,16 @@ def _run_review_fix_loop(
     for attempt in range(1, max_attempts + 1):
         # --- FIX phase ---
         print_step(f"[AUTO-FIX {attempt}/{max_attempts}] Attempting fix for {phase} review...")
-        run_auto_fix(state, current_feedback, log_dir, backend)
+        fix_success = run_auto_fix(state, current_feedback, log_dir, backend)
+
+        if not fix_success:
+            print_warning(f"[AUTO-FIX {attempt}/{max_attempts}] Auto-fix reported failure")
+            return ReviewFixResult(
+                passed=False,
+                review_output=current_feedback,
+                fix_attempts=attempt,
+                max_attempts=max_attempts,
+            )
 
         # --- VERIFY phase ---
         print_step(f"[VERIFY {attempt}/{max_attempts}] Re-reviewing after fix...")

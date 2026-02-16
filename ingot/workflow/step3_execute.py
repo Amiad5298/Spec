@@ -25,12 +25,13 @@ Helper modules:
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from ingot.integrations.backends.base import AIBackend
 from ingot.integrations.backends.errors import BackendRateLimitError
-from ingot.integrations.git import get_current_branch
+from ingot.integrations.git import find_repo_root, get_current_branch
 from ingot.ui.log_buffer import TaskLogBuffer
 from ingot.ui.prompts import prompt_confirm
 from ingot.utils.console import (
@@ -83,6 +84,21 @@ TaskStatus = Literal["success", "failed", "skipped"]
 
 # Log directory names for workflow steps
 LOG_DIR_TEST_EXECUTION = "test_execution"
+
+
+@dataclass
+class SelfCorrectionResult:
+    """Result of task execution with self-correction loop."""
+
+    success: bool
+    final_output: str = ""
+    attempt_count: int = 1
+    total_attempts: int = 1
+
+
+def _get_repo_root() -> Path:
+    """Get repository root, falling back to cwd if not in a git repo."""
+    return find_repo_root() or Path.cwd()
 
 
 def _capture_baseline_for_diffs(state: WorkflowState) -> bool:
@@ -537,7 +553,13 @@ def _execute_task(
     """
     # Build minimal prompt - pass plan path reference, not full content
     # The agent uses codebase-retrieval to read relevant sections
-    prompt = build_task_prompt(task, plan_path, is_parallel=False, user_context=state.user_context)
+    prompt = build_task_prompt(
+        task,
+        plan_path,
+        is_parallel=False,
+        user_context=state.user_context,
+        repo_root=_get_repo_root(),
+    )
 
     try:
         success, output = backend.run_with_callback(
@@ -582,7 +604,11 @@ def _execute_task_with_callback(
     # Build minimal prompt - pass plan path reference, not full content
     # The agent uses codebase-retrieval to read relevant sections
     prompt = build_task_prompt(
-        task, plan_path, is_parallel=is_parallel, user_context=state.user_context
+        task,
+        plan_path,
+        is_parallel=is_parallel,
+        user_context=state.user_context,
+        repo_root=_get_repo_root(),
     )
 
     try:
@@ -654,7 +680,7 @@ def _execute_task_with_self_correction(
     backend: AIBackend,
     callback: Callable[[str], None] | None = None,
     is_parallel: bool = False,
-) -> bool:
+) -> SelfCorrectionResult:
     """Execute a task with self-correction loop.
 
     On failure, feeds the error output back to the agent as a new prompt,
@@ -672,7 +698,7 @@ def _execute_task_with_self_correction(
     # If self-correction disabled, delegate directly
     if max_corrections <= 0:
         if callback:
-            return _execute_task_with_callback(
+            success = _execute_task_with_callback(
                 state,
                 task,
                 plan_path,
@@ -681,11 +707,29 @@ def _execute_task_with_self_correction(
                 is_parallel=is_parallel,
             )
         else:
-            return _execute_task(state, task, plan_path, backend)
+            success = _execute_task(state, task, plan_path, backend)
+        return SelfCorrectionResult(success=success)
+
+    total_attempts = 1 + max_corrections
+
+    def _emit(msg: str, level: str = "info") -> None:
+        if callback:
+            callback(msg)
+        else:
+            if level == "info":
+                print_info(msg)
+            elif level == "success":
+                print_success(msg)
+            elif level == "warning":
+                print_warning(msg)
 
     # First attempt — capture output for potential correction
     prompt = build_task_prompt(
-        task, plan_path, is_parallel=is_parallel, user_context=state.user_context
+        task,
+        plan_path,
+        is_parallel=is_parallel,
+        user_context=state.user_context,
+        repo_root=_get_repo_root(),
     )
     success, output = _run_backend_capturing_output(
         state,
@@ -695,7 +739,12 @@ def _execute_task_with_self_correction(
     )
 
     if success:
-        return True
+        return SelfCorrectionResult(
+            success=True,
+            final_output=output,
+            attempt_count=1,
+            total_attempts=total_attempts,
+        )
 
     # Self-correction loop
     for attempt in range(1, max_corrections + 1):
@@ -703,9 +752,7 @@ def _execute_task_with_self_correction(
             f"[SELF-CORRECTION {attempt}/{max_corrections}] "
             f"Task '{task.name}' failed. Attempting correction..."
         )
-        if callback:
-            callback(info_msg)
-        print_info(info_msg)
+        _emit(info_msg, "info")
 
         correction_prompt = build_self_correction_prompt(
             task,
@@ -715,6 +762,9 @@ def _execute_task_with_self_correction(
             max_attempts=max_corrections,
             is_parallel=is_parallel,
             user_context=state.user_context,
+            repo_root=_get_repo_root(),
+            ticket_title=state.ticket.title,
+            ticket_description=state.ticket.description,
         )
 
         success, output = _run_backend_capturing_output(
@@ -730,20 +780,26 @@ def _execute_task_with_self_correction(
                 f"[SELF-CORRECTION {attempt}/{max_corrections}] "
                 f"Task '{task.name}' succeeded after correction."
             )
-            if callback:
-                callback(success_msg)
-            print_success(success_msg)
-            return True
+            _emit(success_msg, "success")
+            return SelfCorrectionResult(
+                success=True,
+                final_output=output,
+                attempt_count=1 + attempt,
+                total_attempts=total_attempts,
+            )
 
     # All corrections exhausted
     fail_msg = (
         f"[SELF-CORRECTION] Task '{task.name}' failed after "
         f"{max_corrections} correction attempt(s)."
     )
-    if callback:
-        callback(fail_msg)
-    print_warning(fail_msg)
-    return False
+    _emit(fail_msg, "warning")
+    return SelfCorrectionResult(
+        success=False,
+        final_output=output,
+        attempt_count=1 + max_corrections,
+        total_attempts=total_attempts,
+    )
 
 
 def _execute_task_with_retry(
@@ -762,10 +818,21 @@ def _execute_task_with_retry(
     """
     config = state.rate_limit_config
 
+    def _emit(msg: str, level: str = "info") -> None:
+        if callback:
+            callback(msg)
+        else:
+            if level == "info":
+                print_info(msg)
+            elif level == "warning":
+                print_warning(msg)
+            elif level == "error":
+                print_error(msg)
+
     # Skip retry wrapper if retries disabled
     if config.max_retries <= 0:
         try:
-            return _execute_task_with_self_correction(
+            result = _execute_task_with_self_correction(
                 state,
                 task,
                 plan_path,
@@ -773,24 +840,22 @@ def _execute_task_with_retry(
                 callback=callback,
                 is_parallel=is_parallel,
             )
+            return result.success
         except BackendRateLimitError:
             # No retries available — treat as failure
-            error_msg = "[FAILED] Rate limit detected but retries are disabled"
-            if callback:
-                callback(error_msg)
-            print_warning(error_msg)
+            _emit("[FAILED] Rate limit detected but retries are disabled", "warning")
             return False
 
     def log_retry(attempt: int, delay: float, error: Exception) -> None:
         """Log retry attempts."""
-        message = f"[RETRY {attempt}/{config.max_retries}] Rate limited. Waiting {delay:.1f}s..."
-        if callback:
-            callback(message)
-        print_warning(message)
+        _emit(
+            f"[RETRY {attempt}/{config.max_retries}] Rate limited. Waiting {delay:.1f}s...",
+            "warning",
+        )
 
     @with_rate_limit_retry(config, on_retry=log_retry)
     def execute_with_retry() -> bool:
-        return _execute_task_with_self_correction(
+        result = _execute_task_with_self_correction(
             state,
             task,
             plan_path,
@@ -798,14 +863,12 @@ def _execute_task_with_retry(
             callback=callback,
             is_parallel=is_parallel,
         )
+        return result.success
 
     try:
         return execute_with_retry()
     except RateLimitExceededError as e:
-        error_msg = f"[FAILED] Task exhausted all retries: {e}"
-        if callback:
-            callback(error_msg)
-        print_error(error_msg)
+        _emit(f"[FAILED] Task exhausted all retries: {e}", "error")
         return False
 
 
@@ -904,6 +967,7 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
 
 
 __all__ = [
+    "SelfCorrectionResult",
     "step_3_execute",
     "LOG_DIR_TEST_EXECUTION",
 ]

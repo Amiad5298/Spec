@@ -150,6 +150,19 @@ def run_ingot_workflow(
         if state.ticket.description:
             print_info(f"Description: {state.ticket.description[:200]}...")
 
+        # Validate ticket content — block if platform returned nothing
+        if not state.ticket.has_verified_content:
+            state.spec_verified = False
+            print_warning(
+                f"The platform returned no content for ticket '{state.ticket.id}' "
+                "(empty title and description). The planner may hallucinate requirements."
+            )
+            if not prompt_confirm("Proceed without verified ticket data?", default=False):
+                return WorkflowResult(
+                    success=False,
+                    error=f"Aborted: no verified content for ticket '{state.ticket.id}'",
+                )
+
         # Ask user for additional context
         if prompt_confirm(
             "Would you like to add additional context about this ticket?", default=False

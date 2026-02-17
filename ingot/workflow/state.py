@@ -92,6 +92,10 @@ class WorkflowState:
     conflict_detected: bool = False
     conflict_summary: str = ""
 
+    # Spec verification: True when the ticket has verified platform content.
+    # Set to False by runner when ticket.has_verified_content is False.
+    spec_verified: bool = True
+
     # File paths
     plan_file: Path | None = None
     tasklist_file: Path | None = None

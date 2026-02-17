@@ -1567,3 +1567,139 @@ class TestDetectContextConflict:
 
         assert result[0] is True
         assert "Conflict found" in result[1]
+
+
+class TestSpecVerificationGate:
+    """Tests for the ticket content validation gate in run_ingot_workflow."""
+
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.is_dirty")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_empty_ticket_user_declines_returns_failure(
+        self,
+        mock_get_branch,
+        mock_is_dirty,
+        mock_confirm,
+        mock_backend,
+        mock_config,
+    ):
+        mock_get_branch.return_value = "main"
+        mock_is_dirty.return_value = False
+        # First confirm: "Proceed without verified ticket data?" → No
+        mock_confirm.return_value = False
+
+        empty_ticket = GenericTicket(
+            id="EMPTY-1",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/EMPTY-1",
+            title=None,
+            description=None,
+        )
+
+        result = run_ingot_workflow(ticket=empty_ticket, config=mock_config, backend=mock_backend)
+
+        assert result.success is False
+        assert "no verified content" in result.error
+
+    @patch("ingot.workflow.runner._show_completion")
+    @patch("ingot.workflow.runner.step_5_commit")
+    @patch("ingot.workflow.runner.step_3_execute")
+    @patch("ingot.workflow.runner.step_2_create_tasklist")
+    @patch("ingot.workflow.runner.step_1_create_plan")
+    @patch("ingot.workflow.runner.get_current_commit")
+    @patch("ingot.workflow.runner._setup_branch")
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.is_dirty")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_empty_ticket_user_overrides_proceeds_with_spec_unverified(
+        self,
+        mock_get_branch,
+        mock_is_dirty,
+        mock_confirm,
+        mock_setup_branch,
+        mock_commit,
+        mock_step1,
+        mock_step2,
+        mock_step3,
+        mock_step5,
+        mock_completion,
+        mock_backend,
+        mock_config,
+    ):
+        mock_get_branch.return_value = "main"
+        mock_is_dirty.return_value = False
+
+        # Route answers based on prompt text to avoid fragile ordering
+        def confirm_router(prompt, **kwargs):
+            if "verified ticket data" in prompt.lower():
+                return True  # Proceed without verified data
+            return False  # Decline everything else (e.g. additional context)
+
+        mock_confirm.side_effect = confirm_router
+        mock_setup_branch.return_value = True
+        mock_commit.return_value = "abc123"
+        mock_step1.return_value = True
+        mock_step2.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
+        mock_step5.return_value = Step5Result()
+
+        empty_ticket = GenericTicket(
+            id="EMPTY-2",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/EMPTY-2",
+            title=None,
+            description=None,
+        )
+
+        result = run_ingot_workflow(ticket=empty_ticket, config=mock_config, backend=mock_backend)
+
+        assert result.success is True
+        # Verify state passed to step1 has spec_verified=False
+        call_args = mock_step1.call_args[0]
+        state = call_args[0]
+        assert state.spec_verified is False
+
+    @patch("ingot.workflow.runner._show_completion")
+    @patch("ingot.workflow.runner.step_5_commit")
+    @patch("ingot.workflow.runner.step_3_execute")
+    @patch("ingot.workflow.runner.step_2_create_tasklist")
+    @patch("ingot.workflow.runner.step_1_create_plan")
+    @patch("ingot.workflow.runner.get_current_commit")
+    @patch("ingot.workflow.runner._setup_branch")
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.is_dirty")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_normal_ticket_does_not_trigger_validation_gate(
+        self,
+        mock_get_branch,
+        mock_is_dirty,
+        mock_confirm,
+        mock_setup_branch,
+        mock_commit,
+        mock_step1,
+        mock_step2,
+        mock_step3,
+        mock_step5,
+        mock_completion,
+        mock_backend,
+        ticket,
+        mock_config,
+    ):
+        mock_get_branch.return_value = "main"
+        mock_is_dirty.return_value = False
+        # Only confirm: "Would you like to add additional context?" → No
+        mock_confirm.return_value = False
+        mock_setup_branch.return_value = True
+        mock_commit.return_value = "abc123"
+        mock_step1.return_value = True
+        mock_step2.return_value = True
+        mock_step3.return_value = Step3Result(success=True)
+        mock_step5.return_value = Step5Result()
+
+        result = run_ingot_workflow(ticket=ticket, config=mock_config, backend=mock_backend)
+
+        assert result.success is True
+        # spec_verified should remain True (default)
+        call_args = mock_step1.call_args[0]
+        state = call_args[0]
+        assert state.spec_verified is True

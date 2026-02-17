@@ -497,7 +497,7 @@ class TestRunIngotWorkflowUserContext:
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.is_dirty")
     @patch("ingot.workflow.runner.get_current_branch")
-    def test_stores_user_context_when_confirmed(
+    def test_stores_user_constraints_when_confirmed(
         self,
         mock_get_branch,
         mock_is_dirty,
@@ -531,7 +531,7 @@ class TestRunIngotWorkflowUserContext:
         # Verify state received the context
         call_args = mock_step1.call_args[0]
         state = call_args[0]
-        assert state.user_context == "Additional implementation details"
+        assert state.user_constraints == "Additional implementation details"
 
 
 class TestRunIngotWorkflowBranchSetup:
@@ -1397,7 +1397,7 @@ class TestRunIngotWorkflowStep5:
 
 
 class TestDetectContextConflict:
-    def test_returns_false_when_user_context_empty(self, ticket, workflow_state):
+    def test_returns_false_when_user_constraints_empty(self, ticket, workflow_state):
         mock_auggie = MagicMock()
 
         result = detect_context_conflict(ticket, "", mock_auggie, workflow_state)
@@ -1405,7 +1405,7 @@ class TestDetectContextConflict:
         assert result == (False, "")
         mock_auggie.run_with_callback.assert_not_called()
 
-    def test_returns_false_when_user_context_whitespace_only(self, ticket, workflow_state):
+    def test_returns_false_when_user_constraints_whitespace_only(self, ticket, workflow_state):
         mock_auggie = MagicMock()
 
         result = detect_context_conflict(ticket, "   \n\t  ", mock_auggie, workflow_state)

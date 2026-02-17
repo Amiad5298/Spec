@@ -20,11 +20,9 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
+from ingot.workflow.constants import MAX_REVIEW_ITERATIONS
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import parse_task_list
-
-# Safety cap on review iterations to prevent runaway loops.
-_MAX_REVIEW_ITERATIONS = 10
 
 
 def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
@@ -53,7 +51,7 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
     needs_generation = True
 
     # Task list approval loop
-    for _iteration in range(_MAX_REVIEW_ITERATIONS):
+    for _iteration in range(MAX_REVIEW_ITERATIONS):
         if needs_generation:
             # Generate task list
             print_step("Generating task list from plan...")
@@ -95,7 +93,7 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
             return False
     else:
         print_warning(
-            f"Maximum review iterations ({_MAX_REVIEW_ITERATIONS}) reached. "
+            f"Maximum review iterations ({MAX_REVIEW_ITERATIONS}) reached. "
             "Please re-run the workflow."
         )
         return False
@@ -281,8 +279,8 @@ Read the plan file before generating the task list.
 
 Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
 
-    if state.user_context and state.user_context.strip():
-        prompt += f"\n\nUser Constraints & Preferences (use for scope and prioritization only — do not generate implementation details or code):\n{state.user_context.strip()}"
+    if state.user_constraints and state.user_constraints.strip():
+        prompt += f"\n\nUser Constraints & Preferences (use for scope and prioritization only — do not generate implementation details or code):\n{state.user_constraints.strip()}"
 
     # Use run_with_callback to capture AI output (Phase 2 migration)
     success, output = backend.run_with_callback(

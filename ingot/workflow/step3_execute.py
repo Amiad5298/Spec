@@ -584,7 +584,7 @@ def _execute_task(
         task,
         plan_path,
         is_parallel=False,
-        user_context=state.user_context,
+        user_constraints=state.user_constraints,
         repo_root=_get_repo_root(os.getcwd()),
     )
 
@@ -634,7 +634,7 @@ def _execute_task_with_callback(
         task,
         plan_path,
         is_parallel=is_parallel,
-        user_context=state.user_context,
+        user_constraints=state.user_constraints,
         repo_root=_get_repo_root(os.getcwd()),
     )
 
@@ -755,7 +755,7 @@ def _execute_task_with_self_correction(
         task,
         plan_path,
         is_parallel=is_parallel,
-        user_context=state.user_context,
+        user_constraints=state.user_constraints,
         repo_root=_get_repo_root(os.getcwd()),
     )
     success, output = _run_backend_capturing_output(
@@ -788,7 +788,7 @@ def _execute_task_with_self_correction(
             attempt=attempt,
             max_attempts=max_corrections,
             is_parallel=is_parallel,
-            user_context=state.user_context,
+            user_constraints=state.user_constraints,
             repo_root=_get_repo_root(os.getcwd()),
             ticket_title=state.ticket.title,
             ticket_description=state.ticket.description,

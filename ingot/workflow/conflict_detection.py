@@ -19,7 +19,7 @@ TICKET INFORMATION:
 {ticket_info}
 
 USER-PROVIDED CONSTRAINTS & PREFERENCES:
-{user_context}
+{user_constraints}
 
 TASK: Determine if there are any semantic conflicts between the ticket and the user's constraints & preferences.
 Conflicts include:
@@ -45,7 +45,7 @@ def _noop_callback(_: str) -> None:
 
 def detect_context_conflict(
     ticket: GenericTicket,
-    user_context: str,
+    user_constraints: str,
     backend: AIBackend,
     state: WorkflowState,
 ) -> tuple[bool, str]:
@@ -61,7 +61,7 @@ def detect_context_conflict(
 
     Args:
         ticket: GenericTicket with title and description (platform-agnostic)
-        user_context: User-provided constraints & preferences
+        user_constraints: User-provided constraints & preferences
         backend: AI backend instance for agent interactions
         state: Workflow state for accessing subagent configuration
 
@@ -71,7 +71,7 @@ def detect_context_conflict(
         - conflict_summary: Description of the conflict(s) if any
     """
     # If no user constraints or no ticket description, no conflict is possible
-    if not user_context.strip():
+    if not user_constraints.strip():
         return False, ""
 
     if not ticket.description and not ticket.title:
@@ -82,7 +82,7 @@ def detect_context_conflict(
     # Build prompt from template
     prompt = CONFLICT_DETECTION_PROMPT_TEMPLATE.format(
         ticket_info=ticket_info,
-        user_context=user_context,
+        user_constraints=user_constraints,
     )
 
     log_message("Running conflict detection between ticket and user constraints")

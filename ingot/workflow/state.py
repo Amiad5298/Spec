@@ -85,16 +85,12 @@ class WorkflowState:
     max_review_fix_attempts: int = 3  # Max auto-fix attempts during review (0 = disable)
 
     # User-provided constraints & preferences
-    user_context: str = ""
+    user_constraints: str = ""
 
     # Conflict detection (Fail-Fast Semantic Check)
     # Detects semantic conflicts between ticket description and user constraints
     conflict_detected: bool = False
     conflict_summary: str = ""
-
-    # Spec verification: True when the ticket has verified platform content.
-    # Set to False by runner when ticket.has_verified_content is False.
-    spec_verified: bool = True
 
     # File paths
     plan_file: Path | None = None
@@ -163,6 +159,11 @@ class WorkflowState:
             raise ValueError(f"max_self_corrections must be 0-10, got {self.max_self_corrections}")
         if self.max_replans < 0 or self.max_replans > 5:
             raise ValueError(f"max_replans must be 0-5, got {self.max_replans}")
+
+    @property
+    def spec_verified(self) -> bool:
+        """Whether the ticket has verified platform content (derived from ticket)."""
+        return self.ticket.has_verified_content
 
     @property
     def specs_dir(self) -> Path:

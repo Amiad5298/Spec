@@ -498,7 +498,7 @@ class TestGenerateTasklist:
         # Default template has placeholder tasks
         assert "[Core functionality implementation with tests]" in content
 
-    def test_includes_user_context_in_prompt(
+    def test_includes_user_constraints_in_prompt(
         self,
         tmp_path,
         mock_backend,
@@ -512,7 +512,7 @@ class TestGenerateTasklist:
             branch_summary="Test",
         )
         state = WorkflowState(ticket=ticket)
-        state.user_context = "Focus on backward compatibility"
+        state.user_constraints = "Focus on backward compatibility"
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True)
@@ -528,7 +528,7 @@ class TestGenerateTasklist:
         assert "User Constraints & Preferences" in prompt
         assert "Focus on backward compatibility" in prompt
 
-    def test_excludes_user_context_when_empty(
+    def test_excludes_user_constraints_when_empty(
         self,
         tmp_path,
         mock_backend,
@@ -542,7 +542,7 @@ class TestGenerateTasklist:
             branch_summary="Test",
         )
         state = WorkflowState(ticket=ticket)
-        state.user_context = ""
+        state.user_constraints = ""
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True)
@@ -557,7 +557,7 @@ class TestGenerateTasklist:
         prompt = mock_backend.run_with_callback.call_args[0][0]
         assert "User Constraints & Preferences" not in prompt
 
-    def test_excludes_user_context_when_whitespace_only(
+    def test_excludes_user_constraints_when_whitespace_only(
         self,
         tmp_path,
         mock_backend,
@@ -571,7 +571,7 @@ class TestGenerateTasklist:
             branch_summary="Test",
         )
         state = WorkflowState(ticket=ticket)
-        state.user_context = "   \n  "
+        state.user_constraints = "   \n  "
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True)

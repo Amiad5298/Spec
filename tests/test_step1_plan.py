@@ -245,8 +245,10 @@ class TestBuildMinimalPrompt:
 
         assert "Not available" in result
 
-    def test_prompt_includes_user_context_when_provided(self, workflow_state, tmp_path):
-        workflow_state.user_context = "Additional context from the user about the implementation."
+    def test_prompt_includes_user_constraints_when_provided(self, workflow_state, tmp_path):
+        workflow_state.user_constraints = (
+            "Additional context from the user about the implementation."
+        )
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(workflow_state, plan_path)
@@ -254,8 +256,10 @@ class TestBuildMinimalPrompt:
         assert "Additional context from the user" in result
         assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in result
 
-    def test_prompt_excludes_user_context_section_when_not_provided(self, workflow_state, tmp_path):
-        workflow_state.user_context = ""
+    def test_prompt_excludes_user_constraints_section_when_not_provided(
+        self, workflow_state, tmp_path
+    ):
+        workflow_state.user_constraints = ""
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(workflow_state, plan_path)
@@ -263,7 +267,6 @@ class TestBuildMinimalPrompt:
         assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" not in result
 
     def test_prompt_has_verified_source_label_when_spec_verified(self, workflow_state, tmp_path):
-        workflow_state.spec_verified = True
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(workflow_state, plan_path)
@@ -277,7 +280,6 @@ class TestBuildMinimalPrompt:
         generic_ticket.title = None
         generic_ticket.description = None
         state = WorkflowState(ticket=generic_ticket)
-        state.spec_verified = False
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(state, plan_path)
@@ -1039,7 +1041,6 @@ class TestBuildReplanPrompt:
     """Tests for _build_replan_prompt source label handling."""
 
     def test_includes_verified_source_label(self, workflow_state, tmp_path):
-        workflow_state.spec_verified = True
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs more detail")
@@ -1051,7 +1052,6 @@ class TestBuildReplanPrompt:
         generic_ticket.title = None
         generic_ticket.description = None
         state = WorkflowState(ticket=generic_ticket)
-        state.spec_verified = False
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_replan_prompt(state, plan_path, "# Old plan", "Needs more detail")
@@ -1061,7 +1061,7 @@ class TestBuildReplanPrompt:
         assert "Do NOT reference" in result
 
     def test_includes_user_constraints_label(self, workflow_state, tmp_path):
-        workflow_state.user_context = "Use Redis for caching"
+        workflow_state.user_constraints = "Use Redis for caching"
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs caching")
@@ -1070,7 +1070,7 @@ class TestBuildReplanPrompt:
         assert "Use Redis for caching" in result
 
     def test_excludes_user_constraints_when_empty(self, workflow_state, tmp_path):
-        workflow_state.user_context = ""
+        workflow_state.user_constraints = ""
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs work")

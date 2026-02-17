@@ -24,6 +24,7 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
+from ingot.workflow.constants import MAX_REVIEW_ITERATIONS
 from ingot.workflow.events import format_run_directory
 from ingot.workflow.state import WorkflowState
 
@@ -54,8 +55,6 @@ _THINKING_BLOCK_RE = re.compile(
 _REPLAN_PLAN_EXCERPT_LIMIT = 4000
 _REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
 
-# Safety cap on plan review iterations to prevent runaway loops.
-_MAX_REVIEW_ITERATIONS = 10
 
 # =============================================================================
 # Log Directory Management
@@ -162,11 +161,11 @@ Description: {state.ticket.description or "Not available"}"""
 NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
 
     # Add user constraints if provided
-    if state.user_context:
+    if state.user_constraints:
         prompt += f"""
 
 [SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
-{state.user_context}"""
+{state.user_constraints}"""
 
     if plan_mode:
         prompt += """
@@ -260,7 +259,7 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         _display_plan_summary(plan_path)
 
         # Plan review loop
-        for _iteration in range(_MAX_REVIEW_ITERATIONS):
+        for _iteration in range(MAX_REVIEW_ITERATIONS):
             choice = show_plan_review_menu()
 
             if choice == ReviewChoice.APPROVE:
@@ -291,7 +290,7 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                 return False
         else:
             print_warning(
-                f"Maximum review iterations ({_MAX_REVIEW_ITERATIONS}) reached. "
+                f"Maximum review iterations ({MAX_REVIEW_ITERATIONS}) reached. "
                 "Please re-run the workflow."
             )
             return False
@@ -446,11 +445,11 @@ Codebase context will be retrieved automatically."""
         prompt += """
 NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
 
-    if state.user_context:
+    if state.user_constraints:
         prompt += f"""
 
 [SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
-{state.user_context}"""
+{state.user_constraints}"""
 
     return prompt
 

@@ -231,11 +231,11 @@ class TestUserConstraintsAndPreferences:
         if mock_confirm(
             "Do you have any constraints or preferences for this implementation?", default=False
         ):
-            user_context = mock_input(
+            user_constraints = mock_input(
                 "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
-            state.user_context = user_context.strip()
+            state.user_constraints = user_constraints.strip()
 
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.prompt_input")
@@ -245,7 +245,7 @@ class TestUserConstraintsAndPreferences:
         self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
         mock_input.assert_not_called()
-        assert state_with_ticket.user_context == ""
+        assert state_with_ticket.user_constraints == ""
 
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.prompt_input")
@@ -255,7 +255,7 @@ class TestUserConstraintsAndPreferences:
 
         self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        assert state_with_ticket.user_context == "Additional details about the feature"
+        assert state_with_ticket.user_constraints == "Additional details about the feature"
 
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.prompt_input")
@@ -265,7 +265,7 @@ class TestUserConstraintsAndPreferences:
 
         self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        assert state_with_ticket.user_context == ""
+        assert state_with_ticket.user_constraints == ""
 
 
 class TestBuildMinimalPrompt:
@@ -282,7 +282,7 @@ class TestBuildMinimalPrompt:
         )
         return WorkflowState(ticket=ticket)
 
-    def test_prompt_without_user_context(self, state_with_ticket, tmp_path):
+    def test_prompt_without_user_constraints(self, state_with_ticket, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-789-plan.md"
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
@@ -294,9 +294,9 @@ class TestBuildMinimalPrompt:
         assert "Test description for the feature" in prompt
         assert str(plan_path) in prompt
 
-    def test_prompt_with_user_context(self, state_with_ticket, tmp_path):
+    def test_prompt_with_user_constraints(self, state_with_ticket, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-789-plan.md"
-        state_with_ticket.user_context = "Focus on performance optimization"
+        state_with_ticket.user_constraints = "Focus on performance optimization"
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
         # Verify user context section is present (uses provenance label)

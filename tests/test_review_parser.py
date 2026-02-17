@@ -258,7 +258,7 @@ class TestBuildReviewPrompt:
 
         state = MagicMock()
         state.get_plan_path.return_value = "specs/TEST-123-plan.md"
-        state.user_context = ""
+        state.user_constraints = ""
 
         result = build_review_prompt(
             state=state,
@@ -280,7 +280,7 @@ class TestBuildReviewPrompt:
 
         state = MagicMock()
         state.get_plan_path.return_value = "specs/PROJ-456-plan.md"
-        state.user_context = ""
+        state.user_constraints = ""
 
         result = build_review_prompt(
             state=state,
@@ -300,7 +300,7 @@ class TestBuildReviewPrompt:
 
         state = MagicMock()
         state.get_plan_path.return_value = "plan.md"
-        state.user_context = ""
+        state.user_constraints = ""
 
         result = build_review_prompt(
             state=state,
@@ -313,14 +313,14 @@ class TestBuildReviewPrompt:
         assert "align with the implementation plan" in result
         assert "NEEDS_ATTENTION" in result
 
-    def test_includes_user_context_when_provided(self):
+    def test_includes_user_constraints_when_provided(self):
         from unittest.mock import MagicMock
 
         from ingot.workflow.review import build_review_prompt
 
         state = MagicMock()
         state.get_plan_path.return_value = "plan.md"
-        state.user_context = "Focus on backward compatibility"
+        state.user_constraints = "Focus on backward compatibility"
 
         result = build_review_prompt(
             state=state,
@@ -332,14 +332,14 @@ class TestBuildReviewPrompt:
         assert "User Constraints & Preferences" in result
         assert "Focus on backward compatibility" in result
 
-    def test_excludes_user_context_when_empty(self):
+    def test_excludes_user_constraints_when_empty(self):
         from unittest.mock import MagicMock
 
         from ingot.workflow.review import build_review_prompt
 
         state = MagicMock()
         state.get_plan_path.return_value = "plan.md"
-        state.user_context = ""
+        state.user_constraints = ""
 
         result = build_review_prompt(
             state=state,
@@ -350,14 +350,14 @@ class TestBuildReviewPrompt:
 
         assert "User Constraints & Preferences" not in result
 
-    def test_excludes_user_context_when_whitespace_only(self):
+    def test_excludes_user_constraints_when_whitespace_only(self):
         from unittest.mock import MagicMock
 
         from ingot.workflow.review import build_review_prompt
 
         state = MagicMock()
         state.get_plan_path.return_value = "plan.md"
-        state.user_context = "   \n  "
+        state.user_constraints = "   \n  "
 
         result = build_review_prompt(
             state=state,
@@ -1251,7 +1251,7 @@ class TestBuildReviewPromptNeedsReplan:
 
         state = MagicMock()
         state.get_plan_path.return_value = "specs/TEST-plan.md"
-        state.user_context = ""
+        state.user_constraints = ""
 
         result = build_review_prompt(
             state=state,

@@ -51,12 +51,12 @@ class TestWorkflowState:
         state.mark_task_complete("Task 1")
         assert state.completed_tasks.count("Task 1") == 1
 
-    def test_user_context_default_empty(self, state):
-        assert state.user_context == ""
+    def test_user_constraints_default_empty(self, state):
+        assert state.user_constraints == ""
 
-    def test_user_context_can_be_set(self, state):
-        state.user_context = "Additional details"
-        assert state.user_context == "Additional details"
+    def test_user_constraints_can_be_set(self, state):
+        state.user_constraints = "Additional details"
+        assert state.user_constraints == "Additional details"
 
     def test_fail_fast_default_false(self, state):
         assert state.fail_fast is False

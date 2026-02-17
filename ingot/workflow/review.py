@@ -191,11 +191,11 @@ Focus on files most critical to the implementation plan.
 """
 
     # Add user-provided constraints if available
-    user_context = state.user_context.strip() if state.user_context else ""
-    if user_context:
+    user_constraints = state.user_constraints.strip() if state.user_constraints else ""
+    if user_constraints:
         prompt += f"""
 ## User Constraints & Preferences
-{user_context}
+{user_constraints}
 """
 
     prompt += """

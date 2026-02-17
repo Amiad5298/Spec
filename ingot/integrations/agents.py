@@ -265,6 +265,15 @@ What this implementation explicitly does NOT include.
 - Keep the plan focused on the ticket scope - don't expand unnecessarily
 - Include estimated complexity/effort hints where helpful
 - Use codebase-retrieval to understand the current architecture before planning
+
+## Data Provenance Rules
+
+The prompt you receive tags each data section with a SOURCE label. Follow these rules strictly:
+
+- `[SOURCE: VERIFIED PLATFORM DATA]` — This data was fetched from the ticketing platform. You may reference "the ticket" as a source.
+- `[SOURCE: USER-PROVIDED CONTEXT]` — This was typed by the user. Attribute to "the user" (e.g., "the user mentioned…"), never to "the ticket."
+- `[SOURCE: NO VERIFIED PLATFORM DATA]` — The platform returned no content. You MUST NOT say "the ticket requires," "the ticket says," "the ticket describes," or similar. Base the plan only on user-provided context and codebase exploration.
+- When any field says "Not available," never fabricate requirements from it. State what is unknown and plan around what you can verify.
 """,
     INGOT_AGENT_TASKLIST: """
 You are a task list generation AI assistant working within the INGOT workflow.

@@ -251,7 +251,7 @@ class TestBuildMinimalPrompt:
         result = _build_minimal_prompt(workflow_state, plan_path)
 
         assert "Additional context from the user" in result
-        assert "Additional Context" in result
+        assert "[SOURCE: USER-PROVIDED CONTEXT]" in result
 
     def test_prompt_excludes_user_context_section_when_not_provided(self, workflow_state, tmp_path):
         workflow_state.user_context = ""
@@ -259,7 +259,31 @@ class TestBuildMinimalPrompt:
 
         result = _build_minimal_prompt(workflow_state, plan_path)
 
-        assert "Additional Context" not in result
+        assert "[SOURCE: USER-PROVIDED CONTEXT]" not in result
+
+    def test_prompt_has_verified_source_label_when_spec_verified(self, workflow_state, tmp_path):
+        workflow_state.spec_verified = True
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(workflow_state, plan_path)
+
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" in result
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" not in result
+
+    def test_prompt_has_unverified_source_label_when_spec_not_verified(
+        self, generic_ticket, tmp_path
+    ):
+        generic_ticket.title = None
+        generic_ticket.description = None
+        state = WorkflowState(ticket=generic_ticket)
+        state.spec_verified = False
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(state, plan_path)
+
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" not in result
+        assert "Do NOT reference" in result
 
     def test_prompt_includes_plan_file_path(self, workflow_state, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
@@ -972,3 +996,21 @@ class TestEditPlan:
         _edit_plan(plan_path)
 
         mock_enter.assert_called_once()
+
+    @patch("ingot.workflow.step1_plan.print_warning")
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_warns_when_file_deleted(self, mock_run, mock_warning, tmp_path, monkeypatch):
+        monkeypatch.setenv("EDITOR", "nano")
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        # Simulate editor deleting the file
+        def delete_file(*args, **kwargs):
+            plan_path.unlink()
+
+        mock_run.side_effect = delete_file
+
+        _edit_plan(plan_path)
+
+        mock_warning.assert_called_once()
+        assert "no longer exists" in mock_warning.call_args[0][0].lower()

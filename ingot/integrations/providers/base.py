@@ -344,6 +344,18 @@ class GenericTicket:
     platform_metadata: PlatformMetadata = field(default_factory=dict)  # type: ignore[assignment]
 
     @property
+    def has_verified_content(self) -> bool:
+        """Whether the ticket has at least a non-empty title or description.
+
+        Returns False when the platform returned no meaningful content
+        (e.g. the ticket fetch failed silently or the ticket is empty).
+        Uses OR — some tickets legitimately have title but no body.
+        """
+        has_title = bool(self.title and self.title.strip())
+        has_desc = bool(self.description and self.description.strip())
+        return has_title or has_desc
+
+    @property
     def display_id(self) -> str:
         """Human-readable ticket ID for display."""
         return self.id

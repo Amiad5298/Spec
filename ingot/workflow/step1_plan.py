@@ -53,6 +53,9 @@ _THINKING_BLOCK_RE = re.compile(
 _REPLAN_PLAN_EXCERPT_LIMIT = 4000
 _REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
 
+# Safety cap on plan review iterations to prevent runaway loops.
+_MAX_REVIEW_ITERATIONS = 10
+
 # =============================================================================
 # Log Directory Management
 # =============================================================================
@@ -142,16 +145,26 @@ def _build_minimal_prompt(state: WorkflowState, plan_path: Path, *, plan_mode: b
         plan_mode: If True, instruct the AI to output the plan to stdout
             instead of writing a file (for read-only backends).
     """
+    if state.spec_verified:
+        source_label = "[SOURCE: VERIFIED PLATFORM DATA]"
+    else:
+        source_label = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+
     prompt = f"""Create implementation plan for: {state.ticket.id}
 
+{source_label}
 Ticket: {state.ticket.title or state.ticket.branch_summary or "Not available"}
 Description: {state.ticket.description or "Not available"}"""
+
+    if not state.spec_verified:
+        prompt += """
+NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
 
     # Add user context if provided
     if state.user_context:
         prompt += f"""
 
-Additional Context:
+[SOURCE: USER-PROVIDED CONTEXT]
 {state.user_context}"""
 
     if plan_mode:
@@ -245,8 +258,7 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         # Display plan summary
         _display_plan_summary(plan_path)
 
-        # Plan review loop (max iterations prevents runaway loops)
-        _MAX_REVIEW_ITERATIONS = 10
+        # Plan review loop
         for _iteration in range(_MAX_REVIEW_ITERATIONS):
             choice = show_plan_review_menu()
 
@@ -307,7 +319,7 @@ def _save_plan_from_output(plan_path: Path, state: WorkflowState, *, output: str
 {state.ticket.title or "Implementation task"}
 
 ## Description
-{state.ticket.description or "See Jira ticket for details."}
+{state.ticket.description or "No description was returned by the ticketing platform."}
 
 ## Implementation Steps
 1. Review requirements
@@ -360,7 +372,10 @@ def _edit_plan(plan_path: Path) -> None:
     try:
         editor_cmd = shlex.split(editor)
         subprocess.run([*editor_cmd, str(plan_path)], check=True)
-        print_success("Plan updated")
+        if plan_path.exists():
+            print_success("Plan updated")
+        else:
+            print_warning(f"Plan file no longer exists at {plan_path}")
     except subprocess.CalledProcessError:
         print_warning("Editor exited with an error")
     except FileNotFoundError:
@@ -392,9 +407,15 @@ def _build_replan_prompt(
     if len(review_feedback) > _REPLAN_FEEDBACK_EXCERPT_LIMIT:
         feedback_excerpt += "\n\n... [truncated] ..."
 
+    if state.spec_verified:
+        ticket_source_label = "[SOURCE: VERIFIED PLATFORM DATA]"
+    else:
+        ticket_source_label = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+
     prompt = f"""Revise the implementation plan based on reviewer feedback.
 
 ## Ticket
+{ticket_source_label}
 ID: {state.ticket.id}
 Title: {state.ticket.title or state.ticket.branch_summary or "Not available"}
 Description: {state.ticket.description or "Not available"}
@@ -417,7 +438,7 @@ Codebase context will be retrieved automatically."""
     if state.user_context:
         prompt += f"""
 
-## Additional Context
+[SOURCE: USER-PROVIDED CONTEXT]
 {state.user_context}"""
 
     return prompt

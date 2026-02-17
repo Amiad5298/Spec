@@ -315,8 +315,8 @@ class TestBuildMinimalPrompt:
         state_with_ticket.user_context = "Focus on performance optimization"
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
-        # Verify user context section is present (note: section name changed)
-        assert "Additional Context:" in prompt
+        # Verify user context section is present (uses provenance label)
+        assert "[SOURCE: USER-PROVIDED CONTEXT]" in prompt
         assert "Focus on performance optimization" in prompt
         # Verify basic prompt structure is still there
         assert "TEST-789" in prompt

@@ -7,7 +7,6 @@ import pytest
 from ingot.integrations.git import DirtyStateAction
 from ingot.ui.menus import (
     MainMenuChoice,
-    PlanReviewChoice,
     ReviewChoice,
     show_git_dirty_menu,
     show_main_menu,
@@ -42,9 +41,6 @@ class TestReviewChoice:
 
     def test_has_abort(self):
         assert ReviewChoice.ABORT.value == "abort"
-
-    def test_plan_review_choice_is_alias(self):
-        assert PlanReviewChoice is ReviewChoice
 
 
 class TestShowMainMenu:

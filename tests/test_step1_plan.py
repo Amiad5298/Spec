@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ingot.ui.menus import PlanReviewChoice
+from ingot.ui.menus import ReviewChoice
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import (
     _build_minimal_prompt,
@@ -536,7 +536,7 @@ class TestStep1CreatePlanTuiMode:
         monkeypatch.chdir(tmp_path)
         mock_should_tui.return_value = True
         mock_generate.return_value = (True, "# Plan")
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         # Create plan file to simulate successful generation
         specs_dir = tmp_path / "specs"
@@ -561,7 +561,7 @@ class TestStep1CreatePlanTuiMode:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -598,7 +598,7 @@ class TestStep1CreatePlanFileHandling:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -632,7 +632,7 @@ class TestStep1CreatePlanFileHandling:
     ):
         monkeypatch.chdir(tmp_path)
         mock_generate.return_value = (True, "# Plan output")  # Success but no file
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
@@ -686,7 +686,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -710,7 +710,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.ABORT
+        mock_review_menu.return_value = ReviewChoice.ABORT
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -734,7 +734,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -760,7 +760,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.ABORT
+        mock_review_menu.return_value = ReviewChoice.ABORT
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -817,7 +817,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # First call: REGENERATE, second call: APPROVE
-        mock_review_menu.side_effect = [PlanReviewChoice.REGENERATE, PlanReviewChoice.APPROVE]
+        mock_review_menu.side_effect = [ReviewChoice.REGENERATE, ReviewChoice.APPROVE]
         mock_prompt_input.return_value = "Add more error handling"
         mock_replan.return_value = True
 
@@ -850,8 +850,8 @@ class TestStep1PlanReviewLoop:
 
         # REGENERATE with empty feedback → loops, then ABORT
         mock_review_menu.side_effect = [
-            PlanReviewChoice.REGENERATE,
-            PlanReviewChoice.ABORT,
+            ReviewChoice.REGENERATE,
+            ReviewChoice.ABORT,
         ]
         mock_prompt_input.return_value = ""
 
@@ -881,7 +881,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # REGENERATE fails → stays in loop, then ABORT
-        mock_review_menu.side_effect = [PlanReviewChoice.REGENERATE, PlanReviewChoice.ABORT]
+        mock_review_menu.side_effect = [ReviewChoice.REGENERATE, ReviewChoice.ABORT]
         mock_prompt_input.return_value = "Fix the architecture section"
         mock_replan.return_value = False  # Replan fails
 
@@ -908,7 +908,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # EDIT → then APPROVE
-        mock_review_menu.side_effect = [PlanReviewChoice.EDIT, PlanReviewChoice.APPROVE]
+        mock_review_menu.side_effect = [ReviewChoice.EDIT, ReviewChoice.APPROVE]
 
         result = step_1_create_plan(workflow_state, MagicMock())
 
@@ -933,7 +933,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # Always choose EDIT to exhaust the iteration limit
-        mock_review_menu.return_value = PlanReviewChoice.EDIT
+        mock_review_menu.return_value = ReviewChoice.EDIT
 
         with patch("ingot.workflow.step1_plan._edit_plan"):
             result = step_1_create_plan(workflow_state, MagicMock())
@@ -1058,6 +1058,7 @@ class TestBuildReplanPrompt:
 
         assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
         assert "[SOURCE: VERIFIED PLATFORM DATA]" not in result
+        assert "Do NOT reference" in result
 
     def test_includes_user_constraints_label(self, workflow_state, tmp_path):
         workflow_state.user_context = "Use Redis for caching"

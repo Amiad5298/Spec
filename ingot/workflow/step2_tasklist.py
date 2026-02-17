@@ -23,6 +23,9 @@ from ingot.utils.logging import log_message
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import parse_task_list
 
+# Safety cap on review iterations to prevent runaway loops.
+_MAX_REVIEW_ITERATIONS = 10
+
 
 def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
     """Execute Step 2: Create task list.
@@ -50,7 +53,7 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
     needs_generation = True
 
     # Task list approval loop
-    while True:
+    for _iteration in range(_MAX_REVIEW_ITERATIONS):
         if needs_generation:
             # Generate task list
             print_step("Generating task list from plan...")
@@ -90,6 +93,12 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
         elif choice == ReviewChoice.ABORT:
             print_warning("Workflow aborted by user")
             return False
+    else:
+        print_warning(
+            f"Maximum review iterations ({_MAX_REVIEW_ITERATIONS}) reached. "
+            "Please re-run the workflow."
+        )
+        return False
 
 
 # Strict regex for add_tasks tool output format:

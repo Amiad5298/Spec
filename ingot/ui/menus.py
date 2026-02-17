@@ -80,9 +80,6 @@ class ReviewChoice(Enum):
     ABORT = "abort"
 
 
-PlanReviewChoice = ReviewChoice
-
-
 def _show_review_menu(
     *,
     item_label: str,
@@ -375,7 +372,6 @@ def show_task_checkboxes(
 __all__ = [
     "CommitFailureChoice",
     "MainMenuChoice",
-    "PlanReviewChoice",
     "ReviewChoice",
     "show_commit_failure_menu",
     "show_main_menu",

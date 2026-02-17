@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
-from ingot.ui.menus import PlanReviewChoice, show_plan_review_menu
+from ingot.ui.menus import ReviewChoice, show_plan_review_menu
 from ingot.ui.prompts import prompt_enter, prompt_input
 from ingot.utils.console import (
     console,
@@ -263,11 +263,11 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         for _iteration in range(_MAX_REVIEW_ITERATIONS):
             choice = show_plan_review_menu()
 
-            if choice == PlanReviewChoice.APPROVE:
+            if choice == ReviewChoice.APPROVE:
                 state.current_step = 2
                 return True
 
-            elif choice == PlanReviewChoice.REGENERATE:
+            elif choice == ReviewChoice.REGENERATE:
                 feedback = prompt_input("What changes would you like?", default="")
                 if not feedback or not feedback.strip():
                     print_warning("No feedback provided. Please describe what to change.")
@@ -281,12 +281,12 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                     print_error("Failed to regenerate plan. You can retry or edit manually.")
                     continue
 
-            elif choice == PlanReviewChoice.EDIT:
+            elif choice == ReviewChoice.EDIT:
                 _edit_plan(plan_path)
                 _display_plan_summary(plan_path)
                 continue
 
-            elif choice == PlanReviewChoice.ABORT:
+            elif choice == ReviewChoice.ABORT:
                 print_warning("Workflow aborted by user")
                 return False
         else:
@@ -317,10 +317,10 @@ def _save_plan_from_output(plan_path: Path, state: WorkflowState, *, output: str
     template = f"""# Implementation Plan: {state.ticket.id}
 
 ## Summary
-{state.ticket.title or "No title was returned by the ticketing platform."}
+{state.ticket.title or "(No title)"}
 
 ## Description
-{state.ticket.description or "No description was returned by the ticketing platform."}
+{state.ticket.description or "(No description)"}
 
 ## Implementation Steps
 1. Review requirements
@@ -441,6 +441,10 @@ The reviewer determined the current plan is flawed and needs revision:
 4. Save the revised plan to: {plan_path}
 
 Codebase context will be retrieved automatically."""
+
+    if not state.spec_verified:
+        prompt += """
+NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
 
     if state.user_context:
         prompt += f"""

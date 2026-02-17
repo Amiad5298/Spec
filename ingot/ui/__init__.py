@@ -10,7 +10,6 @@ This package contains:
 from ingot.ui.log_buffer import TaskLogBuffer
 from ingot.ui.menus import (
     MainMenuChoice,
-    PlanReviewChoice,
     ReviewChoice,
     show_git_dirty_menu,
     show_main_menu,
@@ -40,7 +39,6 @@ __all__ = [
     "prompt_select",
     # Menus
     "MainMenuChoice",
-    "PlanReviewChoice",
     "ReviewChoice",
     "show_main_menu",
     "show_plan_review_menu",

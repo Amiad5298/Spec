@@ -211,7 +211,7 @@ class TestMultipleTasksWithMemory:
         assert "Added Python tests" in all_patterns
 
 
-class TestUserAdditionalContext:
+class TestUserConstraintsAndPreferences:
     @pytest.fixture
     def state_with_ticket(self):
         """Create a workflow state with ticket for testing."""

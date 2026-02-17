@@ -1,5 +1,6 @@
 """Tests for ingot.workflow.step1_plan module."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -800,6 +801,10 @@ class TestStep1PlanReviewLoop:
         assert result is True
         mock_replan.assert_called_once()
         assert "Add more error handling" in mock_replan.call_args[0][2]
+        # replan_count should be incremented
+        assert workflow_state.replan_count == 1
+        # _display_plan_summary called: once initially + once after regenerate
+        assert mock_display.call_count == 2
 
     @patch("ingot.workflow.step1_plan.prompt_input")
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
@@ -887,6 +892,29 @@ class TestStep1PlanReviewLoop:
         # _display_plan_summary called: once initially + once after edit
         assert mock_display.call_count == 2
 
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_max_review_iterations_returns_false(
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._setup_plan(tmp_path, workflow_state, mock_generate)
+
+        # Always choose EDIT to exhaust the iteration limit
+        mock_review_menu.return_value = PlanReviewChoice.EDIT
+
+        with patch("ingot.workflow.step1_plan._edit_plan"):
+            result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is False
+
 
 class TestEditPlan:
     """Tests for the _edit_plan helper."""
@@ -902,6 +930,16 @@ class TestEditPlan:
         mock_run.assert_called_once_with(["nano", str(plan_path)], check=True)
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_handles_editor_with_flags(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setenv("EDITOR", "code --wait")
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        _edit_plan(plan_path)
+
+        mock_run.assert_called_once_with(["code", "--wait", str(plan_path)], check=True)
+
+    @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_defaults_to_vim(self, mock_run, tmp_path, monkeypatch):
         monkeypatch.delenv("EDITOR", raising=False)
         plan_path = tmp_path / "plan.md"
@@ -910,6 +948,18 @@ class TestEditPlan:
         _edit_plan(plan_path)
 
         mock_run.assert_called_once_with(["vim", str(plan_path)], check=True)
+
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_handles_editor_error(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setenv("EDITOR", "nano")
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+        mock_run.side_effect = subprocess.CalledProcessError(1, "nano")
+
+        _edit_plan(plan_path)
+
+        # Should not raise, just print a warning
+        mock_run.assert_called_once()
 
     @patch("ingot.workflow.step1_plan.prompt_enter")
     @patch("ingot.workflow.step1_plan.subprocess.run")

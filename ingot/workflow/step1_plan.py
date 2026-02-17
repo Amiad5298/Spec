@@ -6,6 +6,7 @@ an implementation plan based on the Jira ticket.
 
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -244,8 +245,9 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         # Display plan summary
         _display_plan_summary(plan_path)
 
-        # Plan review loop
-        while True:
+        # Plan review loop (max iterations prevents runaway loops)
+        _MAX_REVIEW_ITERATIONS = 10
+        for _iteration in range(_MAX_REVIEW_ITERATIONS):
             choice = show_plan_review_menu()
 
             if choice == PlanReviewChoice.APPROVE:
@@ -258,8 +260,9 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                     print_warning("No feedback provided. Please describe what to change.")
                     continue
 
+                state.replan_count += 1
                 if replan_with_feedback(state, backend, feedback):
-                    # Plan was updated and re-displayed by replan_with_feedback
+                    _display_plan_summary(plan_path)
                     continue
                 else:
                     print_error("Failed to regenerate plan. You can retry or edit manually.")
@@ -273,6 +276,12 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
             elif choice == PlanReviewChoice.ABORT:
                 print_warning("Workflow aborted by user")
                 return False
+        else:
+            print_warning(
+                f"Maximum review iterations ({_MAX_REVIEW_ITERATIONS}) reached. "
+                "Please re-run the workflow."
+            )
+            return False
     else:
         print_error("Plan file was not created")
         return False
@@ -349,10 +358,11 @@ def _edit_plan(plan_path: Path) -> None:
     print_info("Save and close the editor when done.")
 
     try:
-        subprocess.run([editor, str(plan_path)], check=True)
+        editor_cmd = shlex.split(editor)
+        subprocess.run([*editor_cmd, str(plan_path)], check=True)
         print_success("Plan updated")
     except subprocess.CalledProcessError:
-        print_warning("Editor closed without saving")
+        print_warning("Editor exited with an error")
     except FileNotFoundError:
         print_error(f"Editor not found: {editor}")
         print_info(f"Edit the file manually: {plan_path}")

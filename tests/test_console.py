@@ -107,8 +107,8 @@ class TestBanner:
         mock_console.print.assert_called_once()
         call_args = mock_console.print.call_args
         banner_text = call_args[0][0]
-        # Check for "Spec-driven" in the banner text
-        assert "Spec-driven" in banner_text
+        # Check for "Spec-Driven" in the banner text
+        assert "Spec-Driven" in banner_text
 
 
 class TestVersion:

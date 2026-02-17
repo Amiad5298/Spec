@@ -6,10 +6,13 @@ an implementation plan based on the Jira ticket.
 
 import os
 import re
+import shlex
+import subprocess
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
-from ingot.ui.prompts import prompt_confirm
+from ingot.ui.menus import PlanReviewChoice, show_plan_review_menu
+from ingot.ui.prompts import prompt_enter, prompt_input
 from ingot.utils.console import (
     console,
     print_error,
@@ -242,12 +245,42 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         # Display plan summary
         _display_plan_summary(plan_path)
 
-        # Confirm plan
-        if prompt_confirm("Does this plan look good?", default=True):
-            state.current_step = 2
-            return True
+        # Plan review loop (max iterations prevents runaway loops)
+        _MAX_REVIEW_ITERATIONS = 10
+        for _iteration in range(_MAX_REVIEW_ITERATIONS):
+            choice = show_plan_review_menu()
+
+            if choice == PlanReviewChoice.APPROVE:
+                state.current_step = 2
+                return True
+
+            elif choice == PlanReviewChoice.REGENERATE:
+                feedback = prompt_input("What changes would you like?", default="")
+                if not feedback or not feedback.strip():
+                    print_warning("No feedback provided. Please describe what to change.")
+                    continue
+
+                state.replan_count += 1
+                if replan_with_feedback(state, backend, feedback):
+                    _display_plan_summary(plan_path)
+                    continue
+                else:
+                    print_error("Failed to regenerate plan. You can retry or edit manually.")
+                    continue
+
+            elif choice == PlanReviewChoice.EDIT:
+                _edit_plan(plan_path)
+                _display_plan_summary(plan_path)
+                continue
+
+            elif choice == PlanReviewChoice.ABORT:
+                print_warning("Workflow aborted by user")
+                return False
         else:
-            print_info("You can edit the plan manually and re-run.")
+            print_warning(
+                f"Maximum review iterations ({_MAX_REVIEW_ITERATIONS}) reached. "
+                "Please re-run the workflow."
+            )
             return False
     else:
         print_error("Plan file was not created")
@@ -315,6 +348,25 @@ def _display_plan_summary(plan_path: Path) -> None:
         console.print("...")
     console.print("-" * 40)
     console.print()
+
+
+def _edit_plan(plan_path: Path) -> None:
+    """Allow user to edit the plan file in their editor."""
+    editor = os.environ.get("EDITOR", "vim")
+
+    print_info(f"Opening plan in {editor}...")
+    print_info("Save and close the editor when done.")
+
+    try:
+        editor_cmd = shlex.split(editor)
+        subprocess.run([*editor_cmd, str(plan_path)], check=True)
+        print_success("Plan updated")
+    except subprocess.CalledProcessError:
+        print_warning("Editor exited with an error")
+    except FileNotFoundError:
+        print_error(f"Editor not found: {editor}")
+        print_info(f"Edit the file manually: {plan_path}")
+        prompt_enter("Press Enter when done editing...")
 
 
 def _build_replan_prompt(

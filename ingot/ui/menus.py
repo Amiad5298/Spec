@@ -71,8 +71,8 @@ def show_main_menu() -> MainMenuChoice:
         raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
-class TaskReviewChoice(Enum):
-    """Task review menu choices."""
+class ReviewChoice(Enum):
+    """Review menu choices (shared by plan and task review)."""
 
     APPROVE = "approve"
     REGENERATE = "regenerate"
@@ -80,38 +80,96 @@ class TaskReviewChoice(Enum):
     ABORT = "abort"
 
 
-def show_task_review_menu() -> TaskReviewChoice:
-    """Display task review menu.
+# Backwards-compatible aliases
+TaskReviewChoice = ReviewChoice
+PlanReviewChoice = ReviewChoice
+
+
+def _show_review_menu(
+    *,
+    item_label: str,
+    approve_text: str,
+    regenerate_text: str,
+    edit_text: str,
+    prompt_text: str,
+    cancel_message: str,
+) -> ReviewChoice:
+    """Shared review menu implementation.
+
+    Args:
+        item_label: Label for logging (e.g. "Plan review", "Task review").
+        approve_text: Display text for the approve choice.
+        regenerate_text: Display text for the regenerate choice.
+        edit_text: Display text for the edit choice.
+        prompt_text: The question prompt displayed to the user.
+        cancel_message: Error message when user cancels.
 
     Returns:
-        Selected TaskReviewChoice
+        Selected ReviewChoice.
 
     Raises:
-        UserCancelledError: If user cancels
+        UserCancelledError: If user cancels.
     """
     choices = [
-        questionary.Choice("Approve task list and continue", value=TaskReviewChoice.APPROVE),
-        questionary.Choice("Regenerate task list", value=TaskReviewChoice.REGENERATE),
-        questionary.Choice("Edit task list manually", value=TaskReviewChoice.EDIT),
-        questionary.Choice("Abort workflow", value=TaskReviewChoice.ABORT),
+        questionary.Choice(approve_text, value=ReviewChoice.APPROVE),
+        questionary.Choice(regenerate_text, value=ReviewChoice.REGENERATE),
+        questionary.Choice(edit_text, value=ReviewChoice.EDIT),
+        questionary.Choice("Abort workflow", value=ReviewChoice.ABORT),
     ]
 
     try:
         result = questionary.select(
-            "Review the task list above. What would you like to do?",
+            prompt_text,
             choices=choices,
             style=custom_style,
         ).ask()
 
         if result is None:
-            raise UserCancelledError("User cancelled task review")
+            raise UserCancelledError(cancel_message)
 
-        log_message(f"Task review selection: {result.value}")
-        # Cast to expected type since questionary returns Any
-        return TaskReviewChoice(result.value)
+        log_message(f"{item_label} selection: {result.value}")
+        return ReviewChoice(result.value)
 
     except KeyboardInterrupt as e:
         raise UserCancelledError("User cancelled with Ctrl+C") from e
+
+
+def show_task_review_menu() -> ReviewChoice:
+    """Display task review menu.
+
+    Returns:
+        Selected ReviewChoice
+
+    Raises:
+        UserCancelledError: If user cancels
+    """
+    return _show_review_menu(
+        item_label="Task review",
+        approve_text="Approve task list and continue",
+        regenerate_text="Regenerate task list",
+        edit_text="Edit task list manually",
+        prompt_text="Review the task list above. What would you like to do?",
+        cancel_message="User cancelled task review",
+    )
+
+
+def show_plan_review_menu() -> ReviewChoice:
+    """Display plan review menu.
+
+    Returns:
+        Selected ReviewChoice
+
+    Raises:
+        UserCancelledError: If user cancels
+    """
+    return _show_review_menu(
+        item_label="Plan review",
+        approve_text="Approve plan and continue",
+        regenerate_text="Regenerate plan with feedback",
+        edit_text="Edit plan manually",
+        prompt_text="Review the plan above. What would you like to do?",
+        cancel_message="User cancelled plan review",
+    )
 
 
 def show_git_dirty_menu(context: str) -> DirtyStateAction:
@@ -319,9 +377,12 @@ def show_task_checkboxes(
 __all__ = [
     "CommitFailureChoice",
     "MainMenuChoice",
+    "PlanReviewChoice",
+    "ReviewChoice",
     "TaskReviewChoice",
     "show_commit_failure_menu",
     "show_main_menu",
+    "show_plan_review_menu",
     "show_task_review_menu",
     "show_git_dirty_menu",
     "show_model_selection",

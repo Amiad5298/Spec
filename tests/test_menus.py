@@ -7,10 +7,13 @@ import pytest
 from ingot.integrations.git import DirtyStateAction
 from ingot.ui.menus import (
     MainMenuChoice,
+    PlanReviewChoice,
+    ReviewChoice,
     TaskReviewChoice,
     show_git_dirty_menu,
     show_main_menu,
     show_model_selection,
+    show_plan_review_menu,
     show_task_checkboxes,
     show_task_review_menu,
 )
@@ -28,15 +31,24 @@ class TestMainMenuChoice:
         assert MainMenuChoice.QUIT.value == "quit"
 
 
-class TestTaskReviewChoice:
+class TestReviewChoice:
     def test_has_approve(self):
-        assert TaskReviewChoice.APPROVE.value == "approve"
+        assert ReviewChoice.APPROVE.value == "approve"
 
     def test_has_regenerate(self):
-        assert TaskReviewChoice.REGENERATE.value == "regenerate"
+        assert ReviewChoice.REGENERATE.value == "regenerate"
+
+    def test_has_edit(self):
+        assert ReviewChoice.EDIT.value == "edit"
 
     def test_has_abort(self):
-        assert TaskReviewChoice.ABORT.value == "abort"
+        assert ReviewChoice.ABORT.value == "abort"
+
+    def test_task_review_choice_is_alias(self):
+        assert TaskReviewChoice is ReviewChoice
+
+    def test_plan_review_choice_is_alias(self):
+        assert PlanReviewChoice is ReviewChoice
 
 
 class TestShowMainMenu:
@@ -73,6 +85,23 @@ class TestShowTaskReviewMenu:
 
         with pytest.raises(UserCancelledError):
             show_task_review_menu()
+
+
+class TestShowPlanReviewMenu:
+    @patch("questionary.select")
+    def test_returns_selection(self, mock_select):
+        mock_select.return_value.ask.return_value = ReviewChoice.APPROVE
+
+        result = show_plan_review_menu()
+
+        assert result == ReviewChoice.APPROVE
+
+    @patch("questionary.select")
+    def test_raises_on_cancel(self, mock_select):
+        mock_select.return_value.ask.return_value = None
+
+        with pytest.raises(UserCancelledError):
+            show_plan_review_menu()
 
 
 class TestShowGitDirtyMenu:

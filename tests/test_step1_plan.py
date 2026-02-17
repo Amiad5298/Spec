@@ -5,11 +5,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ingot.ui.menus import PlanReviewChoice
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import (
     _build_minimal_prompt,
     _create_plan_log_dir,
     _display_plan_summary,
+    _edit_plan,
     _extract_plan_markdown,
     _generate_plan_with_tui,
     _get_log_base_dir,
@@ -491,7 +493,7 @@ class TestDisplayPlanSummary:
 
 
 class TestStep1CreatePlanTuiMode:
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     @patch("ingot.ui.tui._should_use_tui")
@@ -500,7 +502,7 @@ class TestStep1CreatePlanTuiMode:
         mock_should_tui,
         mock_generate,
         mock_display,
-        mock_confirm,
+        mock_review_menu,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -508,7 +510,7 @@ class TestStep1CreatePlanTuiMode:
         monkeypatch.chdir(tmp_path)
         mock_should_tui.return_value = True
         mock_generate.return_value = (True, "# Plan")
-        mock_confirm.return_value = True
+        mock_review_menu.return_value = PlanReviewChoice.APPROVE
 
         # Create plan file to simulate successful generation
         specs_dir = tmp_path / "specs"
@@ -526,14 +528,14 @@ class TestStep1CreatePlanTuiMode:
 
         assert specs_dir.exists()
 
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_calls_generate_plan_with_tui(
-        self, mock_generate, mock_display, mock_confirm, workflow_state, tmp_path, monkeypatch
+        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_confirm.return_value = True
+        mock_review_menu.return_value = PlanReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -563,14 +565,14 @@ class TestStep1CreatePlanTuiMode:
 
 
 class TestStep1CreatePlanFileHandling:
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_saves_plan_file_on_success(
-        self, mock_generate, mock_display, mock_confirm, workflow_state, tmp_path, monkeypatch
+        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_confirm.return_value = True
+        mock_review_menu.return_value = PlanReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -588,7 +590,7 @@ class TestStep1CreatePlanFileHandling:
         # Compare resolved paths since the function uses relative paths
         assert workflow_state.plan_file.resolve() == plan_path.resolve()
 
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._save_plan_from_output")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
@@ -597,14 +599,14 @@ class TestStep1CreatePlanFileHandling:
         mock_generate,
         mock_save_plan,
         mock_display,
-        mock_confirm,
+        mock_review_menu,
         workflow_state,
         tmp_path,
         monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_generate.return_value = (True, "# Plan output")  # Success but no file
-        mock_confirm.return_value = True
+        mock_review_menu.return_value = PlanReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
@@ -651,14 +653,14 @@ class TestStep1CreatePlanFileHandling:
 
 
 class TestStep1CreatePlanConfirmation:
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_returns_true_when_plan_confirmed(
-        self, mock_generate, mock_display, mock_confirm, workflow_state, tmp_path, monkeypatch
+    def test_returns_true_when_plan_approved(
+        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_confirm.return_value = True  # User confirms
+        mock_review_menu.return_value = PlanReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -675,14 +677,14 @@ class TestStep1CreatePlanConfirmation:
 
         assert result is True
 
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_returns_false_when_plan_rejected(
-        self, mock_generate, mock_display, mock_confirm, workflow_state, tmp_path, monkeypatch
+    def test_returns_false_when_plan_aborted(
+        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_confirm.return_value = False  # User rejects
+        mock_review_menu.return_value = PlanReviewChoice.ABORT
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -699,14 +701,14 @@ class TestStep1CreatePlanConfirmation:
 
         assert result is False
 
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_updates_current_step_to_2_on_success(
-        self, mock_generate, mock_display, mock_confirm, workflow_state, tmp_path, monkeypatch
+    def test_updates_current_step_to_2_on_approve(
+        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_confirm.return_value = True
+        mock_review_menu.return_value = PlanReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -725,14 +727,14 @@ class TestStep1CreatePlanConfirmation:
 
         assert workflow_state.current_step == 2  # Updated to 2
 
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_does_not_update_current_step_on_rejection(
-        self, mock_generate, mock_display, mock_confirm, workflow_state, tmp_path, monkeypatch
+    def test_does_not_update_current_step_on_abort(
+        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_confirm.return_value = False  # Rejected
+        mock_review_menu.return_value = PlanReviewChoice.ABORT
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -750,3 +752,173 @@ class TestStep1CreatePlanConfirmation:
         step_1_create_plan(workflow_state, MagicMock())
 
         assert workflow_state.current_step == 1  # Unchanged
+
+
+class TestStep1PlanReviewLoop:
+    """Tests for the plan review loop (regenerate, edit, abort flows)."""
+
+    def _setup_plan(self, tmp_path, workflow_state, mock_generate):
+        """Helper: set up plan file creation side effect."""
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan\n\n## Steps\n1. Do stuff")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+        workflow_state.skip_clarification = True
+        return plan_path
+
+    @patch("ingot.workflow.step1_plan.replan_with_feedback")
+    @patch("ingot.workflow.step1_plan.prompt_input")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_regenerate_collects_feedback_and_calls_replan(
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_prompt_input,
+        mock_replan,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._setup_plan(tmp_path, workflow_state, mock_generate)
+
+        # First call: REGENERATE, second call: APPROVE
+        mock_review_menu.side_effect = [PlanReviewChoice.REGENERATE, PlanReviewChoice.APPROVE]
+        mock_prompt_input.return_value = "Add more error handling"
+        mock_replan.return_value = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        mock_replan.assert_called_once()
+        assert "Add more error handling" in mock_replan.call_args[0][2]
+
+    @patch("ingot.workflow.step1_plan.prompt_input")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_regenerate_empty_feedback_loops_again(
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_prompt_input,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._setup_plan(tmp_path, workflow_state, mock_generate)
+
+        # REGENERATE with empty feedback → loops, then ABORT
+        mock_review_menu.side_effect = [
+            PlanReviewChoice.REGENERATE,
+            PlanReviewChoice.ABORT,
+        ]
+        mock_prompt_input.return_value = ""
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is False
+        # prompt_input called once for the empty feedback attempt
+        mock_prompt_input.assert_called_once()
+
+    @patch("ingot.workflow.step1_plan.replan_with_feedback")
+    @patch("ingot.workflow.step1_plan.prompt_input")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_regenerate_failure_stays_in_loop(
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_prompt_input,
+        mock_replan,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._setup_plan(tmp_path, workflow_state, mock_generate)
+
+        # REGENERATE fails → stays in loop, then ABORT
+        mock_review_menu.side_effect = [PlanReviewChoice.REGENERATE, PlanReviewChoice.ABORT]
+        mock_prompt_input.return_value = "Fix the architecture section"
+        mock_replan.return_value = False  # Replan fails
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is False
+        mock_replan.assert_called_once()
+
+    @patch("ingot.workflow.step1_plan._edit_plan")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_edit_opens_editor_and_redisplays(
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_edit_plan,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._setup_plan(tmp_path, workflow_state, mock_generate)
+
+        # EDIT → then APPROVE
+        mock_review_menu.side_effect = [PlanReviewChoice.EDIT, PlanReviewChoice.APPROVE]
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        mock_edit_plan.assert_called_once()
+        # _display_plan_summary called: once initially + once after edit
+        assert mock_display.call_count == 2
+
+
+class TestEditPlan:
+    """Tests for the _edit_plan helper."""
+
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_opens_editor(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setenv("EDITOR", "nano")
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        _edit_plan(plan_path)
+
+        mock_run.assert_called_once_with(["nano", str(plan_path)], check=True)
+
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_defaults_to_vim(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.delenv("EDITOR", raising=False)
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        _edit_plan(plan_path)
+
+        mock_run.assert_called_once_with(["vim", str(plan_path)], check=True)
+
+    @patch("ingot.workflow.step1_plan.prompt_enter")
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_handles_missing_editor(self, mock_run, mock_enter, tmp_path, monkeypatch):
+        monkeypatch.setenv("EDITOR", "nonexistent-editor")
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+        mock_run.side_effect = FileNotFoundError("No such file")
+
+        _edit_plan(plan_path)
+
+        mock_enter.assert_called_once()

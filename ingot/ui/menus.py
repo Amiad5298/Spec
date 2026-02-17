@@ -114,6 +114,49 @@ def show_task_review_menu() -> TaskReviewChoice:
         raise UserCancelledError("User cancelled with Ctrl+C") from e
 
 
+class PlanReviewChoice(Enum):
+    """Plan review menu choices."""
+
+    APPROVE = "approve"
+    REGENERATE = "regenerate"
+    EDIT = "edit"
+    ABORT = "abort"
+
+
+def show_plan_review_menu() -> PlanReviewChoice:
+    """Display plan review menu.
+
+    Returns:
+        Selected PlanReviewChoice
+
+    Raises:
+        UserCancelledError: If user cancels
+    """
+    choices = [
+        questionary.Choice("Approve plan and continue", value=PlanReviewChoice.APPROVE),
+        questionary.Choice("Regenerate plan with feedback", value=PlanReviewChoice.REGENERATE),
+        questionary.Choice("Edit plan manually", value=PlanReviewChoice.EDIT),
+        questionary.Choice("Abort workflow", value=PlanReviewChoice.ABORT),
+    ]
+
+    try:
+        result = questionary.select(
+            "Review the plan above. What would you like to do?",
+            choices=choices,
+            style=custom_style,
+        ).ask()
+
+        if result is None:
+            raise UserCancelledError("User cancelled plan review")
+
+        log_message(f"Plan review selection: {result.value}")
+        # Cast to expected type since questionary returns Any
+        return PlanReviewChoice(result.value)
+
+    except KeyboardInterrupt as e:
+        raise UserCancelledError("User cancelled with Ctrl+C") from e
+
+
 def show_git_dirty_menu(context: str) -> DirtyStateAction:
     """Display menu for handling uncommitted changes.
 
@@ -319,9 +362,11 @@ def show_task_checkboxes(
 __all__ = [
     "CommitFailureChoice",
     "MainMenuChoice",
+    "PlanReviewChoice",
     "TaskReviewChoice",
     "show_commit_failure_menu",
     "show_main_menu",
+    "show_plan_review_menu",
     "show_task_review_menu",
     "show_git_dirty_menu",
     "show_model_selection",

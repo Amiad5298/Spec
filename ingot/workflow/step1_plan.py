@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
@@ -316,7 +317,7 @@ def _save_plan_from_output(plan_path: Path, state: WorkflowState, *, output: str
     template = f"""# Implementation Plan: {state.ticket.id}
 
 ## Summary
-{state.ticket.title or "Implementation task"}
+{state.ticket.title or "No title was returned by the ticketing platform."}
 
 ## Description
 {state.ticket.description or "No description was returned by the ticketing platform."}
@@ -364,6 +365,12 @@ def _display_plan_summary(plan_path: Path) -> None:
 
 def _edit_plan(plan_path: Path) -> None:
     """Allow user to edit the plan file in their editor."""
+    if not sys.stdin.isatty():
+        print_warning("Cannot open editor: not running in a terminal")
+        print_info(f"Edit the file manually: {plan_path}")
+        prompt_enter("Press Enter when done editing...")
+        return
+
     editor = os.environ.get("EDITOR", "vim")
 
     print_info(f"Opening plan in {editor}...")

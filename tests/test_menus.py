@@ -9,7 +9,6 @@ from ingot.ui.menus import (
     MainMenuChoice,
     PlanReviewChoice,
     ReviewChoice,
-    TaskReviewChoice,
     show_git_dirty_menu,
     show_main_menu,
     show_model_selection,
@@ -44,9 +43,6 @@ class TestReviewChoice:
     def test_has_abort(self):
         assert ReviewChoice.ABORT.value == "abort"
 
-    def test_task_review_choice_is_alias(self):
-        assert TaskReviewChoice is ReviewChoice
-
     def test_plan_review_choice_is_alias(self):
         assert PlanReviewChoice is ReviewChoice
 
@@ -73,11 +69,11 @@ class TestShowMainMenu:
 class TestShowTaskReviewMenu:
     @patch("questionary.select")
     def test_returns_selection(self, mock_select):
-        mock_select.return_value.ask.return_value = TaskReviewChoice.APPROVE
+        mock_select.return_value.ask.return_value = ReviewChoice.APPROVE
 
         result = show_task_review_menu()
 
-        assert result == TaskReviewChoice.APPROVE
+        assert result == ReviewChoice.APPROVE
 
     @patch("questionary.select")
     def test_raises_on_cancel(self, mock_select):

@@ -10,6 +10,7 @@ from ingot.ui.menus import PlanReviewChoice
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import (
     _build_minimal_prompt,
+    _build_replan_prompt,
     _create_plan_log_dir,
     _display_plan_summary,
     _edit_plan,
@@ -943,8 +944,21 @@ class TestStep1PlanReviewLoop:
 class TestEditPlan:
     """Tests for the _edit_plan helper."""
 
+    @patch("ingot.workflow.step1_plan.prompt_enter")
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_falls_back_when_not_tty(self, mock_run, mock_enter, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: False)
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        _edit_plan(plan_path)
+
+        mock_run.assert_not_called()
+        mock_enter.assert_called_once()
+
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_opens_editor(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nano")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -955,6 +969,7 @@ class TestEditPlan:
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_handles_editor_with_flags(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "code --wait")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -965,6 +980,7 @@ class TestEditPlan:
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_defaults_to_vim(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.delenv("EDITOR", raising=False)
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -975,6 +991,7 @@ class TestEditPlan:
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_handles_editor_error(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nano")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -988,6 +1005,7 @@ class TestEditPlan:
     @patch("ingot.workflow.step1_plan.prompt_enter")
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_handles_missing_editor(self, mock_run, mock_enter, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nonexistent-editor")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -1000,6 +1018,7 @@ class TestEditPlan:
     @patch("ingot.workflow.step1_plan.print_warning")
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_warns_when_file_deleted(self, mock_run, mock_warning, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nano")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -1014,3 +1033,45 @@ class TestEditPlan:
 
         mock_warning.assert_called_once()
         assert "no longer exists" in mock_warning.call_args[0][0].lower()
+
+
+class TestBuildReplanPrompt:
+    """Tests for _build_replan_prompt source label handling."""
+
+    def test_includes_verified_source_label(self, workflow_state, tmp_path):
+        workflow_state.spec_verified = True
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs more detail")
+
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" in result
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" not in result
+
+    def test_includes_unverified_source_label(self, generic_ticket, tmp_path):
+        generic_ticket.title = None
+        generic_ticket.description = None
+        state = WorkflowState(ticket=generic_ticket)
+        state.spec_verified = False
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(state, plan_path, "# Old plan", "Needs more detail")
+
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" not in result
+
+    def test_includes_user_constraints_label(self, workflow_state, tmp_path):
+        workflow_state.user_context = "Use Redis for caching"
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs caching")
+
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in result
+        assert "Use Redis for caching" in result
+
+    def test_excludes_user_constraints_when_empty(self, workflow_state, tmp_path):
+        workflow_state.user_context = ""
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs work")
+
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" not in result

@@ -80,8 +80,6 @@ class ReviewChoice(Enum):
     ABORT = "abort"
 
 
-# Backwards-compatible aliases
-TaskReviewChoice = ReviewChoice
 PlanReviewChoice = ReviewChoice
 
 
@@ -379,7 +377,6 @@ __all__ = [
     "MainMenuChoice",
     "PlanReviewChoice",
     "ReviewChoice",
-    "TaskReviewChoice",
     "show_commit_failure_menu",
     "show_main_menu",
     "show_plan_review_menu",

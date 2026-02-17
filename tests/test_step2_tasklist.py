@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ingot.integrations.providers import GenericTicket, Platform
-from ingot.ui.menus import TaskReviewChoice
+from ingot.ui.menus import ReviewChoice
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step2_tasklist import (
     _create_default_tasklist,
@@ -651,7 +651,7 @@ class TestStep2CreateTasklist:
         mock_edit.side_effect = mock_edit_side_effect
 
         # Menu returns EDIT first, then APPROVE
-        mock_menu.side_effect = [TaskReviewChoice.EDIT, TaskReviewChoice.APPROVE]
+        mock_menu.side_effect = [ReviewChoice.EDIT, ReviewChoice.APPROVE]
 
         mock_auggie = MagicMock()
 
@@ -710,8 +710,8 @@ class TestStep2CreateTasklist:
 
         # REGENERATE then APPROVE
         mock_menu.side_effect = [
-            TaskReviewChoice.REGENERATE,
-            TaskReviewChoice.APPROVE,
+            ReviewChoice.REGENERATE,
+            ReviewChoice.APPROVE,
         ]
 
         result = step_2_create_tasklist(state, MagicMock())
@@ -748,7 +748,7 @@ class TestStep2CreateTasklist:
         state.plan_file = plan_path
 
         mock_generate.side_effect = lambda s, pp, tp, b: (tp.write_text("- [ ] Task\n") or True)
-        mock_menu.return_value = TaskReviewChoice.ABORT
+        mock_menu.return_value = ReviewChoice.ABORT
 
         result = step_2_create_tasklist(state, MagicMock())
 

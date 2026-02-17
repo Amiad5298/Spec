@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
-from ingot.ui.menus import TaskReviewChoice, show_task_review_menu
+from ingot.ui.menus import ReviewChoice, show_task_review_menu
 from ingot.ui.prompts import prompt_confirm, prompt_enter
 from ingot.utils.console import (
     console,
@@ -70,24 +70,24 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
         # Get user decision
         choice = show_task_review_menu()
 
-        if choice == TaskReviewChoice.APPROVE:
+        if choice == ReviewChoice.APPROVE:
             state.tasklist_file = tasklist_path
             state.current_step = 3
             print_success("Task list approved!")
             return True
 
-        elif choice == TaskReviewChoice.REGENERATE:
+        elif choice == ReviewChoice.REGENERATE:
             print_info("Regenerating task list...")
             needs_generation = True
             continue
 
-        elif choice == TaskReviewChoice.EDIT:
+        elif choice == ReviewChoice.EDIT:
             _edit_tasklist(tasklist_path)
             # Re-display after edit, but do NOT regenerate
             # needs_generation stays False
             continue
 
-        elif choice == TaskReviewChoice.ABORT:
+        elif choice == ReviewChoice.ABORT:
             print_warning("Workflow aborted by user")
             return False
 

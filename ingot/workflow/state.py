@@ -84,11 +84,11 @@ class WorkflowState:
     max_self_corrections: int = 3  # Max self-correction attempts per task (0 = disable)
     max_review_fix_attempts: int = 3  # Max auto-fix attempts during review (0 = disable)
 
-    # User-provided additional context
+    # User-provided constraints & preferences
     user_context: str = ""
 
     # Conflict detection (Fail-Fast Semantic Check)
-    # Detects semantic conflicts between ticket description and user context
+    # Detects semantic conflicts between ticket description and user constraints
     conflict_detected: bool = False
     conflict_summary: str = ""
 

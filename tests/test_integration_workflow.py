@@ -225,12 +225,9 @@ class TestUserAdditionalContext:
         )
         return WorkflowState(ticket=ticket)
 
-    @patch("ingot.workflow.runner.prompt_confirm")
-    @patch("ingot.workflow.runner.prompt_input")
-    def test_user_declines_additional_context(self, mock_input, mock_confirm, state_with_ticket):
-        mock_confirm.return_value = False
-
-        # Simulate the logic from runner.py
+    @staticmethod
+    def _simulate_constraints_prompt(mock_confirm, mock_input, state):
+        """Simulate the constraints/preferences prompt logic from runner.py."""
         if mock_confirm(
             "Do you have any constraints or preferences for this implementation?", default=False
         ):
@@ -238,11 +235,16 @@ class TestUserAdditionalContext:
                 "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
-            state_with_ticket.user_context = user_context.strip()
+            state.user_context = user_context.strip()
 
-        # Verify prompt_input was not called
+    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_input")
+    def test_user_declines_additional_context(self, mock_input, mock_confirm, state_with_ticket):
+        mock_confirm.return_value = False
+
+        self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
+
         mock_input.assert_not_called()
-        # Verify state.user_context remains empty
         assert state_with_ticket.user_context == ""
 
     @patch("ingot.workflow.runner.prompt_confirm")
@@ -251,17 +253,8 @@ class TestUserAdditionalContext:
         mock_confirm.return_value = True
         mock_input.return_value = "Additional details about the feature"
 
-        # Simulate the logic from runner.py
-        if mock_confirm(
-            "Do you have any constraints or preferences for this implementation?", default=False
-        ):
-            user_context = mock_input(
-                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
-                multiline=True,
-            )
-            state_with_ticket.user_context = user_context.strip()
+        self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        # Verify state.user_context is set
         assert state_with_ticket.user_context == "Additional details about the feature"
 
     @patch("ingot.workflow.runner.prompt_confirm")
@@ -270,17 +263,8 @@ class TestUserAdditionalContext:
         mock_confirm.return_value = True
         mock_input.return_value = "   "  # whitespace only
 
-        # Simulate the logic from runner.py
-        if mock_confirm(
-            "Do you have any constraints or preferences for this implementation?", default=False
-        ):
-            user_context = mock_input(
-                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
-                multiline=True,
-            )
-            state_with_ticket.user_context = user_context.strip()
+        self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        # Verify state.user_context is empty string after strip
         assert state_with_ticket.user_context == ""
 
 

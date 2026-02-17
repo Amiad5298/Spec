@@ -41,7 +41,7 @@ def build_task_prompt(
         task: Task to execute
         plan_path: Path to the implementation plan file
         is_parallel: Whether this task runs in parallel with others
-        user_context: Optional additional context provided by the user
+        user_context: Optional constraints & preferences provided by the user
 
     Returns:
         Minimal prompt string with task context
@@ -81,7 +81,7 @@ Target files for this task:
 {files_list}
 Focus your changes on these files."""
 
-    # Add user-provided context if available
+    # Add user-provided constraints if available
     if user_context and user_context.strip():
         prompt += f"""
 
@@ -166,7 +166,7 @@ def build_self_correction_prompt(
         attempt: Current correction attempt number (1-based)
         max_attempts: Maximum correction attempts allowed
         is_parallel: Whether this task runs in parallel with others
-        user_context: Optional additional context provided by the user
+        user_context: Optional constraints & preferences provided by the user
 
     Returns:
         Correction prompt string
@@ -217,7 +217,7 @@ Implementation plan: {plan_path}"""
 Target files:
 {files_list}"""
 
-    # Add user-provided context if available
+    # Add user-provided constraints if available
     if user_context and user_context.strip():
         prompt += f"""
 

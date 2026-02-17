@@ -1,8 +1,8 @@
 """Conflict detection for INGOT workflow.
 
 This module provides semantic conflict detection between ticket descriptions
-and user-provided context. It implements the "Fail-Fast Semantic Check" pattern
-to identify contradictions early in the workflow.
+and user-provided constraints & preferences. It implements the "Fail-Fast
+Semantic Check" pattern to identify contradictions early in the workflow.
 """
 
 import re
@@ -12,8 +12,8 @@ from ingot.integrations.providers import GenericTicket
 from ingot.utils.logging import log_message
 from ingot.workflow.state import WorkflowState
 
-# Prompt template for conflict detection between ticket and user context
-CONFLICT_DETECTION_PROMPT_TEMPLATE = """Analyze the following ticket information and user-provided context for semantic conflicts.
+# Prompt template for conflict detection between ticket and user constraints
+CONFLICT_DETECTION_PROMPT_TEMPLATE = """Analyze the following ticket information and user-provided constraints & preferences for semantic conflicts.
 
 TICKET INFORMATION:
 {ticket_info}
@@ -21,10 +21,10 @@ TICKET INFORMATION:
 USER-PROVIDED CONSTRAINTS & PREFERENCES:
 {user_context}
 
-TASK: Determine if there are any semantic conflicts between the ticket and user context.
+TASK: Determine if there are any semantic conflicts between the ticket and the user's constraints & preferences.
 Conflicts include:
 - Contradictory requirements (e.g., ticket says "add feature X" but user says "remove feature X")
-- Scope mismatches (e.g., ticket is about backend but user context discusses frontend changes)
+- Scope mismatches (e.g., ticket is about backend but user constraints discuss frontend changes)
 - Incompatible constraints (e.g., different target versions, conflicting technical approaches)
 
 RESPOND IN EXACTLY THIS FORMAT:
@@ -49,19 +49,19 @@ def detect_context_conflict(
     backend: AIBackend,
     state: WorkflowState,
 ) -> tuple[bool, str]:
-    """Detect semantic conflicts between ticket description and user context.
+    """Detect semantic conflicts between ticket description and user constraints.
 
     Uses a lightweight LLM call to identify contradictions or conflicts between
-    the official ticket description and the user-provided additional context.
+    the official ticket description and the user-provided constraints & preferences.
 
     This implements the "Fail-Fast Semantic Check" pattern:
-    - Runs immediately after user context is collected
+    - Runs immediately after user constraints are collected
     - Uses semantic analysis (not brittle keyword matching)
     - Returns conflict info for advisory warnings (non-blocking)
 
     Args:
         ticket: GenericTicket with title and description (platform-agnostic)
-        user_context: User-provided additional context
+        user_context: User-provided constraints & preferences
         backend: AI backend instance for agent interactions
         state: Workflow state for accessing subagent configuration
 
@@ -70,7 +70,7 @@ def detect_context_conflict(
         - conflict_detected: True if semantic conflicts were found
         - conflict_summary: Description of the conflict(s) if any
     """
-    # If no user context or no ticket description, no conflict is possible
+    # If no user constraints or no ticket description, no conflict is possible
     if not user_context.strip():
         return False, ""
 
@@ -85,7 +85,7 @@ def detect_context_conflict(
         user_context=user_context,
     )
 
-    log_message("Running conflict detection between ticket and user context")
+    log_message("Running conflict detection between ticket and user constraints")
 
     try:
         # Use run_with_callback with a no-op callback to capture output silently.
@@ -113,7 +113,7 @@ def detect_context_conflict(
                 summary = summary_match.group(1).strip()
 
             if not summary:
-                summary = "Potential conflict detected between ticket and user context."
+                summary = "Potential conflict detected between ticket and user constraints."
 
         log_message(
             f"Conflict detection result: detected={conflict_detected}, summary={summary[:100]}"

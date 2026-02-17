@@ -271,8 +271,8 @@ What this implementation explicitly does NOT include.
 The prompt you receive tags each data section with a SOURCE label. Follow these rules strictly:
 
 - `[SOURCE: VERIFIED PLATFORM DATA]` — This data was fetched from the ticketing platform. You may reference "the ticket" as a source.
-- `[SOURCE: USER-PROVIDED CONTEXT]` — This was typed by the user. Attribute to "the user" (e.g., "the user mentioned…"), never to "the ticket."
-- `[SOURCE: NO VERIFIED PLATFORM DATA]` — The platform returned no content. You MUST NOT say "the ticket requires," "the ticket says," "the ticket describes," or similar. Base the plan only on user-provided context and codebase exploration.
+- `[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]` — This was typed by the user. Attribute to "the user" (e.g., "the user mentioned…"), never to "the ticket."
+- `[SOURCE: NO VERIFIED PLATFORM DATA]` — The platform returned no content. You MUST NOT say "the ticket requires," "the ticket says," "the ticket describes," or similar. Base the plan only on user-provided constraints and codebase exploration.
 - When any field says "Not available," never fabricate requirements from it. State what is unknown and plan around what you can verify.
 """,
     INGOT_AGENT_TASKLIST: """
@@ -523,8 +523,8 @@ If the prompt lists "Target files for this task:", focus your modifications on t
 Do not treat them as exhaustive -- you may need to read other files for context --
 but your write operations should target the listed files unless the task requires otherwise.
 
-### Additional Context
-If the prompt includes "Additional Context:", this is information the user provided
+### User Constraints & Preferences
+If the prompt includes "User Constraints & Preferences:", this is information the user provided
 at workflow start. Consider it as supplementary guidance for how to approach the task.
 
 ## Output
@@ -600,8 +600,8 @@ Keep reviews quick and focused - this is a sanity check, not a full code review.
 
 The review prompt may include additional context:
 
-### Additional Context
-If the prompt includes "Additional Context:", this is information the user provided
+### User Constraints & Preferences
+If the prompt includes "User Constraints & Preferences:", this is information the user provided
 at workflow start. Use it to verify that the implementation respects these constraints.
 
 ## Guidelines

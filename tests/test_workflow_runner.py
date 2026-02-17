@@ -430,7 +430,7 @@ class TestRunIngotWorkflowInit:
     ):
         mock_get_branch.return_value = "main"
         mock_is_dirty.return_value = False
-        mock_confirm.return_value = False  # No additional context
+        mock_confirm.return_value = False  # No constraints/preferences
         mock_setup_branch.return_value = True
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
@@ -1633,7 +1633,7 @@ class TestSpecVerificationGate:
         def confirm_router(prompt, **kwargs):
             if "verified ticket data" in prompt.lower():
                 return True  # Proceed without verified data
-            return False  # Decline everything else (e.g. additional context)
+            return False  # Decline everything else (e.g. constraints/preferences)
 
         mock_confirm.side_effect = confirm_router
         mock_setup_branch.return_value = True
@@ -1687,7 +1687,7 @@ class TestSpecVerificationGate:
     ):
         mock_get_branch.return_value = "main"
         mock_is_dirty.return_value = False
-        # Only confirm: "Would you like to add additional context?" → No
+        # Only confirm: "Do you have any constraints or preferences?" → No
         mock_confirm.return_value = False
         mock_setup_branch.return_value = True
         mock_commit.return_value = "abc123"

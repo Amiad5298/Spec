@@ -163,7 +163,7 @@ def run_ingot_workflow(
                     error=f"Aborted: no verified content for ticket '{state.ticket.id}'",
                 )
 
-        # Ask user for additional context
+        # Ask user for constraints and preferences
         if prompt_confirm(
             "Do you have any constraints or preferences for this implementation?", default=False
         ):
@@ -175,7 +175,7 @@ def run_ingot_workflow(
             if state.user_context:
                 print_success("Constraints and preferences saved")
 
-                # Fail-Fast Semantic Check: Detect conflicts between ticket and user context
+                # Fail-Fast Semantic Check: Detect conflicts between ticket and user constraints
                 print_step("Checking for conflicts between ticket and your constraints...")
                 conflict_detected, conflict_summary = detect_context_conflict(
                     state.ticket, state.user_context, backend, state
@@ -186,7 +186,7 @@ def run_ingot_workflow(
                 if conflict_detected:
                     console.print()
                     print_warning(
-                        "⚠️  Potential conflict detected between ticket description and your additional context"
+                        "⚠️  Potential conflict detected between ticket description and your constraints"
                     )
                     console.print(f"[yellow]   {conflict_summary}[/yellow]")
                     console.print()

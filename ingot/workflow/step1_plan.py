@@ -160,7 +160,7 @@ Description: {state.ticket.description or "Not available"}"""
         prompt += """
 NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
 
-    # Add user context if provided
+    # Add user constraints if provided
     if state.user_context:
         prompt += f"""
 

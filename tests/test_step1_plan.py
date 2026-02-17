@@ -251,7 +251,7 @@ class TestBuildMinimalPrompt:
         result = _build_minimal_prompt(workflow_state, plan_path)
 
         assert "Additional context from the user" in result
-        assert "[SOURCE: USER-PROVIDED CONTEXT]" in result
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in result
 
     def test_prompt_excludes_user_context_section_when_not_provided(self, workflow_state, tmp_path):
         workflow_state.user_context = ""
@@ -259,7 +259,7 @@ class TestBuildMinimalPrompt:
 
         result = _build_minimal_prompt(workflow_state, plan_path)
 
-        assert "[SOURCE: USER-PROVIDED CONTEXT]" not in result
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" not in result
 
     def test_prompt_has_verified_source_label_when_spec_verified(self, workflow_state, tmp_path):
         workflow_state.spec_verified = True

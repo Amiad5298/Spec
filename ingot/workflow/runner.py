@@ -165,18 +165,18 @@ def run_ingot_workflow(
 
         # Ask user for additional context
         if prompt_confirm(
-            "Would you like to add additional context about this ticket?", default=False
+            "Do you have any constraints or preferences for this implementation?", default=False
         ):
             user_context = prompt_input(
-                "Enter additional context (press Enter twice when done):",
+                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
             state.user_context = user_context.strip()
             if state.user_context:
-                print_success("Additional context saved")
+                print_success("Constraints and preferences saved")
 
                 # Fail-Fast Semantic Check: Detect conflicts between ticket and user context
-                print_step("Checking for conflicts between ticket and your context...")
+                print_step("Checking for conflicts between ticket and your constraints...")
                 conflict_detected, conflict_summary = detect_context_conflict(
                     state.ticket, state.user_context, backend, state
                 )

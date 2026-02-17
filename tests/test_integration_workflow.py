@@ -232,10 +232,10 @@ class TestUserAdditionalContext:
 
         # Simulate the logic from runner.py
         if mock_confirm(
-            "Would you like to add additional context about this ticket?", default=False
+            "Do you have any constraints or preferences for this implementation?", default=False
         ):
             user_context = mock_input(
-                "Enter additional context (press Enter twice when done):",
+                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
             state_with_ticket.user_context = user_context.strip()
@@ -253,10 +253,10 @@ class TestUserAdditionalContext:
 
         # Simulate the logic from runner.py
         if mock_confirm(
-            "Would you like to add additional context about this ticket?", default=False
+            "Do you have any constraints or preferences for this implementation?", default=False
         ):
             user_context = mock_input(
-                "Enter additional context (press Enter twice when done):",
+                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
             state_with_ticket.user_context = user_context.strip()
@@ -272,10 +272,10 @@ class TestUserAdditionalContext:
 
         # Simulate the logic from runner.py
         if mock_confirm(
-            "Would you like to add additional context about this ticket?", default=False
+            "Do you have any constraints or preferences for this implementation?", default=False
         ):
             user_context = mock_input(
-                "Enter additional context (press Enter twice when done):",
+                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
             state_with_ticket.user_context = user_context.strip()
@@ -303,7 +303,7 @@ class TestBuildMinimalPrompt:
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
         # Verify no user context section (note: section name changed)
-        assert "Additional Context:" not in prompt
+        assert "User Constraints & Preferences:" not in prompt
         # Verify basic prompt structure
         assert "TEST-789" in prompt
         assert "Implement test feature" in prompt
@@ -316,7 +316,7 @@ class TestBuildMinimalPrompt:
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
         # Verify user context section is present (uses provenance label)
-        assert "[SOURCE: USER-PROVIDED CONTEXT]" in prompt
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in prompt
         assert "Focus on performance optimization" in prompt
         # Verify basic prompt structure is still there
         assert "TEST-789" in prompt

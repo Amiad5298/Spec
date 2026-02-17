@@ -329,7 +329,7 @@ class TestBuildReviewPrompt:
             is_truncated=False,
         )
 
-        assert "Additional Context" in result
+        assert "User Constraints & Preferences" in result
         assert "Focus on backward compatibility" in result
 
     def test_excludes_user_context_when_empty(self):
@@ -348,7 +348,7 @@ class TestBuildReviewPrompt:
             is_truncated=False,
         )
 
-        assert "Additional Context" not in result
+        assert "User Constraints & Preferences" not in result
 
     def test_excludes_user_context_when_whitespace_only(self):
         from unittest.mock import MagicMock
@@ -366,7 +366,7 @@ class TestBuildReviewPrompt:
             is_truncated=False,
         )
 
-        assert "Additional Context" not in result
+        assert "User Constraints & Preferences" not in result
 
 
 class TestGetDiffForReview:

@@ -194,7 +194,7 @@ Focus on files most critical to the implementation plan.
     user_context = state.user_context.strip() if state.user_context else ""
     if user_context:
         prompt += f"""
-## Additional Context
+## User Constraints & Preferences
 {user_context}
 """
 

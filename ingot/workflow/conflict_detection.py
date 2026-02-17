@@ -18,7 +18,7 @@ CONFLICT_DETECTION_PROMPT_TEMPLATE = """Analyze the following ticket information
 TICKET INFORMATION:
 {ticket_info}
 
-USER-PROVIDED CONTEXT:
+USER-PROVIDED CONSTRAINTS & PREFERENCES:
 {user_context}
 
 TASK: Determine if there are any semantic conflicts between the ticket and user context.

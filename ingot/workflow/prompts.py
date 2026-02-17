@@ -85,7 +85,7 @@ Focus your changes on these files."""
     if user_context and user_context.strip():
         prompt += f"""
 
-Additional Context:
+User Constraints & Preferences:
 {user_context.strip()}"""
 
     # Add critical constraints reminder
@@ -221,7 +221,7 @@ Target files:
     if user_context and user_context.strip():
         prompt += f"""
 
-Additional Context:
+User Constraints & Preferences:
 {user_context.strip()}"""
 
     # Add original ticket context to prevent drift

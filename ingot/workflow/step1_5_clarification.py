@@ -282,7 +282,7 @@ def _build_single_question_prompt(
         if len(state.conflict_summary) > _MAX_CONFLICT_SUMMARY_LENGTH:
             sanitized_summary += "..."
         conflict_context = f"""
-IMPORTANT: A conflict was detected between the ticket description and the user's additional context:
+IMPORTANT: A conflict was detected between the ticket description and the user's constraints/preferences:
 "{sanitized_summary}"
 
 Your FIRST question should address this specific conflict to help resolve the ambiguity.

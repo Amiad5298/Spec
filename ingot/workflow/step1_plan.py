@@ -164,7 +164,7 @@ NOTE: The platform returned no verified content for this ticket. Do NOT referenc
     if state.user_context:
         prompt += f"""
 
-[SOURCE: USER-PROVIDED CONTEXT]
+[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
 {state.user_context}"""
 
     if plan_mode:
@@ -438,7 +438,7 @@ Codebase context will be retrieved automatically."""
     if state.user_context:
         prompt += f"""
 
-[SOURCE: USER-PROVIDED CONTEXT]
+[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
 {state.user_context}"""
 
     return prompt

@@ -259,13 +259,40 @@ class TestQuit:
     """Tests for the quit action."""
 
     @pytest.mark.timeout(10)
-    async def test_q_exits_app(self) -> None:
-        """Pressing 'q' exits the app without hanging."""
+    async def test_q_pushes_quit_modal(self) -> None:
+        """Pressing 'q' pushes the QuitConfirmModal instead of exiting."""
+        from ingot.ui.screens.quit_modal import QuitConfirmModal
+
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("q")
+            await pilot.pause()
+            assert isinstance(app.screen, QuitConfirmModal)
+
+    @pytest.mark.timeout(10)
+    async def test_q_then_y_exits_app(self) -> None:
+        """Pressing 'q' then 'y' exits the app."""
+        app = MultiTaskTestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("q")
+            await pilot.pause()
+            await pilot.press("y")
             # If we reach here without hanging, the test passes
+
+    @pytest.mark.timeout(10)
+    async def test_q_then_n_returns_to_screen(self) -> None:
+        """Pressing 'q' then 'n' returns to MultiTaskScreen."""
+        app = MultiTaskTestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("q")
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            screen = _get_screen(app)
+            assert isinstance(screen, MultiTaskScreen)
 
 
 # ===========================================================================

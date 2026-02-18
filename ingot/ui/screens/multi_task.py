@@ -219,7 +219,13 @@ class MultiTaskScreen(Screen[None]):
             self.notify(str(record.log_buffer.log_path))
 
     def action_request_quit(self) -> None:
-        self.app.exit()
+        from ingot.ui.screens.quit_modal import QuitConfirmModal
+
+        def _on_result(confirmed: bool | None) -> None:
+            if confirmed:
+                self.app.exit()
+
+        self.app.push_screen(QuitConfirmModal(), callback=_on_result)
 
     # -- private helpers ------------------------------------------------------
 

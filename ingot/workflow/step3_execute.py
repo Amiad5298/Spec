@@ -373,16 +373,9 @@ def _execute_with_tui(
         for i, task in enumerate(pending):
             # Check for quit request before starting next task
             if tui.check_quit_requested():
-                # Stop TUI temporarily to show prompt
-                tui.stop()
-                if prompt_confirm("Quit task execution?", default=False):
-                    user_quit = True
-                    tui.mark_remaining_skipped(i)
-                    break
-                else:
-                    # User changed their mind, continue
-                    tui.clear_quit_request()
-                    tui.start()
+                user_quit = True
+                tui.mark_remaining_skipped(i)
+                break
 
             record = tui.get_record(i)
             if not record:
@@ -410,31 +403,25 @@ def _execute_with_tui(
 
             # Check for quit request during task execution
             if tui.check_quit_requested():
-                # Task finished naturally, check if user still wants to quit
-                tui.stop()
-                if prompt_confirm("Task completed. Quit execution?", default=False):
-                    user_quit = True
-                    # Emit task finished event first
-                    duration = record.elapsed_time
-                    status: TaskStatus = "success" if success else "failed"
-                    finish_event = create_task_finished_event(
-                        i,
-                        task.name,
-                        status,
-                        duration,
-                        error=None if success else "Task returned failure",
-                    )
-                    tui.handle_event(finish_event)
-                    if success:
-                        mark_task_complete(tasklist_path, task.name)
-                        state.mark_task_complete(task.name)
-                    else:
-                        failed_tasks.append(task.name)
-                    tui.mark_remaining_skipped(i + 1)
-                    break
+                user_quit = True
+                # Emit task finished event first
+                duration = record.elapsed_time
+                status: TaskStatus = "success" if success else "failed"
+                finish_event = create_task_finished_event(
+                    i,
+                    task.name,
+                    status,
+                    duration,
+                    error=None if success else "Task returned failure",
+                )
+                tui.handle_event(finish_event)
+                if success:
+                    mark_task_complete(tasklist_path, task.name)
+                    state.mark_task_complete(task.name)
                 else:
-                    tui.clear_quit_request()
-                    tui.start()
+                    failed_tasks.append(task.name)
+                tui.mark_remaining_skipped(i + 1)
+                break
 
             # Emit task finished event
             duration = record.elapsed_time

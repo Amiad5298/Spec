@@ -144,8 +144,14 @@ class SingleOperationScreen(Screen[None]):
             self.notify(f"Pager '{pager}' not found", severity="error")
 
     def action_request_quit(self) -> None:
-        self._quit_requested = True
-        self.app.exit()
+        from ingot.ui.screens.quit_modal import QuitConfirmModal
+
+        def _on_result(confirmed: bool | None) -> None:
+            if confirmed:
+                self._quit_requested = True
+                self.app.exit()
+
+        self.app.push_screen(QuitConfirmModal("Cancel operation?"), callback=_on_result)
 
 
 __all__ = ["SingleOperationScreen"]

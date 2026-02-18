@@ -60,10 +60,16 @@ class _ReadyMultiTaskScreen(MultiTaskScreen):
         self._runner._app_ready.set()
 
     def action_request_quit(self) -> None:
-        app = self.app
-        if isinstance(app, _RunnerApp):
-            app.quit_by_user = True
-        super().action_request_quit()
+        from ingot.ui.screens.quit_modal import QuitConfirmModal
+
+        def _on_result(confirmed: bool | None) -> None:
+            if confirmed:
+                app = self.app
+                if isinstance(app, _RunnerApp):
+                    app.quit_by_user = True
+                self.app.exit()
+
+        self.app.push_screen(QuitConfirmModal(), callback=_on_result)
 
 
 class _ReadySingleOpScreen(SingleOperationScreen):
@@ -87,10 +93,16 @@ class _ReadySingleOpScreen(SingleOperationScreen):
         self._runner._app_ready.set()
 
     def action_request_quit(self) -> None:
-        app = self.app
-        if isinstance(app, _RunnerApp):
-            app.quit_by_user = True
-        super().action_request_quit()
+        from ingot.ui.screens.quit_modal import QuitConfirmModal
+
+        def _on_result(confirmed: bool | None) -> None:
+            if confirmed:
+                app = self.app
+                if isinstance(app, _RunnerApp):
+                    app.quit_by_user = True
+                self.app.exit()
+
+        self.app.push_screen(QuitConfirmModal("Cancel operation?"), callback=_on_result)
 
 
 # =============================================================================

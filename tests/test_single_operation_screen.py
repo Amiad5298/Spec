@@ -120,23 +120,45 @@ class TestQuit:
     """Tests for the quit action."""
 
     @pytest.mark.timeout(10)
-    async def test_q_exits_app(self) -> None:
-        """Pressing 'q' exits the app without hanging."""
+    async def test_q_pushes_quit_modal(self) -> None:
+        """Pressing 'q' pushes the QuitConfirmModal instead of exiting."""
+        from ingot.ui.screens.quit_modal import QuitConfirmModal
+
         app = SingleOperationTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("q")
-            # If we reach here without hanging, the test passes
+            await pilot.pause()
+            assert isinstance(app.screen, QuitConfirmModal)
 
     @pytest.mark.timeout(10)
-    async def test_q_sets_quit_requested_flag(self) -> None:
-        """Pressing 'q' sets quit_requested before exiting."""
+    async def test_q_then_y_sets_quit_requested_and_exits(self) -> None:
+        """Pressing 'q' then 'y' sets quit_requested and exits."""
         app = SingleOperationTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_screen(app)
             assert screen.quit_requested is False
             await pilot.press("q")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+            assert screen.quit_requested is True
+
+    @pytest.mark.timeout(10)
+    async def test_q_then_n_returns_to_screen(self) -> None:
+        """Pressing 'q' then 'n' returns to SingleOperationScreen."""
+        app = SingleOperationTestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = _get_screen(app)
+            assert screen.quit_requested is False
+            await pilot.press("q")
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            screen = _get_screen(app)
+            assert screen.quit_requested is False
 
 
 # ===========================================================================

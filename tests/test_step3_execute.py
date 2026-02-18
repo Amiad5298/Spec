@@ -542,7 +542,7 @@ class TestRunPostImplementationTests:
 
         mock_backend.run_with_callback.assert_not_called()
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_runs_auggie_with_test_prompt(
         self, mock_confirm, mock_ui_class, mock_backend, workflow_state
@@ -563,7 +563,7 @@ class TestRunPostImplementationTests:
         prompt = mock_backend.run_with_callback.call_args[0][0]
         assert "test" in prompt.lower()
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_handles_auggie_exceptions(
         self, mock_confirm, mock_ui_class, mock_backend, workflow_state
@@ -716,7 +716,7 @@ class TestExecuteFallback:
 class TestExecuteWithTui:
     @patch("ingot.workflow.step3_execute.mark_task_complete")
     @patch("ingot.workflow.step3_execute._execute_task_with_callback")
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_initializes_tui_correctly(
         self,
         mock_tui_class,
@@ -750,7 +750,7 @@ class TestExecuteWithTui:
 
     @patch("ingot.workflow.step3_execute.mark_task_complete")
     @patch("ingot.workflow.step3_execute._execute_task_with_callback")
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_marks_tasks_complete_on_success(
         self,
         mock_tui_class,
@@ -784,7 +784,7 @@ class TestExecuteWithTui:
 
     @patch("ingot.workflow.step3_execute.mark_task_complete")
     @patch("ingot.workflow.step3_execute._execute_task_with_callback")
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_tracks_failed_tasks(
         self,
         mock_tui_class,
@@ -820,7 +820,7 @@ class TestExecuteWithTui:
 
     @patch("ingot.workflow.step3_execute.mark_task_complete")
     @patch("ingot.workflow.step3_execute._execute_task_with_callback")
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_respects_fail_fast_option(
         self,
         mock_tui_class,
@@ -1108,7 +1108,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     @patch("ingot.workflow.step3_execute.mark_task_complete")
     @patch("ingot.workflow.step3_execute._execute_task_with_callback")
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_stops_execution_when_quit_requested(
         self,
         mock_tui_class,

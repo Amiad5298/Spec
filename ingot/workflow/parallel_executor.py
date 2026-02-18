@@ -176,7 +176,7 @@ def _execute_parallel_with_tui(
     - TASK_FINISHED events are emitted from main thread after future completes
     - Each worker creates a fresh backend instance via BackendFactory
     """
-    from ingot.ui.tui import TaskRunnerUI
+    from ingot.ui.textual_runner import TextualTaskRunner
 
     failed_tasks: list[str] = []
     skipped_tasks: list[str] = []
@@ -184,7 +184,7 @@ def _execute_parallel_with_tui(
     max_workers = min(state.max_parallel_tasks, len(tasks))
 
     # Initialize TUI with all parallel tasks
-    tui = TaskRunnerUI(ticket_id=state.ticket.id, verbose_mode=verbose)
+    tui = TextualTaskRunner(ticket_id=state.ticket.id, verbose_mode=verbose)
     tui.initialize_records([t.name for t in tasks])
     tui.set_log_dir(log_dir)
     tui.set_parallel_mode(True)  # Enable parallel mode display

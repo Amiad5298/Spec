@@ -351,13 +351,13 @@ def _execute_with_tui(
 ) -> list[str]:
     """Execute tasks with TUI display (sequential mode)."""
     # Lazy import to avoid circular dependency
-    from ingot.ui.tui import TaskRunnerUI
+    from ingot.ui.textual_runner import TextualTaskRunner
 
     failed_tasks: list[str] = []
     user_quit: bool = False
 
     # Initialize TUI
-    tui = TaskRunnerUI(ticket_id=state.ticket.id, verbose_mode=verbose)
+    tui = TextualTaskRunner(ticket_id=state.ticket.id, verbose_mode=verbose)
     tui.initialize_records([t.name for t in pending])
     tui.set_log_dir(log_dir)
 
@@ -945,10 +945,10 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
     This includes both modified test files AND tests that cover modified source files.
     Does NOT run the full project test suite.
 
-    Uses TaskRunnerUI in single-operation mode to provide a consistent
+    Uses TextualTaskRunner in single-operation mode to provide a consistent
     collapsible UI with verbose toggle, matching the UX of Steps 1 and 3.
     """
-    from ingot.ui.tui import TaskRunnerUI
+    from ingot.ui.textual_runner import TextualTaskRunner
     from ingot.workflow.events import format_run_directory
 
     # Prompt user to run tests
@@ -964,7 +964,7 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
     log_path = log_dir / f"{format_run_directory()}.log"
 
     # Create UI with collapsible panel and verbose toggle (single-operation mode)
-    ui = TaskRunnerUI(
+    ui = TextualTaskRunner(
         status_message="Running tests for changed code...",
         ticket_id=state.ticket.id,  # Keep original ID for display
         single_operation_mode=True,

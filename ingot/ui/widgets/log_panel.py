@@ -1,7 +1,7 @@
 """LogPanelWidget — Textual widget for scrollable, streaming log output.
 
-Wraps Textual's ``RichLog`` in a bordered widget with follow mode,
-replacing the fixed-height ``render_log_panel()`` from ``ingot/ui/tui.py``.
+Wraps Textual's ``RichLog`` in a bordered widget with follow mode
+for real-time task log display.
 """
 
 from __future__ import annotations

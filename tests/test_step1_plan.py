@@ -547,7 +547,7 @@ class TestStep1CreatePlanTuiMode:
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     def test_creates_specs_directory_if_not_exists(
         self,
         mock_should_tui,

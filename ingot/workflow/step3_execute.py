@@ -226,9 +226,9 @@ def step_3_execute(
     failed_tasks: list[str] = []
 
     # Determine execution mode
-    from ingot.ui.tui import _should_use_tui
+    from ingot.ui.textual_runner import should_use_tui
 
-    use_tui_mode = _should_use_tui(use_tui)
+    use_tui_mode = should_use_tui(use_tui)
 
     # PHASE 1: Execute fundamental tasks sequentially
     if pending_fundamental:

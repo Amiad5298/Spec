@@ -1,8 +1,7 @@
 """TaskListWidget — Textual widget for displaying task execution status.
 
-Ports the rendering logic from ``render_task_list()`` in ``ingot/ui/tui.py``
-into a proper Textual widget with reactive state, keyboard navigation, and
-spinner animation.
+Provides a Textual widget with reactive state, keyboard navigation, and
+spinner animation for visualizing task execution progress.
 """
 
 from __future__ import annotations

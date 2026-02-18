@@ -14,6 +14,8 @@ Supports two modes:
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -29,6 +31,27 @@ from ingot.utils.console import console
 from ingot.workflow.events import TaskEvent, TaskRunRecord, TaskRunStatus
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# TUI Detection
+# =============================================================================
+
+
+def should_use_tui(override: bool | None = None) -> bool:
+    """Determine if TUI should be used based on CLI override or TTY auto-detection."""
+    # CLI override takes precedence
+    if override is not None:
+        return override
+
+    # Check environment variable
+    env_setting = os.environ.get("INGOT_TUI", "auto").lower()
+
+    if env_setting == "true":
+        return True
+    if env_setting == "false":
+        return False
+    return sys.stdout.isatty()
 
 
 # =============================================================================

@@ -899,7 +899,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_with_tui")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -928,7 +928,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -958,7 +958,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -989,7 +989,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1019,7 +1019,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1050,7 +1050,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1079,7 +1079,7 @@ class TestStep3Execute:
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1105,7 +1105,6 @@ class TestStep3Execute:
 
         mock_tests.assert_called_once()
 
-    @patch("ingot.workflow.step3_execute.prompt_confirm")
     @patch("ingot.workflow.step3_execute.mark_task_complete")
     @patch("ingot.workflow.step3_execute._execute_task_with_callback")
     @patch("ingot.ui.textual_runner.TextualTaskRunner")
@@ -1114,20 +1113,16 @@ class TestStep3Execute:
         mock_tui_class,
         mock_execute,
         mock_mark,
-        mock_confirm,
         mock_backend,
         workflow_state,
         tmp_path,
     ):
         # Setup
         mock_tui = MagicMock()
-        # Simulate quit requested before the second task
+        # Simulate quit requested before the first task
         mock_tui.check_quit_requested.return_value = True
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0)
         mock_tui_class.return_value = mock_tui
-
-        # User confirms quit at the prompt
-        mock_confirm.return_value = True
 
         tasks = [
             Task(name="Task 1", status=TaskStatus.PENDING),
@@ -1147,12 +1142,10 @@ class TestStep3Execute:
         )
 
         # Assertions
-        # Should verify that we stopped TUI to show prompt
-        mock_tui.stop.assert_called()
-        # Should verify prompt was shown
-        mock_confirm.assert_called_with("Quit task execution?", default=False)
-        # Should verify specific cleanup method for skipping remaining tasks was called
+        # Should verify remaining tasks were marked skipped
         mock_tui.mark_remaining_skipped.assert_called()
+        # No tasks should have been executed since quit was requested immediately
+        mock_execute.assert_not_called()
 
 
 class TestTwoPhaseExecution:
@@ -1160,7 +1153,7 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1210,7 +1203,7 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._run_post_implementation_tests")
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1258,7 +1251,7 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")
@@ -1307,7 +1300,7 @@ class TestTwoPhaseExecution:
     @patch("ingot.workflow.step3_execute._show_summary")
     @patch("ingot.workflow.step3_execute._execute_parallel_fallback")
     @patch("ingot.workflow.step3_execute._execute_fallback")
-    @patch("ingot.ui.tui._should_use_tui")
+    @patch("ingot.ui.textual_runner.should_use_tui")
     @patch("ingot.workflow.step3_execute.cleanup_old_runs")
     @patch("ingot.workflow.step3_execute.create_run_log_dir")
     @patch("ingot.workflow.step3_execute._capture_baseline_for_diffs")

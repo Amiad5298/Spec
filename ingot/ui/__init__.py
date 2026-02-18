@@ -4,7 +4,6 @@ This package contains:
 - prompts: Questionary-based user input prompts
 - menus: Interactive menu functions
 - log_buffer: Memory-efficient log buffer with file backing
-- tui: TaskRunnerUI for interactive task display
 """
 
 from ingot.ui.log_buffer import TaskLogBuffer

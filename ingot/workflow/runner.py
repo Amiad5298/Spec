@@ -152,7 +152,6 @@ def run_ingot_workflow(
 
         # Validate ticket content — block if platform returned nothing
         if not state.ticket.has_verified_content:
-            state.spec_verified = False
             print_warning(
                 f"The platform returned no content for ticket '{state.ticket.id}' "
                 "(empty title and description). The planner may hallucinate requirements."
@@ -163,22 +162,22 @@ def run_ingot_workflow(
                     error=f"Aborted: no verified content for ticket '{state.ticket.id}'",
                 )
 
-        # Ask user for additional context
+        # Ask user for constraints and preferences
         if prompt_confirm(
-            "Would you like to add additional context about this ticket?", default=False
+            "Do you have any constraints or preferences for this implementation?", default=False
         ):
-            user_context = prompt_input(
-                "Enter additional context (press Enter twice when done):",
+            user_constraints = prompt_input(
+                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
                 multiline=True,
             )
-            state.user_context = user_context.strip()
-            if state.user_context:
-                print_success("Additional context saved")
+            state.user_constraints = user_constraints.strip()
+            if state.user_constraints:
+                print_success("Constraints and preferences saved")
 
-                # Fail-Fast Semantic Check: Detect conflicts between ticket and user context
-                print_step("Checking for conflicts between ticket and your context...")
+                # Fail-Fast Semantic Check: Detect conflicts between ticket and user constraints
+                print_step("Checking for conflicts between ticket and your constraints...")
                 conflict_detected, conflict_summary = detect_context_conflict(
-                    state.ticket, state.user_context, backend, state
+                    state.ticket, state.user_constraints, backend, state
                 )
                 state.conflict_detected = conflict_detected
                 state.conflict_summary = conflict_summary
@@ -186,7 +185,7 @@ def run_ingot_workflow(
                 if conflict_detected:
                     console.print()
                     print_warning(
-                        "⚠️  Potential conflict detected between ticket description and your additional context"
+                        "⚠️  Potential conflict detected between ticket description and your constraints"
                     )
                     console.print(f"[yellow]   {conflict_summary}[/yellow]")
                     console.print()

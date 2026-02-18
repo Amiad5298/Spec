@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ingot.integrations.providers import GenericTicket, Platform
-from ingot.ui.menus import TaskReviewChoice
+from ingot.ui.menus import ReviewChoice
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step2_tasklist import (
     _create_default_tasklist,
@@ -498,7 +498,7 @@ class TestGenerateTasklist:
         # Default template has placeholder tasks
         assert "[Core functionality implementation with tests]" in content
 
-    def test_includes_user_context_in_prompt(
+    def test_includes_user_constraints_in_prompt(
         self,
         tmp_path,
         mock_backend,
@@ -512,7 +512,7 @@ class TestGenerateTasklist:
             branch_summary="Test",
         )
         state = WorkflowState(ticket=ticket)
-        state.user_context = "Focus on backward compatibility"
+        state.user_constraints = "Focus on backward compatibility"
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True)
@@ -525,10 +525,10 @@ class TestGenerateTasklist:
         _generate_tasklist(state, plan_path, tasklist_path, mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context" in prompt
+        assert "User Constraints & Preferences" in prompt
         assert "Focus on backward compatibility" in prompt
 
-    def test_excludes_user_context_when_empty(
+    def test_excludes_user_constraints_when_empty(
         self,
         tmp_path,
         mock_backend,
@@ -542,7 +542,7 @@ class TestGenerateTasklist:
             branch_summary="Test",
         )
         state = WorkflowState(ticket=ticket)
-        state.user_context = ""
+        state.user_constraints = ""
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True)
@@ -555,9 +555,9 @@ class TestGenerateTasklist:
         _generate_tasklist(state, plan_path, tasklist_path, mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context" not in prompt
+        assert "User Constraints & Preferences" not in prompt
 
-    def test_excludes_user_context_when_whitespace_only(
+    def test_excludes_user_constraints_when_whitespace_only(
         self,
         tmp_path,
         mock_backend,
@@ -571,7 +571,7 @@ class TestGenerateTasklist:
             branch_summary="Test",
         )
         state = WorkflowState(ticket=ticket)
-        state.user_context = "   \n  "
+        state.user_constraints = "   \n  "
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True)
@@ -584,7 +584,7 @@ class TestGenerateTasklist:
         _generate_tasklist(state, plan_path, tasklist_path, mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context" not in prompt
+        assert "User Constraints & Preferences" not in prompt
 
 
 class TestStep2CreateTasklist:
@@ -651,7 +651,7 @@ class TestStep2CreateTasklist:
         mock_edit.side_effect = mock_edit_side_effect
 
         # Menu returns EDIT first, then APPROVE
-        mock_menu.side_effect = [TaskReviewChoice.EDIT, TaskReviewChoice.APPROVE]
+        mock_menu.side_effect = [ReviewChoice.EDIT, ReviewChoice.APPROVE]
 
         mock_auggie = MagicMock()
 
@@ -710,8 +710,8 @@ class TestStep2CreateTasklist:
 
         # REGENERATE then APPROVE
         mock_menu.side_effect = [
-            TaskReviewChoice.REGENERATE,
-            TaskReviewChoice.APPROVE,
+            ReviewChoice.REGENERATE,
+            ReviewChoice.APPROVE,
         ]
 
         result = step_2_create_tasklist(state, MagicMock())
@@ -748,7 +748,7 @@ class TestStep2CreateTasklist:
         state.plan_file = plan_path
 
         mock_generate.side_effect = lambda s, pp, tp, b: (tp.write_text("- [ ] Task\n") or True)
-        mock_menu.return_value = TaskReviewChoice.ABORT
+        mock_menu.return_value = ReviewChoice.ABORT
 
         result = step_2_create_tasklist(state, MagicMock())
 

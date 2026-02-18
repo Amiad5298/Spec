@@ -6,10 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ingot.ui.menus import PlanReviewChoice
+from ingot.ui.menus import ReviewChoice
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import (
     _build_minimal_prompt,
+    _build_replan_prompt,
     _create_plan_log_dir,
     _display_plan_summary,
     _edit_plan,
@@ -244,25 +245,28 @@ class TestBuildMinimalPrompt:
 
         assert "Not available" in result
 
-    def test_prompt_includes_user_context_when_provided(self, workflow_state, tmp_path):
-        workflow_state.user_context = "Additional context from the user about the implementation."
+    def test_prompt_includes_user_constraints_when_provided(self, workflow_state, tmp_path):
+        workflow_state.user_constraints = (
+            "Additional context from the user about the implementation."
+        )
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(workflow_state, plan_path)
 
         assert "Additional context from the user" in result
-        assert "[SOURCE: USER-PROVIDED CONTEXT]" in result
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in result
 
-    def test_prompt_excludes_user_context_section_when_not_provided(self, workflow_state, tmp_path):
-        workflow_state.user_context = ""
+    def test_prompt_excludes_user_constraints_section_when_not_provided(
+        self, workflow_state, tmp_path
+    ):
+        workflow_state.user_constraints = ""
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(workflow_state, plan_path)
 
-        assert "[SOURCE: USER-PROVIDED CONTEXT]" not in result
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" not in result
 
     def test_prompt_has_verified_source_label_when_spec_verified(self, workflow_state, tmp_path):
-        workflow_state.spec_verified = True
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(workflow_state, plan_path)
@@ -276,7 +280,6 @@ class TestBuildMinimalPrompt:
         generic_ticket.title = None
         generic_ticket.description = None
         state = WorkflowState(ticket=generic_ticket)
-        state.spec_verified = False
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
 
         result = _build_minimal_prompt(state, plan_path)
@@ -284,6 +287,29 @@ class TestBuildMinimalPrompt:
         assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
         assert "[SOURCE: VERIFIED PLATFORM DATA]" not in result
         assert "Do NOT reference" in result
+
+    def test_plan_mode_includes_source_labels(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(workflow_state, plan_path, plan_mode=True)
+
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" in result
+        assert "Output the complete implementation plan" in result
+        assert "Do not attempt to create or write any files" in result
+        # Should NOT mention saving to a file
+        assert f"Save the plan to: {plan_path}" not in result
+
+    def test_plan_mode_unverified_includes_source_labels(self, generic_ticket, tmp_path):
+        generic_ticket.title = None
+        generic_ticket.description = None
+        state = WorkflowState(ticket=generic_ticket)
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(state, plan_path, plan_mode=True)
+
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
+        assert "Do NOT reference" in result
+        assert "Output the complete implementation plan" in result
 
     def test_prompt_includes_plan_file_path(self, workflow_state, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
@@ -535,7 +561,7 @@ class TestStep1CreatePlanTuiMode:
         monkeypatch.chdir(tmp_path)
         mock_should_tui.return_value = True
         mock_generate.return_value = (True, "# Plan")
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         # Create plan file to simulate successful generation
         specs_dir = tmp_path / "specs"
@@ -560,7 +586,7 @@ class TestStep1CreatePlanTuiMode:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -597,7 +623,7 @@ class TestStep1CreatePlanFileHandling:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -631,7 +657,7 @@ class TestStep1CreatePlanFileHandling:
     ):
         monkeypatch.chdir(tmp_path)
         mock_generate.return_value = (True, "# Plan output")  # Success but no file
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
@@ -685,7 +711,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -709,7 +735,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.ABORT
+        mock_review_menu.return_value = ReviewChoice.ABORT
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -733,7 +759,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.APPROVE
+        mock_review_menu.return_value = ReviewChoice.APPROVE
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -759,7 +785,7 @@ class TestStep1CreatePlanConfirmation:
         self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = PlanReviewChoice.ABORT
+        mock_review_menu.return_value = ReviewChoice.ABORT
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -816,7 +842,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # First call: REGENERATE, second call: APPROVE
-        mock_review_menu.side_effect = [PlanReviewChoice.REGENERATE, PlanReviewChoice.APPROVE]
+        mock_review_menu.side_effect = [ReviewChoice.REGENERATE, ReviewChoice.APPROVE]
         mock_prompt_input.return_value = "Add more error handling"
         mock_replan.return_value = True
 
@@ -849,8 +875,8 @@ class TestStep1PlanReviewLoop:
 
         # REGENERATE with empty feedback → loops, then ABORT
         mock_review_menu.side_effect = [
-            PlanReviewChoice.REGENERATE,
-            PlanReviewChoice.ABORT,
+            ReviewChoice.REGENERATE,
+            ReviewChoice.ABORT,
         ]
         mock_prompt_input.return_value = ""
 
@@ -880,7 +906,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # REGENERATE fails → stays in loop, then ABORT
-        mock_review_menu.side_effect = [PlanReviewChoice.REGENERATE, PlanReviewChoice.ABORT]
+        mock_review_menu.side_effect = [ReviewChoice.REGENERATE, ReviewChoice.ABORT]
         mock_prompt_input.return_value = "Fix the architecture section"
         mock_replan.return_value = False  # Replan fails
 
@@ -907,7 +933,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # EDIT → then APPROVE
-        mock_review_menu.side_effect = [PlanReviewChoice.EDIT, PlanReviewChoice.APPROVE]
+        mock_review_menu.side_effect = [ReviewChoice.EDIT, ReviewChoice.APPROVE]
 
         result = step_1_create_plan(workflow_state, MagicMock())
 
@@ -932,7 +958,7 @@ class TestStep1PlanReviewLoop:
         self._setup_plan(tmp_path, workflow_state, mock_generate)
 
         # Always choose EDIT to exhaust the iteration limit
-        mock_review_menu.return_value = PlanReviewChoice.EDIT
+        mock_review_menu.return_value = ReviewChoice.EDIT
 
         with patch("ingot.workflow.step1_plan._edit_plan"):
             result = step_1_create_plan(workflow_state, MagicMock())
@@ -943,8 +969,21 @@ class TestStep1PlanReviewLoop:
 class TestEditPlan:
     """Tests for the _edit_plan helper."""
 
+    @patch("ingot.workflow.step1_plan.prompt_enter")
+    @patch("ingot.workflow.step1_plan.subprocess.run")
+    def test_edit_plan_falls_back_when_not_tty(self, mock_run, mock_enter, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: False)
+        plan_path = tmp_path / "plan.md"
+        plan_path.write_text("# Plan")
+
+        _edit_plan(plan_path)
+
+        mock_run.assert_not_called()
+        mock_enter.assert_called_once()
+
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_opens_editor(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nano")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -955,6 +994,7 @@ class TestEditPlan:
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_handles_editor_with_flags(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "code --wait")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -965,6 +1005,7 @@ class TestEditPlan:
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_defaults_to_vim(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.delenv("EDITOR", raising=False)
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -975,6 +1016,7 @@ class TestEditPlan:
 
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_handles_editor_error(self, mock_run, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nano")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -988,6 +1030,7 @@ class TestEditPlan:
     @patch("ingot.workflow.step1_plan.prompt_enter")
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_handles_missing_editor(self, mock_run, mock_enter, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nonexistent-editor")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -1000,6 +1043,7 @@ class TestEditPlan:
     @patch("ingot.workflow.step1_plan.print_warning")
     @patch("ingot.workflow.step1_plan.subprocess.run")
     def test_edit_plan_warns_when_file_deleted(self, mock_run, mock_warning, tmp_path, monkeypatch):
+        monkeypatch.setattr("ingot.workflow.step1_plan.sys.stdin.isatty", lambda: True)
         monkeypatch.setenv("EDITOR", "nano")
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
@@ -1014,3 +1058,44 @@ class TestEditPlan:
 
         mock_warning.assert_called_once()
         assert "no longer exists" in mock_warning.call_args[0][0].lower()
+
+
+class TestBuildReplanPrompt:
+    """Tests for _build_replan_prompt source label handling."""
+
+    def test_includes_verified_source_label(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs more detail")
+
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" in result
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" not in result
+
+    def test_includes_unverified_source_label(self, generic_ticket, tmp_path):
+        generic_ticket.title = None
+        generic_ticket.description = None
+        state = WorkflowState(ticket=generic_ticket)
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(state, plan_path, "# Old plan", "Needs more detail")
+
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" not in result
+        assert "Do NOT reference" in result
+
+    def test_includes_user_constraints_label(self, workflow_state, tmp_path):
+        workflow_state.user_constraints = "Use Redis for caching"
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs caching")
+
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in result
+        assert "Use Redis for caching" in result
+
+    def test_excludes_user_constraints_when_empty(self, workflow_state, tmp_path):
+        workflow_state.user_constraints = ""
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs work")
+
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" not in result

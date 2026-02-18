@@ -211,7 +211,7 @@ class TestMultipleTasksWithMemory:
         assert "Added Python tests" in all_patterns
 
 
-class TestUserAdditionalContext:
+class TestUserConstraintsAndPreferences:
     @pytest.fixture
     def state_with_ticket(self):
         """Create a workflow state with ticket for testing."""
@@ -225,25 +225,27 @@ class TestUserAdditionalContext:
         )
         return WorkflowState(ticket=ticket)
 
+    @staticmethod
+    def _simulate_constraints_prompt(mock_confirm, mock_input, state):
+        """Simulate the constraints/preferences prompt logic from runner.py."""
+        if mock_confirm(
+            "Do you have any constraints or preferences for this implementation?", default=False
+        ):
+            user_constraints = mock_input(
+                "Enter your constraints or preferences (e.g., 'use Redis', 'backend only', 'no DB migrations').\nPress Enter twice when done:",
+                multiline=True,
+            )
+            state.user_constraints = user_constraints.strip()
+
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.prompt_input")
     def test_user_declines_additional_context(self, mock_input, mock_confirm, state_with_ticket):
         mock_confirm.return_value = False
 
-        # Simulate the logic from runner.py
-        if mock_confirm(
-            "Would you like to add additional context about this ticket?", default=False
-        ):
-            user_context = mock_input(
-                "Enter additional context (press Enter twice when done):",
-                multiline=True,
-            )
-            state_with_ticket.user_context = user_context.strip()
+        self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        # Verify prompt_input was not called
         mock_input.assert_not_called()
-        # Verify state.user_context remains empty
-        assert state_with_ticket.user_context == ""
+        assert state_with_ticket.user_constraints == ""
 
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.prompt_input")
@@ -251,18 +253,9 @@ class TestUserAdditionalContext:
         mock_confirm.return_value = True
         mock_input.return_value = "Additional details about the feature"
 
-        # Simulate the logic from runner.py
-        if mock_confirm(
-            "Would you like to add additional context about this ticket?", default=False
-        ):
-            user_context = mock_input(
-                "Enter additional context (press Enter twice when done):",
-                multiline=True,
-            )
-            state_with_ticket.user_context = user_context.strip()
+        self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        # Verify state.user_context is set
-        assert state_with_ticket.user_context == "Additional details about the feature"
+        assert state_with_ticket.user_constraints == "Additional details about the feature"
 
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.prompt_input")
@@ -270,18 +263,9 @@ class TestUserAdditionalContext:
         mock_confirm.return_value = True
         mock_input.return_value = "   "  # whitespace only
 
-        # Simulate the logic from runner.py
-        if mock_confirm(
-            "Would you like to add additional context about this ticket?", default=False
-        ):
-            user_context = mock_input(
-                "Enter additional context (press Enter twice when done):",
-                multiline=True,
-            )
-            state_with_ticket.user_context = user_context.strip()
+        self._simulate_constraints_prompt(mock_confirm, mock_input, state_with_ticket)
 
-        # Verify state.user_context is empty string after strip
-        assert state_with_ticket.user_context == ""
+        assert state_with_ticket.user_constraints == ""
 
 
 class TestBuildMinimalPrompt:
@@ -298,25 +282,25 @@ class TestBuildMinimalPrompt:
         )
         return WorkflowState(ticket=ticket)
 
-    def test_prompt_without_user_context(self, state_with_ticket, tmp_path):
+    def test_prompt_without_user_constraints(self, state_with_ticket, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-789-plan.md"
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
         # Verify no user context section (note: section name changed)
-        assert "Additional Context:" not in prompt
+        assert "User Constraints & Preferences:" not in prompt
         # Verify basic prompt structure
         assert "TEST-789" in prompt
         assert "Implement test feature" in prompt
         assert "Test description for the feature" in prompt
         assert str(plan_path) in prompt
 
-    def test_prompt_with_user_context(self, state_with_ticket, tmp_path):
+    def test_prompt_with_user_constraints(self, state_with_ticket, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-789-plan.md"
-        state_with_ticket.user_context = "Focus on performance optimization"
+        state_with_ticket.user_constraints = "Focus on performance optimization"
         prompt = _build_minimal_prompt(state_with_ticket, plan_path)
 
         # Verify user context section is present (uses provenance label)
-        assert "[SOURCE: USER-PROVIDED CONTEXT]" in prompt
+        assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" in prompt
         assert "Focus on performance optimization" in prompt
         # Verify basic prompt structure is still there
         assert "TEST-789" in prompt

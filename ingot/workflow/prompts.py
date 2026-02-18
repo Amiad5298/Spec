@@ -23,7 +23,7 @@ def build_task_prompt(
     plan_path: Path,
     *,
     is_parallel: bool = False,
-    user_context: str = "",
+    user_constraints: str = "",
     repo_root: Path | None = None,
 ) -> str:
     """Build a minimal prompt for task execution.
@@ -41,7 +41,7 @@ def build_task_prompt(
         task: Task to execute
         plan_path: Path to the implementation plan file
         is_parallel: Whether this task runs in parallel with others
-        user_context: Optional additional context provided by the user
+        user_constraints: Optional constraints & preferences provided by the user
 
     Returns:
         Minimal prompt string with task context
@@ -81,12 +81,12 @@ Target files for this task:
 {files_list}
 Focus your changes on these files."""
 
-    # Add user-provided context if available
-    if user_context and user_context.strip():
+    # Add user-provided constraints if available
+    if user_constraints and user_constraints.strip():
         prompt += f"""
 
-Additional Context:
-{user_context.strip()}"""
+User Constraints & Preferences:
+{user_constraints.strip()}"""
 
     # Add critical constraints reminder
     prompt += """
@@ -149,7 +149,7 @@ def build_self_correction_prompt(
     max_attempts: int,
     *,
     is_parallel: bool = False,
-    user_context: str = "",
+    user_constraints: str = "",
     repo_root: Path | None = None,
     ticket_title: str = "",
     ticket_description: str = "",
@@ -166,7 +166,7 @@ def build_self_correction_prompt(
         attempt: Current correction attempt number (1-based)
         max_attempts: Maximum correction attempts allowed
         is_parallel: Whether this task runs in parallel with others
-        user_context: Optional additional context provided by the user
+        user_constraints: Optional constraints & preferences provided by the user
 
     Returns:
         Correction prompt string
@@ -217,12 +217,12 @@ Implementation plan: {plan_path}"""
 Target files:
 {files_list}"""
 
-    # Add user-provided context if available
-    if user_context and user_context.strip():
+    # Add user-provided constraints if available
+    if user_constraints and user_constraints.strip():
         prompt += f"""
 
-Additional Context:
-{user_context.strip()}"""
+User Constraints & Preferences:
+{user_constraints.strip()}"""
 
     # Add original ticket context to prevent drift
     if ticket_title or ticket_description:

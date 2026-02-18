@@ -22,6 +22,9 @@ DEFAULT_EXECUTION_TIMEOUT = 60
 FIRST_RUN_TIMEOUT = 120
 ONBOARDING_SMOKE_TEST_TIMEOUT = 60
 
+# Safety cap on plan/tasklist review iterations to prevent runaway loops.
+MAX_REVIEW_ITERATIONS = 10
+
 __all__ = [
     # Subagent constants
     "INGOT_AGENT_PLANNER",
@@ -35,4 +38,6 @@ __all__ = [
     "DEFAULT_EXECUTION_TIMEOUT",
     "FIRST_RUN_TIMEOUT",
     "ONBOARDING_SMOKE_TEST_TIMEOUT",
+    # Review iteration limit
+    "MAX_REVIEW_ITERATIONS",
 ]

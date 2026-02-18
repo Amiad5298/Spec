@@ -257,53 +257,53 @@ class TestBuildTaskPrompt:
 
         assert "Target files for this task:" not in result
 
-    def test_includes_user_context_when_provided(self, sample_task, tmp_path):
+    def test_includes_user_constraints_when_provided(self, sample_task, tmp_path):
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
         result = build_task_prompt(
-            sample_task, plan_path, user_context="Use the new API v2 endpoints"
+            sample_task, plan_path, user_constraints="Use the new API v2 endpoints"
         )
 
-        assert "Additional Context:" in result
+        assert "User Constraints & Preferences:" in result
         assert "Use the new API v2 endpoints" in result
 
-    def test_excludes_user_context_when_empty(self, sample_task, tmp_path):
+    def test_excludes_user_constraints_when_empty(self, sample_task, tmp_path):
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = build_task_prompt(sample_task, plan_path, user_context="")
+        result = build_task_prompt(sample_task, plan_path, user_constraints="")
 
-        assert "Additional Context:" not in result
+        assert "User Constraints & Preferences:" not in result
 
-    def test_includes_both_target_files_and_user_context(self, tmp_path):
+    def test_includes_both_target_files_and_user_constraints(self, tmp_path):
         task = Task(name="Update handler", target_files=["handler.py"])
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = build_task_prompt(task, plan_path, user_context="Follow REST conventions")
+        result = build_task_prompt(task, plan_path, user_constraints="Follow REST conventions")
 
         assert "Target files for this task:" in result
-        assert "Additional Context:" in result
+        assert "User Constraints & Preferences:" in result
         # Target files should appear before user context
         target_pos = result.index("Target files for this task:")
-        context_pos = result.index("Additional Context:")
+        context_pos = result.index("User Constraints & Preferences:")
         assert target_pos < context_pos
 
-    def test_excludes_user_context_when_whitespace_only(self, sample_task, tmp_path):
+    def test_excludes_user_constraints_when_whitespace_only(self, sample_task, tmp_path):
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = build_task_prompt(sample_task, plan_path, user_context="   \n  ")
+        result = build_task_prompt(sample_task, plan_path, user_constraints="   \n  ")
 
-        assert "Additional Context:" not in result
+        assert "User Constraints & Preferences:" not in result
 
     def test_no_commit_constraint_last_with_all_sections(self, tmp_path):
         task = Task(name="Update handler", target_files=["handler.py"])
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
-        result = build_task_prompt(task, plan_path, user_context="Extra info")
+        result = build_task_prompt(task, plan_path, user_constraints="Extra info")
 
         assert "Do NOT commit" in result
         # No-commit constraint should be after user context
@@ -350,14 +350,14 @@ class TestExecuteTask:
         assert call_kwargs["subagent"] == workflow_state.subagent_names["implementer"]
         assert call_kwargs["dont_save_session"] is True
 
-    def test_propagates_user_context_to_prompt(self, mock_backend, workflow_state, sample_task):
+    def test_propagates_user_constraints_to_prompt(self, mock_backend, workflow_state, sample_task):
         mock_backend.run_with_callback.return_value = (True, "Output")
-        workflow_state.user_context = "Use the legacy API adapter"
+        workflow_state.user_constraints = "Use the legacy API adapter"
 
         _execute_task(workflow_state, sample_task, workflow_state.get_plan_path(), mock_backend)
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context:" in prompt
+        assert "User Constraints & Preferences:" in prompt
         assert "Use the legacy API adapter" in prompt
 
 
@@ -448,9 +448,9 @@ class TestExecuteTaskWithCallback:
         assert call_kwargs["subagent"] == workflow_state.subagent_names["implementer"]
         assert call_kwargs["dont_save_session"] is True
 
-    def test_propagates_user_context_to_prompt(self, mock_backend, workflow_state, sample_task):
+    def test_propagates_user_constraints_to_prompt(self, mock_backend, workflow_state, sample_task):
         mock_backend.run_with_callback.return_value = (True, "Output")
-        workflow_state.user_context = "Prefer functional style"
+        workflow_state.user_constraints = "Prefer functional style"
 
         callback = MagicMock()
         _execute_task_with_callback(
@@ -462,7 +462,7 @@ class TestExecuteTaskWithCallback:
         )
 
         prompt = mock_backend.run_with_callback.call_args[0][0]
-        assert "Additional Context:" in prompt
+        assert "User Constraints & Preferences:" in prompt
         assert "Prefer functional style" in prompt
 
 
@@ -1958,7 +1958,7 @@ class TestBuildSelfCorrectionPrompt:
         assert "src/foo.py" in result
         assert "src/bar.py" in result
 
-    def test_includes_user_context(self, sample_task, tmp_path):
+    def test_includes_user_constraints(self, sample_task, tmp_path):
         plan_path = tmp_path / "plan.md"
         plan_path.write_text("# Plan")
 
@@ -1968,10 +1968,10 @@ class TestBuildSelfCorrectionPrompt:
             "error",
             attempt=1,
             max_attempts=3,
-            user_context="Use the v2 API",
+            user_constraints="Use the v2 API",
         )
 
-        assert "Additional Context:" in result
+        assert "User Constraints & Preferences:" in result
         assert "Use the v2 API" in result
 
     def test_includes_task_name(self, sample_task, tmp_path):

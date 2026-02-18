@@ -430,7 +430,7 @@ class TestRunIngotWorkflowInit:
     ):
         mock_get_branch.return_value = "main"
         mock_is_dirty.return_value = False
-        mock_confirm.return_value = False  # No additional context
+        mock_confirm.return_value = False  # No constraints/preferences
         mock_setup_branch.return_value = True
         mock_commit.return_value = "abc123"
         mock_step1.return_value = True
@@ -497,7 +497,7 @@ class TestRunIngotWorkflowUserContext:
     @patch("ingot.workflow.runner.prompt_confirm")
     @patch("ingot.workflow.runner.is_dirty")
     @patch("ingot.workflow.runner.get_current_branch")
-    def test_stores_user_context_when_confirmed(
+    def test_stores_user_constraints_when_confirmed(
         self,
         mock_get_branch,
         mock_is_dirty,
@@ -531,7 +531,7 @@ class TestRunIngotWorkflowUserContext:
         # Verify state received the context
         call_args = mock_step1.call_args[0]
         state = call_args[0]
-        assert state.user_context == "Additional implementation details"
+        assert state.user_constraints == "Additional implementation details"
 
 
 class TestRunIngotWorkflowBranchSetup:
@@ -1397,7 +1397,7 @@ class TestRunIngotWorkflowStep5:
 
 
 class TestDetectContextConflict:
-    def test_returns_false_when_user_context_empty(self, ticket, workflow_state):
+    def test_returns_false_when_user_constraints_empty(self, ticket, workflow_state):
         mock_auggie = MagicMock()
 
         result = detect_context_conflict(ticket, "", mock_auggie, workflow_state)
@@ -1405,7 +1405,7 @@ class TestDetectContextConflict:
         assert result == (False, "")
         mock_auggie.run_with_callback.assert_not_called()
 
-    def test_returns_false_when_user_context_whitespace_only(self, ticket, workflow_state):
+    def test_returns_false_when_user_constraints_whitespace_only(self, ticket, workflow_state):
         mock_auggie = MagicMock()
 
         result = detect_context_conflict(ticket, "   \n\t  ", mock_auggie, workflow_state)
@@ -1629,11 +1629,12 @@ class TestSpecVerificationGate:
         mock_get_branch.return_value = "main"
         mock_is_dirty.return_value = False
 
-        # Route answers based on prompt text to avoid fragile ordering
+        # Route answers based on prompt text to avoid fragile ordering.
+        # Coupled to prompt wording in runner.py — update if prompts change.
         def confirm_router(prompt, **kwargs):
             if "verified ticket data" in prompt.lower():
                 return True  # Proceed without verified data
-            return False  # Decline everything else (e.g. additional context)
+            return False  # Decline everything else (e.g. constraints/preferences)
 
         mock_confirm.side_effect = confirm_router
         mock_setup_branch.return_value = True
@@ -1687,7 +1688,7 @@ class TestSpecVerificationGate:
     ):
         mock_get_branch.return_value = "main"
         mock_is_dirty.return_value = False
-        # Only confirm: "Would you like to add additional context?" → No
+        # Only confirm: "Do you have any constraints or preferences?" → No
         mock_confirm.return_value = False
         mock_setup_branch.return_value = True
         mock_commit.return_value = "abc123"

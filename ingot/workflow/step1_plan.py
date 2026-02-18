@@ -8,10 +8,11 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
-from ingot.ui.menus import PlanReviewChoice, show_plan_review_menu
+from ingot.ui.menus import ReviewChoice, show_plan_review_menu
 from ingot.ui.prompts import prompt_enter, prompt_input
 from ingot.utils.console import (
     console,
@@ -23,6 +24,7 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
+from ingot.workflow.constants import MAX_REVIEW_ITERATIONS
 from ingot.workflow.events import format_run_directory
 from ingot.workflow.state import WorkflowState
 
@@ -53,8 +55,14 @@ _THINKING_BLOCK_RE = re.compile(
 _REPLAN_PLAN_EXCERPT_LIMIT = 4000
 _REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
 
-# Safety cap on plan review iterations to prevent runaway loops.
-_MAX_REVIEW_ITERATIONS = 10
+# Source-label constants used in prompts to tag data provenance.
+_SOURCE_VERIFIED = "[SOURCE: VERIFIED PLATFORM DATA]"
+_SOURCE_UNVERIFIED = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+_UNVERIFIED_NOTE = (
+    "NOTE: The platform returned no verified content for this ticket. "
+    'Do NOT reference "the ticket" as a source of requirements.'
+)
+
 
 # =============================================================================
 # Log Directory Management
@@ -145,10 +153,7 @@ def _build_minimal_prompt(state: WorkflowState, plan_path: Path, *, plan_mode: b
         plan_mode: If True, instruct the AI to output the plan to stdout
             instead of writing a file (for read-only backends).
     """
-    if state.spec_verified:
-        source_label = "[SOURCE: VERIFIED PLATFORM DATA]"
-    else:
-        source_label = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+    source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
     prompt = f"""Create implementation plan for: {state.ticket.id}
 
@@ -157,15 +162,14 @@ Ticket: {state.ticket.title or state.ticket.branch_summary or "Not available"}
 Description: {state.ticket.description or "Not available"}"""
 
     if not state.spec_verified:
-        prompt += """
-NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
+        prompt += f"\n{_UNVERIFIED_NOTE}"
 
-    # Add user context if provided
-    if state.user_context:
+    # Add user constraints if provided
+    if state.user_constraints:
         prompt += f"""
 
-[SOURCE: USER-PROVIDED CONTEXT]
-{state.user_context}"""
+[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
+{state.user_constraints}"""
 
     if plan_mode:
         prompt += """
@@ -259,14 +263,14 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         _display_plan_summary(plan_path)
 
         # Plan review loop
-        for _iteration in range(_MAX_REVIEW_ITERATIONS):
+        for _iteration in range(MAX_REVIEW_ITERATIONS):
             choice = show_plan_review_menu()
 
-            if choice == PlanReviewChoice.APPROVE:
+            if choice == ReviewChoice.APPROVE:
                 state.current_step = 2
                 return True
 
-            elif choice == PlanReviewChoice.REGENERATE:
+            elif choice == ReviewChoice.REGENERATE:
                 feedback = prompt_input("What changes would you like?", default="")
                 if not feedback or not feedback.strip():
                     print_warning("No feedback provided. Please describe what to change.")
@@ -280,17 +284,17 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                     print_error("Failed to regenerate plan. You can retry or edit manually.")
                     continue
 
-            elif choice == PlanReviewChoice.EDIT:
+            elif choice == ReviewChoice.EDIT:
                 _edit_plan(plan_path)
                 _display_plan_summary(plan_path)
                 continue
 
-            elif choice == PlanReviewChoice.ABORT:
+            elif choice == ReviewChoice.ABORT:
                 print_warning("Workflow aborted by user")
                 return False
         else:
             print_warning(
-                f"Maximum review iterations ({_MAX_REVIEW_ITERATIONS}) reached. "
+                f"Maximum review iterations ({MAX_REVIEW_ITERATIONS}) reached. "
                 "Please re-run the workflow."
             )
             return False
@@ -364,6 +368,12 @@ def _display_plan_summary(plan_path: Path) -> None:
 
 def _edit_plan(plan_path: Path) -> None:
     """Allow user to edit the plan file in their editor."""
+    if not sys.stdin.isatty():
+        print_warning("Cannot open editor: not running in a terminal")
+        print_info(f"Edit the file manually: {plan_path}")
+        prompt_enter("Press Enter when done editing...")
+        return
+
     editor = os.environ.get("EDITOR", "vim")
 
     print_info(f"Opening plan in {editor}...")
@@ -407,10 +417,7 @@ def _build_replan_prompt(
     if len(review_feedback) > _REPLAN_FEEDBACK_EXCERPT_LIMIT:
         feedback_excerpt += "\n\n... [truncated] ..."
 
-    if state.spec_verified:
-        ticket_source_label = "[SOURCE: VERIFIED PLATFORM DATA]"
-    else:
-        ticket_source_label = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+    ticket_source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
     prompt = f"""Revise the implementation plan based on reviewer feedback.
 
@@ -418,7 +425,12 @@ def _build_replan_prompt(
 {ticket_source_label}
 ID: {state.ticket.id}
 Title: {state.ticket.title or state.ticket.branch_summary or "Not available"}
-Description: {state.ticket.description or "Not available"}
+Description: {state.ticket.description or "Not available"}"""
+
+    if not state.spec_verified:
+        prompt += f"\n{_UNVERIFIED_NOTE}"
+
+    prompt += f"""
 
 ## Current Plan (needs revision)
 {plan_excerpt}
@@ -435,11 +447,11 @@ The reviewer determined the current plan is flawed and needs revision:
 
 Codebase context will be retrieved automatically."""
 
-    if state.user_context:
+    if state.user_constraints:
         prompt += f"""
 
-[SOURCE: USER-PROVIDED CONTEXT]
-{state.user_context}"""
+[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
+{state.user_constraints}"""
 
     return prompt
 

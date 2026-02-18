@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
-from ingot.ui.menus import TaskReviewChoice, show_task_review_menu
+from ingot.ui.menus import ReviewChoice, show_task_review_menu
 from ingot.ui.prompts import prompt_confirm, prompt_enter
 from ingot.utils.console import (
     console,
@@ -20,6 +20,7 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
+from ingot.workflow.constants import MAX_REVIEW_ITERATIONS
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import parse_task_list
 
@@ -50,7 +51,7 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
     needs_generation = True
 
     # Task list approval loop
-    while True:
+    for _iteration in range(MAX_REVIEW_ITERATIONS):
         if needs_generation:
             # Generate task list
             print_step("Generating task list from plan...")
@@ -70,26 +71,32 @@ def step_2_create_tasklist(state: WorkflowState, backend: AIBackend) -> bool:
         # Get user decision
         choice = show_task_review_menu()
 
-        if choice == TaskReviewChoice.APPROVE:
+        if choice == ReviewChoice.APPROVE:
             state.tasklist_file = tasklist_path
             state.current_step = 3
             print_success("Task list approved!")
             return True
 
-        elif choice == TaskReviewChoice.REGENERATE:
+        elif choice == ReviewChoice.REGENERATE:
             print_info("Regenerating task list...")
             needs_generation = True
             continue
 
-        elif choice == TaskReviewChoice.EDIT:
+        elif choice == ReviewChoice.EDIT:
             _edit_tasklist(tasklist_path)
             # Re-display after edit, but do NOT regenerate
             # needs_generation stays False
             continue
 
-        elif choice == TaskReviewChoice.ABORT:
+        elif choice == ReviewChoice.ABORT:
             print_warning("Workflow aborted by user")
             return False
+    else:
+        print_warning(
+            f"Maximum review iterations ({MAX_REVIEW_ITERATIONS}) reached. "
+            "Please re-run the workflow."
+        )
+        return False
 
 
 # Strict regex for add_tasks tool output format:
@@ -272,8 +279,8 @@ Read the plan file before generating the task list.
 
 Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
 
-    if state.user_context and state.user_context.strip():
-        prompt += f"\n\nAdditional Context (use for scope and prioritization only — do not generate implementation details or code):\n{state.user_context.strip()}"
+    if state.user_constraints and state.user_constraints.strip():
+        prompt += f"\n\nUser Constraints & Preferences (use for scope and prioritization only — do not generate implementation details or code):\n{state.user_constraints.strip()}"
 
     # Use run_with_callback to capture AI output (Phase 2 migration)
     success, output = backend.run_with_callback(

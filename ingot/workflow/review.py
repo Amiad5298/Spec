@@ -190,12 +190,12 @@ Use `git diff -- <file_path>` to inspect specific files that need detailed revie
 Focus on files most critical to the implementation plan.
 """
 
-    # Add user-provided context if available
-    user_context = state.user_context.strip() if state.user_context else ""
-    if user_context:
+    # Add user-provided constraints if available
+    user_constraints = state.user_constraints.strip() if state.user_constraints else ""
+    if user_constraints:
         prompt += f"""
-## Additional Context
-{user_context}
+## User Constraints & Preferences
+{user_constraints}
 """
 
     prompt += """

@@ -25,6 +25,7 @@ class TaskListWidget(Widget):
     DEFAULT_CSS = """
     TaskListWidget {
         height: auto;
+        padding: 0 1;
     }
     """
 
@@ -76,16 +77,18 @@ class TaskListWidget(Widget):
         if self._spinner_timer is not None:
             self._spinner_timer.stop()
             self._spinner_timer = None
+        self._spinners.clear()
 
     # -- spinner management ----------------------------------------------------
 
-    def _sync_spinner(self, index: int, record: TaskRunRecord) -> None:
-        """Create or remove a spinner for *record* at *index*."""
+    def _sync_spinner(self, record: TaskRunRecord) -> None:
+        """Create or remove a spinner for *record*, keyed by ``task_index``."""
+        key = record.task_index
         if record.status == TaskRunStatus.RUNNING:
-            if index not in self._spinners:
-                self._spinners[index] = Spinner("dots", style=record.get_status_color())
+            if key not in self._spinners:
+                self._spinners[key] = Spinner("dots", style=record.get_status_color())
         else:
-            self._spinners.pop(index, None)
+            self._spinners.pop(key, None)
 
     def _ensure_spinner_timer_running(self) -> None:
         """Resume the spinner timer when any task is RUNNING, pause otherwise."""
@@ -106,7 +109,7 @@ class TaskListWidget(Widget):
         """Update a single record in-place, sync its spinner, and repaint."""
         if 0 <= index < len(self.records):
             self.records[index] = record
-            self._sync_spinner(index, record)
+            self._sync_spinner(record)
             self._ensure_spinner_timer_running()
             self.mutate_reactive(TaskListWidget.records)
 
@@ -114,8 +117,8 @@ class TaskListWidget(Widget):
         """Replace all records and rebuild the spinner cache."""
         self.records = list(records)
         self._spinners.clear()
-        for i, rec in enumerate(self.records):
-            self._sync_spinner(i, rec)
+        for rec in self.records:
+            self._sync_spinner(rec)
         self._ensure_spinner_timer_running()
 
     # -- keyboard actions ------------------------------------------------------

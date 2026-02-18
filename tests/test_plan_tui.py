@@ -337,7 +337,7 @@ class TestStep1TUIIntegration:
 
         return state
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_uses_tui_when_enabled(
         self,
         mock_ui_class,
@@ -368,7 +368,7 @@ class TestStep1TUIIntegration:
         mock_ui_class.assert_called_once()
         mock_backend.run_with_callback.assert_called_once()
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     def test_tui_quit_returns_false(
         self,
         mock_ui_class,

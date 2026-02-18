@@ -104,13 +104,13 @@ def _generate_plan_with_tui(
     Returns:
         Tuple of (success, captured_output).
     """
-    from ingot.ui.tui import TaskRunnerUI
+    from ingot.ui.textual_runner import TextualTaskRunner
 
     # Create log directory and log path (use safe_filename_stem for paths)
     log_dir = _create_plan_log_dir(state.ticket.safe_filename_stem)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    ui = TaskRunnerUI(
+    ui = TextualTaskRunner(
         status_message="Generating implementation plan...",
         ticket_id=state.ticket.id,  # Keep original ID for display
         single_operation_mode=True,

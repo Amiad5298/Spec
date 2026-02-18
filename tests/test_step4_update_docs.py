@@ -174,7 +174,7 @@ class TestStep4NoChanges:
 
 
 class TestStep4WithChanges:
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -224,7 +224,7 @@ class TestStep4WithChanges:
 
 
 class TestStep4AgentFailure:
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -267,7 +267,7 @@ class TestStep4AgentFailure:
         assert not result.docs_updated
         mock_print_warning.assert_called()
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -311,7 +311,7 @@ class TestStep4AgentFailure:
 
 
 class TestStep4NonDocEnforcement:
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -363,7 +363,7 @@ class TestStep4NonDocEnforcement:
         # Violations should trigger error messages
         mock_print_error.assert_called()
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -483,7 +483,7 @@ class TestBuildDocUpdatePrompt:
 
 
 class TestStep4UntrackedOnly:
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -549,7 +549,7 @@ class TestStep4UntrackedOnly:
 
 
 class TestStep4MissingBaseCommit:
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -599,7 +599,7 @@ class TestStep4MissingBaseCommit:
 
 
 class TestStep4ViolationTracking:
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -643,7 +643,7 @@ class TestStep4ViolationTracking:
         assert result.had_violations is True
         assert "src/code.py" in result.non_doc_reverted
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")
@@ -687,7 +687,7 @@ class TestStep4ViolationTracking:
         assert "src/code.py" in result.non_doc_reverted
         assert "src/other.py" in result.non_doc_revert_failed
 
-    @patch("ingot.ui.tui.TaskRunnerUI")
+    @patch("ingot.ui.textual_runner.TextualTaskRunner")
     @patch("ingot.workflow.step4_update_docs.NonDocSnapshot")
     @patch("ingot.workflow.step4_update_docs.print_header")
     @patch("ingot.workflow.step4_update_docs.print_info")

@@ -288,6 +288,29 @@ class TestBuildMinimalPrompt:
         assert "[SOURCE: VERIFIED PLATFORM DATA]" not in result
         assert "Do NOT reference" in result
 
+    def test_plan_mode_includes_source_labels(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(workflow_state, plan_path, plan_mode=True)
+
+        assert "[SOURCE: VERIFIED PLATFORM DATA]" in result
+        assert "Output the complete implementation plan" in result
+        assert "Do not attempt to create or write any files" in result
+        # Should NOT mention saving to a file
+        assert f"Save the plan to: {plan_path}" not in result
+
+    def test_plan_mode_unverified_includes_source_labels(self, generic_ticket, tmp_path):
+        generic_ticket.title = None
+        generic_ticket.description = None
+        state = WorkflowState(ticket=generic_ticket)
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(state, plan_path, plan_mode=True)
+
+        assert "[SOURCE: NO VERIFIED PLATFORM DATA]" in result
+        assert "Do NOT reference" in result
+        assert "Output the complete implementation plan" in result
+
     def test_prompt_includes_plan_file_path(self, workflow_state, tmp_path):
         plan_path = tmp_path / "specs" / "TEST-123-plan.md"
         result = _build_minimal_prompt(workflow_state, plan_path)

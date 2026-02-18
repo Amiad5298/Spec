@@ -1629,7 +1629,8 @@ class TestSpecVerificationGate:
         mock_get_branch.return_value = "main"
         mock_is_dirty.return_value = False
 
-        # Route answers based on prompt text to avoid fragile ordering
+        # Route answers based on prompt text to avoid fragile ordering.
+        # Coupled to prompt wording in runner.py — update if prompts change.
         def confirm_router(prompt, **kwargs):
             if "verified ticket data" in prompt.lower():
                 return True  # Proceed without verified data

@@ -55,6 +55,14 @@ _THINKING_BLOCK_RE = re.compile(
 _REPLAN_PLAN_EXCERPT_LIMIT = 4000
 _REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
 
+# Source-label constants used in prompts to tag data provenance.
+_SOURCE_VERIFIED = "[SOURCE: VERIFIED PLATFORM DATA]"
+_SOURCE_UNVERIFIED = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+_UNVERIFIED_NOTE = (
+    "NOTE: The platform returned no verified content for this ticket. "
+    'Do NOT reference "the ticket" as a source of requirements.'
+)
+
 
 # =============================================================================
 # Log Directory Management
@@ -145,10 +153,7 @@ def _build_minimal_prompt(state: WorkflowState, plan_path: Path, *, plan_mode: b
         plan_mode: If True, instruct the AI to output the plan to stdout
             instead of writing a file (for read-only backends).
     """
-    if state.spec_verified:
-        source_label = "[SOURCE: VERIFIED PLATFORM DATA]"
-    else:
-        source_label = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+    source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
     prompt = f"""Create implementation plan for: {state.ticket.id}
 
@@ -157,8 +162,7 @@ Ticket: {state.ticket.title or state.ticket.branch_summary or "Not available"}
 Description: {state.ticket.description or "Not available"}"""
 
     if not state.spec_verified:
-        prompt += """
-NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
+        prompt += f"\n{_UNVERIFIED_NOTE}"
 
     # Add user constraints if provided
     if state.user_constraints:
@@ -413,10 +417,7 @@ def _build_replan_prompt(
     if len(review_feedback) > _REPLAN_FEEDBACK_EXCERPT_LIMIT:
         feedback_excerpt += "\n\n... [truncated] ..."
 
-    if state.spec_verified:
-        ticket_source_label = "[SOURCE: VERIFIED PLATFORM DATA]"
-    else:
-        ticket_source_label = "[SOURCE: NO VERIFIED PLATFORM DATA]"
+    ticket_source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
     prompt = f"""Revise the implementation plan based on reviewer feedback.
 
@@ -442,8 +443,7 @@ The reviewer determined the current plan is flawed and needs revision:
 Codebase context will be retrieved automatically."""
 
     if not state.spec_verified:
-        prompt += """
-NOTE: The platform returned no verified content for this ticket. Do NOT reference "the ticket" as a source of requirements."""
+        prompt += f"\n{_UNVERIFIED_NOTE}"
 
     if state.user_constraints:
         prompt += f"""

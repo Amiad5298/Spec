@@ -1,0 +1,28 @@
+/* INGOT – base Textual theme */
+
+Screen {
+    background: $surface;
+}
+
+/* ── colour variables (mirrors existing Rich palette) ── */
+$primary: cyan;
+$success: green;
+$error: red;
+$warning: yellow;
+$info: blue;
+
+/* ── panels ── */
+.panel {
+    border: round $primary;
+    padding: 1 2;
+}
+
+/* ── base text ── */
+.title {
+    text-style: bold;
+    color: $primary;
+}
+
+.muted {
+    color: $text-muted;
+}

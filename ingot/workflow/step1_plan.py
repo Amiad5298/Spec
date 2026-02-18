@@ -320,10 +320,10 @@ def _save_plan_from_output(plan_path: Path, state: WorkflowState, *, output: str
     template = f"""# Implementation Plan: {state.ticket.id}
 
 ## Summary
-{state.ticket.title or "(No title)"}
+{state.ticket.title or "Implementation task"}
 
 ## Description
-{state.ticket.description or "(No description)"}
+{state.ticket.description or "No description was returned by the ticketing platform."}
 
 ## Implementation Steps
 1. Review requirements
@@ -425,7 +425,12 @@ def _build_replan_prompt(
 {ticket_source_label}
 ID: {state.ticket.id}
 Title: {state.ticket.title or state.ticket.branch_summary or "Not available"}
-Description: {state.ticket.description or "Not available"}
+Description: {state.ticket.description or "Not available"}"""
+
+    if not state.spec_verified:
+        prompt += f"\n{_UNVERIFIED_NOTE}"
+
+    prompt += f"""
 
 ## Current Plan (needs revision)
 {plan_excerpt}
@@ -441,9 +446,6 @@ The reviewer determined the current plan is flawed and needs revision:
 4. Save the revised plan to: {plan_path}
 
 Codebase context will be retrieved automatically."""
-
-    if not state.spec_verified:
-        prompt += f"\n{_UNVERIFIED_NOTE}"
 
     if state.user_constraints:
         prompt += f"""

@@ -516,7 +516,7 @@ When running in parallel with other tasks:
 
 ## Dynamic Context
 
-The task prompt may include additional context:
+The task prompt may include the following sections:
 
 ### Target Files
 If the prompt lists "Target files for this task:", focus your modifications on those files.
@@ -598,7 +598,7 @@ Keep reviews quick and focused - this is a sanity check, not a full code review.
 
 ## Dynamic Context
 
-The review prompt may include additional context:
+The review prompt may include the following sections:
 
 ### User Constraints & Preferences
 If the prompt includes "User Constraints & Preferences:", this is information the user provided

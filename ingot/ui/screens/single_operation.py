@@ -14,6 +14,7 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Footer
 
+from ingot.ui.messages import LivenessUpdate, TaskOutput
 from ingot.ui.widgets.single_operation import SingleOperationWidget
 
 
@@ -117,6 +118,14 @@ class SingleOperationScreen(Screen[None]):
     def write_log_line(self, line: str) -> None:
         """Delegate log line writing to the widget."""
         self._require_widget().write_log_line(line)
+
+    # -- message handlers -----------------------------------------------------
+
+    def on_liveness_update(self, msg: LivenessUpdate) -> None:
+        self._require_widget().update_liveness(msg.line)
+
+    def on_task_output(self, msg: TaskOutput) -> None:
+        self._require_widget().write_log_line(msg.line)
 
     # -- actions --------------------------------------------------------------
 

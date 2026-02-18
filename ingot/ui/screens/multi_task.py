@@ -16,12 +16,19 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import Footer
 
+from ingot.ui.messages import RunFinished, TaskFinished, TaskOutput, TaskStarted
 from ingot.ui.widgets.log_panel import LogPanelWidget
 from ingot.ui.widgets.task_list import TaskListWidget
-from ingot.workflow.events import TaskRunRecord
+from ingot.workflow.events import TaskRunRecord, TaskRunStatus
 
 _DEFAULT_TAIL_LINES = 15
 _VERBOSE_TAIL_LINES = 50
+
+_STATUS_STR_TO_ENUM: dict[str, TaskRunStatus] = {
+    "success": TaskRunStatus.SUCCESS,
+    "failed": TaskRunStatus.FAILED,
+    "skipped": TaskRunStatus.SKIPPED,
+}
 
 
 class MultiTaskScreen(Screen[None]):
@@ -63,6 +70,9 @@ class MultiTaskScreen(Screen[None]):
     ) -> None:
         super().__init__(name=name, id=id, classes=classes)
         self._ticket_id = ticket_id
+        self._running_task_indices: set[int] = set()
+        self._completed: bool = False
+        self._run_summary: RunFinished | None = None
 
     # -- composition ----------------------------------------------------------
 
@@ -99,6 +109,15 @@ class MultiTaskScreen(Screen[None]):
     def records(self) -> list[TaskRunRecord]:
         return self._task_list.records
 
+    @property
+    def completed(self) -> bool:
+        return self._completed
+
+    @property
+    def run_summary(self) -> RunFinished | None:
+        """Summary counts from the last RunFinished event, if received."""
+        return self._run_summary
+
     # -- delegate methods -----------------------------------------------------
 
     def set_records(self, records: list[TaskRunRecord]) -> None:
@@ -114,6 +133,62 @@ class MultiTaskScreen(Screen[None]):
 
     def on_task_list_widget_selected(self, event: TaskListWidget.Selected) -> None:
         self._update_log_panel(event.index)
+
+    def on_task_started(self, msg: TaskStarted) -> None:
+        record = self._get_record_at(msg.task_index)
+        if record is None:
+            return
+        record.status = TaskRunStatus.RUNNING
+        record.start_time = msg.timestamp
+        self.update_record(msg.task_index, record)
+        if self.parallel_mode:
+            self._running_task_indices.add(msg.task_index)
+            if self._task_list.selected_index < 0:
+                self._task_list.selected_index = msg.task_index
+                self._update_log_panel(msg.task_index)
+
+    def on_task_output(self, msg: TaskOutput) -> None:
+        record = self._get_record_at(msg.task_index)
+        if record is None:
+            return
+        if record.log_buffer is not None:
+            record.log_buffer.write(msg.line)
+        if self._task_list.selected_index == msg.task_index:
+            self._update_log_panel(msg.task_index)
+
+    def on_task_finished(self, msg: TaskFinished) -> None:
+        record = self._get_record_at(msg.task_index)
+        if record is None:
+            return
+        if record.start_time is not None:
+            record.end_time = record.start_time + msg.duration
+        else:
+            record.end_time = msg.timestamp
+        record.status = _STATUS_STR_TO_ENUM.get(msg.status, TaskRunStatus.FAILED)
+        if msg.error is not None:
+            record.error = msg.error
+        # Close log buffer to release file descriptors (matches old tui.py)
+        if record.log_buffer is not None:
+            try:
+                record.log_buffer.close()
+            except Exception:  # noqa: BLE001
+                pass  # Best-effort cleanup
+            record.log_buffer = None
+        self.update_record(msg.task_index, record)
+        if self.parallel_mode:
+            self._running_task_indices.discard(msg.task_index)
+            if (
+                self._log_panel.follow_mode
+                and self._task_list.selected_index == msg.task_index
+                and self._running_task_indices
+            ):
+                next_idx = self._find_next_running_task(msg.task_index)
+                self._task_list.selected_index = next_idx
+                self._update_log_panel(next_idx)
+
+    def on_run_finished(self, msg: RunFinished) -> None:
+        self._completed = True
+        self._run_summary = msg
 
     # -- actions --------------------------------------------------------------
 
@@ -166,6 +241,21 @@ class MultiTaskScreen(Screen[None]):
         if 0 <= index < len(self._task_list.records):
             return self._task_list.records[index]
         return None
+
+    def _find_next_running_task(self, finished_index: int) -> int:
+        """Find the next running task using 'Next Neighbor' logic.
+
+        Prefers the next running task after *finished_index*, wrapping
+        around if necessary.
+
+        Raises:
+            AssertionError: If ``_running_task_indices`` is empty.
+        """
+        assert self._running_task_indices, "No running tasks to select from"
+        later = [i for i in self._running_task_indices if i > finished_index]
+        if later:
+            return min(later)
+        return min(self._running_task_indices)
 
 
 __all__ = ["MultiTaskScreen"]

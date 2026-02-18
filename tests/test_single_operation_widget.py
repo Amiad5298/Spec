@@ -221,12 +221,12 @@ class TestLiveness:
 
     @pytest.mark.timeout(10)
     async def test_stores_latest_line(self) -> None:
-        """update_liveness stores the line in _latest_liveness_line."""
+        """update_liveness stores the line in latest_liveness_line."""
         app = SingleOpTestApp()
         async with app.run_test():
             widget = app.query_one(SingleOperationWidget)
             widget.update_liveness("latest output")
-            assert widget._latest_liveness_line == "latest output"
+            assert widget.latest_liveness_line == "latest output"
 
 
 # ===========================================================================

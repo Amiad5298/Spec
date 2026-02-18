@@ -100,6 +100,11 @@ class SingleOperationWidget(Widget):
 
     # -- public API ------------------------------------------------------------
 
+    @property
+    def latest_liveness_line(self) -> str:
+        """The most recent liveness line passed to :meth:`update_liveness`."""
+        return self._latest_liveness_line
+
     def update_liveness(self, line: str) -> None:
         """Update the liveness indicator with the latest output line."""
         self._latest_liveness_line = line

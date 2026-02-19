@@ -1,8 +1,7 @@
 """SingleOperationWidget — Textual widget for spinner + liveness display.
 
-Ports the single-operation rendering logic from ``ingot/ui/tui.py`` into a
-proper Textual widget with compose pattern, reactive state, and verbose mode
-toggling.
+Textual widget with compose pattern, reactive state, and verbose mode
+toggling for single long-running operations (Steps 1/4).
 """
 
 from __future__ import annotations

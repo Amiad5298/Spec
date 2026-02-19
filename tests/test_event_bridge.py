@@ -10,11 +10,8 @@ Covers:
 
 from __future__ import annotations
 
-import tempfile
 import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from textual.app import App
@@ -35,52 +32,9 @@ from ingot.ui.widgets.single_operation import SingleOperationWidget
 from ingot.workflow.events import (
     TaskEvent,
     TaskEventType,
-    TaskRunRecord,
     TaskRunStatus,
 )
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_records(*statuses: TaskRunStatus) -> list[TaskRunRecord]:
-    """Create TaskRunRecord list with the given statuses."""
-    now = time.time()
-    records: list[TaskRunRecord] = []
-    for i, status in enumerate(statuses):
-        rec = TaskRunRecord(task_index=i, task_name=f"Task {i}")
-        rec.status = status
-        if status in (TaskRunStatus.RUNNING, TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-            rec.start_time = now - 5
-        if status in (TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-            rec.end_time = now
-        records.append(rec)
-    return records
-
-
-def _make_record_with_log_buffer(
-    index: int,
-    name: str,
-    status: TaskRunStatus = TaskRunStatus.PENDING,
-    tail_lines: list[str] | None = None,
-    log_path: str | None = None,
-) -> TaskRunRecord:
-    """Create a TaskRunRecord with a mock log_buffer."""
-    now = time.time()
-    rec = TaskRunRecord(task_index=index, task_name=name)
-    rec.status = status
-    if status in (TaskRunStatus.RUNNING, TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-        rec.start_time = now - 5
-    if status in (TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-        rec.end_time = now
-
-    mock_buffer = MagicMock()
-    effective_path = log_path or str(Path(tempfile.gettempdir()) / "test.log")
-    mock_buffer.log_path = Path(effective_path)
-    mock_buffer.get_tail = MagicMock(return_value=tail_lines or [])
-    rec.log_buffer = mock_buffer
-    return rec
+from tests.helpers.ui import make_record_with_log_buffer, make_records
 
 
 class MultiTaskTestApp(App[None]):
@@ -348,7 +302,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING)
+            records = make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING)
             screen.set_records(records)
 
             ts = time.time()
@@ -365,7 +319,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            rec = _make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
+            rec = make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
             screen.set_records([rec])
 
             screen.post_message(TaskOutput(task_index=0, task_name="Build", line="compiling..."))
@@ -380,7 +334,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.RUNNING)
+            records = make_records(TaskRunStatus.RUNNING)
             screen.set_records(records)
 
             screen.post_message(TaskOutput(task_index=0, task_name="Task 0", line="output"))
@@ -394,7 +348,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.RUNNING)
+            records = make_records(TaskRunStatus.RUNNING)
             screen.set_records(records)
 
             screen.post_message(
@@ -411,7 +365,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.RUNNING)
+            records = make_records(TaskRunStatus.RUNNING)
             screen.set_records(records)
 
             screen.post_message(
@@ -435,7 +389,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.RUNNING)
+            records = make_records(TaskRunStatus.RUNNING)
             screen.set_records(records)
 
             screen.post_message(
@@ -452,7 +406,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            rec = _make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
+            rec = make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
             mock_buffer = rec.log_buffer
             screen.set_records([rec])
 
@@ -471,7 +425,7 @@ class TestMultiTaskScreenHandlers:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.RUNNING)
+            records = make_records(TaskRunStatus.RUNNING)
             records[0].start_time = None  # force no start_time
             screen.set_records(records)
 
@@ -516,7 +470,7 @@ class TestMultiTaskScreenHandlers:
             await pilot.pause()
             screen = _get_multi_screen(app)
             screen.parallel_mode = True
-            records = _make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING)
+            records = make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING)
             screen.set_records(records)
 
             screen.post_message(
@@ -535,7 +489,7 @@ class TestMultiTaskScreenHandlers:
             await pilot.pause()
             screen = _get_multi_screen(app)
             screen.parallel_mode = True
-            records = _make_records(
+            records = make_records(
                 TaskRunStatus.PENDING,
                 TaskRunStatus.PENDING,
                 TaskRunStatus.PENDING,
@@ -615,7 +569,7 @@ class TestPostTaskEventBridge:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.PENDING)
+            records = make_records(TaskRunStatus.PENDING)
             screen.set_records(records)
 
             event = TaskEvent(
@@ -658,7 +612,7 @@ class TestPostTaskEventBridge:
         async with app.run_test() as pilot:
             await pilot.pause()
             screen = _get_multi_screen(app)
-            records = _make_records(TaskRunStatus.PENDING)
+            records = make_records(TaskRunStatus.PENDING)
             screen.set_records(records)
 
             event = TaskEvent(

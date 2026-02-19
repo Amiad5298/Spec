@@ -12,25 +12,7 @@ from textual.app import App, ComposeResult
 
 from ingot.ui.widgets.task_list import TaskListWidget
 from ingot.workflow.events import TaskRunRecord, TaskRunStatus
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_records(*statuses: TaskRunStatus) -> list[TaskRunRecord]:
-    """Create TaskRunRecord list with appropriate timestamps per status."""
-    now = time.time()
-    records: list[TaskRunRecord] = []
-    for i, status in enumerate(statuses):
-        rec = TaskRunRecord(task_index=i, task_name=f"Task {i}")
-        rec.status = status
-        if status in (TaskRunStatus.RUNNING, TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-            rec.start_time = now - 5  # 5 seconds ago
-        if status in (TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-            rec.end_time = now
-        records.append(rec)
-    return records
+from tests.helpers.ui import make_records
 
 
 def _render_to_str(widget: TaskListWidget) -> str:
@@ -74,7 +56,7 @@ class TestRendering:
 
     def test_all_status_types_render(self) -> None:
         """All 5 status types render without error."""
-        records = _make_records(
+        records = make_records(
             TaskRunStatus.PENDING,
             TaskRunStatus.RUNNING,
             TaskRunStatus.SUCCESS,
@@ -88,7 +70,7 @@ class TestRendering:
 
     def test_correct_icons_appear(self) -> None:
         """Correct status icons appear for non-running statuses."""
-        records = _make_records(
+        records = make_records(
             TaskRunStatus.PENDING,
             TaskRunStatus.SUCCESS,
             TaskRunStatus.FAILED,
@@ -104,7 +86,7 @@ class TestRendering:
 
     def test_duration_shown_for_running_success_failed(self) -> None:
         """Duration is shown for RUNNING, SUCCESS, and FAILED statuses."""
-        records = _make_records(
+        records = make_records(
             TaskRunStatus.RUNNING,
             TaskRunStatus.SUCCESS,
             TaskRunStatus.FAILED,
@@ -118,7 +100,7 @@ class TestRendering:
 
     def test_duration_absent_for_pending_skipped(self) -> None:
         """Duration is absent for PENDING and SKIPPED tasks."""
-        records = _make_records(TaskRunStatus.PENDING, TaskRunStatus.SKIPPED)
+        records = make_records(TaskRunStatus.PENDING, TaskRunStatus.SKIPPED)
         widget = TaskListWidget()
         widget.set_records(records)
         output = _render_to_str(widget)
@@ -135,13 +117,13 @@ class TestRendering:
     def test_header_contains_ticket_id(self) -> None:
         """Header contains the ticket_id."""
         widget = TaskListWidget(ticket_id="AMI-99")
-        widget.set_records(_make_records(TaskRunStatus.SUCCESS))
+        widget.set_records(make_records(TaskRunStatus.SUCCESS))
         output = _render_to_str(widget)
         assert "AMI-99" in output
 
     def test_header_completion_count(self) -> None:
         """Header shows correct completed/total count."""
-        records = _make_records(
+        records = make_records(
             TaskRunStatus.SUCCESS,
             TaskRunStatus.SUCCESS,
             TaskRunStatus.PENDING,
@@ -162,7 +144,7 @@ class TestParallelMode:
 
     def test_parallel_indicator_shown(self) -> None:
         """Lightning bolt shown next to RUNNING tasks in parallel mode."""
-        records = _make_records(TaskRunStatus.RUNNING)
+        records = make_records(TaskRunStatus.RUNNING)
         widget = TaskListWidget()
         widget.set_records(records)
         widget.parallel_mode = True
@@ -171,7 +153,7 @@ class TestParallelMode:
 
     def test_sequential_running_indicator(self) -> None:
         """'← Running' shown when parallel_mode is False."""
-        records = _make_records(TaskRunStatus.RUNNING)
+        records = make_records(TaskRunStatus.RUNNING)
         widget = TaskListWidget()
         widget.set_records(records)
         widget.parallel_mode = False
@@ -180,7 +162,7 @@ class TestParallelMode:
 
     def test_parallel_header_count(self) -> None:
         """Header shows parallel count when parallel tasks are running."""
-        records = _make_records(TaskRunStatus.RUNNING, TaskRunStatus.RUNNING)
+        records = make_records(TaskRunStatus.RUNNING, TaskRunStatus.RUNNING)
         widget = TaskListWidget(ticket_id="X-1")
         widget.set_records(records)
         widget.parallel_mode = True
@@ -200,7 +182,7 @@ class TestNavigation:
     async def test_down_from_no_selection(self) -> None:
         """Pressing 'j' from no selection moves to index 0."""
         app = TaskListTestApp(
-            records=_make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING),
+            records=make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING),
         )
         async with app.run_test() as pilot:
             widget = app.query_one(TaskListWidget)
@@ -212,7 +194,7 @@ class TestNavigation:
     async def test_down_increments(self) -> None:
         """Pressing 'j' increments selected_index."""
         app = TaskListTestApp(
-            records=_make_records(
+            records=make_records(
                 TaskRunStatus.PENDING, TaskRunStatus.PENDING, TaskRunStatus.PENDING
             ),
         )
@@ -227,7 +209,7 @@ class TestNavigation:
     async def test_down_clamps_at_bottom(self) -> None:
         """Pressing 'j' at the last index stays there."""
         app = TaskListTestApp(
-            records=_make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING),
+            records=make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING),
         )
         async with app.run_test() as pilot:
             widget = app.query_one(TaskListWidget)
@@ -241,7 +223,7 @@ class TestNavigation:
     async def test_up_from_no_selection(self) -> None:
         """Pressing 'k' from no selection moves to last index."""
         app = TaskListTestApp(
-            records=_make_records(
+            records=make_records(
                 TaskRunStatus.PENDING, TaskRunStatus.PENDING, TaskRunStatus.PENDING
             ),
         )
@@ -255,7 +237,7 @@ class TestNavigation:
     async def test_up_decrements(self) -> None:
         """Pressing 'k' decrements selected_index."""
         app = TaskListTestApp(
-            records=_make_records(
+            records=make_records(
                 TaskRunStatus.PENDING, TaskRunStatus.PENDING, TaskRunStatus.PENDING
             ),
         )
@@ -271,7 +253,7 @@ class TestNavigation:
     async def test_up_clamps_at_top(self) -> None:
         """Pressing 'k' at index 0 stays there."""
         app = TaskListTestApp(
-            records=_make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING),
+            records=make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING),
         )
         async with app.run_test() as pilot:
             widget = app.query_one(TaskListWidget)
@@ -295,7 +277,7 @@ class TestNavigation:
     async def test_arrow_keys(self) -> None:
         """Arrow keys behave the same as j/k."""
         app = TaskListTestApp(
-            records=_make_records(
+            records=make_records(
                 TaskRunStatus.PENDING, TaskRunStatus.PENDING, TaskRunStatus.PENDING
             ),
         )
@@ -328,7 +310,7 @@ class TestMessages:
 
             def on_mount(self) -> None:
                 widget = self.query_one(TaskListWidget)
-                widget.set_records(_make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING))
+                widget.set_records(make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING))
                 widget.focus()
 
             def on_task_list_widget_selected(self, event: TaskListWidget.Selected) -> None:
@@ -355,14 +337,14 @@ class TestSpinners:
     def test_spinner_created_for_running(self) -> None:
         """Spinner is created in _spinners for a RUNNING task."""
         widget = TaskListWidget()
-        widget.set_records(_make_records(TaskRunStatus.RUNNING))
+        widget.set_records(make_records(TaskRunStatus.RUNNING))
         assert 0 in widget._spinners
         assert isinstance(widget._spinners[0], Spinner)
 
     def test_spinner_removed_on_success(self) -> None:
         """Spinner is removed when task transitions to SUCCESS."""
         widget = TaskListWidget()
-        records = _make_records(TaskRunStatus.RUNNING)
+        records = make_records(TaskRunStatus.RUNNING)
         widget.set_records(records)
         assert 0 in widget._spinners
 
@@ -376,7 +358,7 @@ class TestSpinners:
     async def test_timer_resumed_when_running(self) -> None:
         """Timer is resumed when RUNNING tasks exist."""
         app = TaskListTestApp(
-            records=_make_records(TaskRunStatus.RUNNING),
+            records=make_records(TaskRunStatus.RUNNING),
         )
         async with app.run_test():
             widget = app.query_one(TaskListWidget)
@@ -389,7 +371,7 @@ class TestSpinners:
     async def test_timer_paused_when_no_running(self) -> None:
         """Timer is paused when no RUNNING tasks exist."""
         app = TaskListTestApp(
-            records=_make_records(TaskRunStatus.PENDING, TaskRunStatus.SUCCESS),
+            records=make_records(TaskRunStatus.PENDING, TaskRunStatus.SUCCESS),
         )
         async with app.run_test():
             widget = app.query_one(TaskListWidget)
@@ -408,11 +390,11 @@ class TestUpdateHelpers:
     def test_set_records_replaces_all(self) -> None:
         """set_records() replaces all records."""
         widget = TaskListWidget()
-        original = _make_records(TaskRunStatus.PENDING)
+        original = make_records(TaskRunStatus.PENDING)
         widget.set_records(original)
         assert len(widget.records) == 1
 
-        replacement = _make_records(TaskRunStatus.SUCCESS, TaskRunStatus.FAILED)
+        replacement = make_records(TaskRunStatus.SUCCESS, TaskRunStatus.FAILED)
         widget.set_records(replacement)
         assert len(widget.records) == 2
         assert widget.records[0].status == TaskRunStatus.SUCCESS
@@ -421,7 +403,7 @@ class TestUpdateHelpers:
     def test_update_record_mutates_single(self) -> None:
         """update_record() mutates a single record in place."""
         widget = TaskListWidget()
-        records = _make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING)
+        records = make_records(TaskRunStatus.PENDING, TaskRunStatus.PENDING)
         widget.set_records(records)
 
         updated = TaskRunRecord(
@@ -437,6 +419,6 @@ class TestUpdateHelpers:
     def test_update_record_out_of_bounds(self) -> None:
         """update_record() with invalid index is a no-op."""
         widget = TaskListWidget()
-        widget.set_records(_make_records(TaskRunStatus.PENDING))
+        widget.set_records(make_records(TaskRunStatus.PENDING))
         widget.update_record(5, TaskRunRecord(task_index=5, task_name="X"))
         assert len(widget.records) == 1

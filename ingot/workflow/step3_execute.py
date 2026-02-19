@@ -13,7 +13,7 @@ Each task runs in its own clean context (using dont_save_session=True)
 to maintain focus and avoid context pollution.
 
 Supports two display modes:
-- TUI mode: Rich interactive display with task list and log panels
+- TUI mode: Textual interactive display with task list and log panels
 - Fallback mode: Simple line-based output for CI/non-TTY environments
 
 Helper modules:
@@ -168,7 +168,7 @@ def step_3_execute(
     Phase 2: Parallel execution of independent tasks
 
     Supports two modes:
-    - TUI mode: Rich interactive display with task list and log panels
+    - TUI mode: Textual interactive display with task list and log panels
     - Fallback mode: Simple line-based output for CI/non-TTY environments
 
     Before execution begins, captures a baseline git ref to ensure all
@@ -443,6 +443,9 @@ def _execute_with_tui(
                 if state.fail_fast:
                     tui.mark_remaining_skipped(i + 1)
                     break
+
+        # Emit RUN_FINISHED so the screen can update its completed state
+        tui.emit_run_finished()
 
     tui.print_summary()
     if user_quit:

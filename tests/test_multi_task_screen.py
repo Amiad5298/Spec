@@ -2,64 +2,24 @@
 
 from __future__ import annotations
 
-import time
+import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from textual.app import App
 from textual.widgets import Footer
 
+from ingot.ui.messages import TaskFinished, TaskOutput
 from ingot.ui.screens.multi_task import (
     _DEFAULT_TAIL_LINES,
     _VERBOSE_TAIL_LINES,
     MultiTaskScreen,
+    _tail_file,
 )
 from ingot.ui.widgets.log_panel import LogPanelWidget
 from ingot.ui.widgets.task_list import TaskListWidget
-from ingot.workflow.events import TaskRunRecord, TaskRunStatus
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_records(*statuses: TaskRunStatus) -> list[TaskRunRecord]:
-    """Create TaskRunRecord list with appropriate timestamps per status."""
-    now = time.time()
-    records: list[TaskRunRecord] = []
-    for i, status in enumerate(statuses):
-        rec = TaskRunRecord(task_index=i, task_name=f"Task {i}")
-        rec.status = status
-        if status in (TaskRunStatus.RUNNING, TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-            rec.start_time = now - 5
-        if status in (TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-            rec.end_time = now
-        records.append(rec)
-    return records
-
-
-def _make_record_with_log_buffer(
-    index: int,
-    name: str,
-    status: TaskRunStatus = TaskRunStatus.RUNNING,
-    tail_lines: list[str] | None = None,
-    log_path: str = "/tmp/test.log",
-) -> TaskRunRecord:
-    """Create a TaskRunRecord with a mock log_buffer."""
-    now = time.time()
-    rec = TaskRunRecord(task_index=index, task_name=name)
-    rec.status = status
-    if status in (TaskRunStatus.RUNNING, TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-        rec.start_time = now - 5
-    if status in (TaskRunStatus.SUCCESS, TaskRunStatus.FAILED):
-        rec.end_time = now
-
-    mock_buffer = MagicMock()
-    mock_buffer.log_path = Path(log_path)
-    mock_buffer.get_tail = MagicMock(return_value=tail_lines or [])
-    rec.log_buffer = mock_buffer
-    return rec
+from ingot.workflow.events import TaskRunStatus
+from tests.helpers.ui import make_record_with_log_buffer, make_records
 
 
 class MultiTaskTestApp(App[None]):
@@ -140,8 +100,8 @@ class TestNavigation:
     @pytest.mark.timeout(10)
     async def test_j_updates_selection_and_log_panel(self) -> None:
         """Pressing 'j' updates selection and log panel task_name."""
-        rec0 = _make_record_with_log_buffer(0, "Build", tail_lines=["building..."])
-        rec1 = _make_record_with_log_buffer(1, "Test", tail_lines=["testing..."])
+        rec0 = make_record_with_log_buffer(0, "Build", tail_lines=["building..."])
+        rec1 = make_record_with_log_buffer(1, "Test", tail_lines=["testing..."])
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -154,8 +114,8 @@ class TestNavigation:
     @pytest.mark.timeout(10)
     async def test_navigating_between_tasks_switches_log(self) -> None:
         """Navigating from task 0 to task 1 switches log content."""
-        rec0 = _make_record_with_log_buffer(0, "Build", tail_lines=["build log"])
-        rec1 = _make_record_with_log_buffer(1, "Test", tail_lines=["test log"])
+        rec0 = make_record_with_log_buffer(0, "Build", tail_lines=["build log"])
+        rec1 = make_record_with_log_buffer(1, "Test", tail_lines=["test log"])
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -220,7 +180,7 @@ class TestVerboseMode:
     @pytest.mark.timeout(10)
     async def test_verbose_uses_more_tail_lines(self) -> None:
         """Verbose mode calls get_tail with _VERBOSE_TAIL_LINES."""
-        rec = _make_record_with_log_buffer(0, "Build", tail_lines=["line"])
+        rec = make_record_with_log_buffer(0, "Build", tail_lines=["line"])
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -238,7 +198,7 @@ class TestVerboseMode:
     @pytest.mark.timeout(10)
     async def test_normal_uses_default_tail_lines(self) -> None:
         """Normal mode calls get_tail with _DEFAULT_TAIL_LINES."""
-        rec = _make_record_with_log_buffer(0, "Build", tail_lines=["line"])
+        rec = make_record_with_log_buffer(0, "Build", tail_lines=["line"])
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -315,7 +275,7 @@ class TestShowLogPath:
     @pytest.mark.timeout(10)
     async def test_l_with_selected_record(self) -> None:
         """Pressing 'l' with a selected record posts notification."""
-        rec = _make_record_with_log_buffer(0, "Build", log_path="/tmp/build.log")
+        rec = make_record_with_log_buffer(0, "Build", log_path="/tmp/build.log")
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -358,7 +318,7 @@ class TestPropertyDelegation:
     @pytest.mark.timeout(10)
     async def test_records_returns_widget_records(self) -> None:
         """records property returns TaskListWidget.records."""
-        records = _make_records(TaskRunStatus.PENDING, TaskRunStatus.RUNNING)
+        records = make_records(TaskRunStatus.PENDING, TaskRunStatus.RUNNING)
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -370,7 +330,7 @@ class TestPropertyDelegation:
     @pytest.mark.timeout(10)
     async def test_update_record_refreshes_log_panel(self) -> None:
         """update_record refreshes log panel when updated record is selected."""
-        rec = _make_record_with_log_buffer(0, "Build", tail_lines=["initial"])
+        rec = make_record_with_log_buffer(0, "Build", tail_lines=["initial"])
         app = MultiTaskTestApp()
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -379,10 +339,223 @@ class TestPropertyDelegation:
             await pilot.press("j")  # select task 0
 
             # Update the record
-            updated = _make_record_with_log_buffer(
+            updated = make_record_with_log_buffer(
                 0, "Build", status=TaskRunStatus.SUCCESS, tail_lines=["done"]
             )
             screen.update_record(0, updated)
             # Verify get_tail was called on the updated record
             assert updated.log_buffer is not None
             updated.log_buffer.get_tail.assert_called()  # type: ignore[attr-defined]
+
+
+# ===========================================================================
+# _tail_file tests
+# ===========================================================================
+
+
+class TestTailFile:
+    """Tests for the _tail_file helper."""
+
+    def test_small_file(self) -> None:
+        """Small file returns all lines when fewer than n."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            f.write("line1\nline2\nline3\n")
+            path = Path(f.name)
+        try:
+            result = _tail_file(path, 10)
+            assert result == ["line1", "line2", "line3"]
+        finally:
+            path.unlink()
+
+    def test_returns_last_n_lines(self) -> None:
+        """Returns only the last n lines."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            for i in range(20):
+                f.write(f"line{i}\n")
+            path = Path(f.name)
+        try:
+            result = _tail_file(path, 3)
+            assert result == ["line17", "line18", "line19"]
+        finally:
+            path.unlink()
+
+    def test_n_zero_returns_empty(self) -> None:
+        """n=0 returns an empty list."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            f.write("content\n")
+            path = Path(f.name)
+        try:
+            assert _tail_file(path, 0) == []
+        finally:
+            path.unlink()
+
+    def test_n_negative_returns_empty(self) -> None:
+        """Negative n returns an empty list."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            f.write("content\n")
+            path = Path(f.name)
+        try:
+            assert _tail_file(path, -1) == []
+        finally:
+            path.unlink()
+
+    def test_large_file_chunk_boundary(self) -> None:
+        """Lines spanning chunk boundaries are read correctly."""
+        # Create a file larger than 8 KiB to trigger the backward-seek path
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".log", delete=False) as f:
+            path = Path(f.name)
+            # Write enough data to exceed 8 KiB
+            for i in range(200):
+                f.write(f"line-{i:04d}-padding{'x' * 40}\n".encode())
+        try:
+            result = _tail_file(path, 5)
+            assert len(result) == 5
+            # Verify last 5 lines are intact (no split artifacts)
+            assert result[-1] == f"line-0199-padding{'x' * 40}"
+            assert result[-5] == f"line-0195-padding{'x' * 40}"
+        finally:
+            path.unlink()
+
+    def test_empty_file(self) -> None:
+        """Empty file returns an empty list."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            path = Path(f.name)
+        try:
+            assert _tail_file(path, 5) == []
+        finally:
+            path.unlink()
+
+
+# ===========================================================================
+# Log path preservation tests
+# ===========================================================================
+
+
+class TestLogPathPreservation:
+    """Tests that log_path is preserved after log_buffer is closed."""
+
+    @pytest.mark.timeout(10)
+    async def test_log_path_preserved_after_task_finished(self) -> None:
+        """on_task_finished preserves log_path from log_buffer before closing it."""
+        rec = make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
+        app = MultiTaskTestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = _get_screen(app)
+            screen.set_records([rec])
+
+            # Post TaskFinished — this should close the buffer but preserve log_path
+            screen.post_message(
+                TaskFinished(
+                    task_index=0,
+                    task_name="Build",
+                    status="success",
+                    duration=1.0,
+                    error=None,
+                    timestamp=0.0,
+                )
+            )
+            await pilot.pause()
+
+            record = screen.records[0]
+            assert record.log_buffer is None, "log_buffer should be closed"
+            assert record.log_path is not None, "log_path should be preserved"
+
+    @pytest.mark.timeout(10)
+    async def test_completed_task_log_viewable_via_file(self) -> None:
+        """After buffer close, _update_log_panel falls back to _tail_file."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+            f.write("saved log line\n")
+            log_path = Path(f.name)
+
+        try:
+            rec = make_record_with_log_buffer(
+                0, "Build", status=TaskRunStatus.RUNNING, log_path=str(log_path)
+            )
+            app = MultiTaskTestApp()
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                screen = _get_screen(app)
+                screen.set_records([rec])
+
+                # Finish the task to close the buffer
+                screen.post_message(
+                    TaskFinished(
+                        task_index=0,
+                        task_name="Build",
+                        status="success",
+                        duration=1.0,
+                        error=None,
+                        timestamp=0.0,
+                    )
+                )
+                await pilot.pause()
+
+                # Select the task — should read from disk
+                await pilot.press("j")
+                await pilot.pause()
+                record = screen.records[0]
+                assert record.log_buffer is None
+                assert record.log_path == log_path
+        finally:
+            log_path.unlink(missing_ok=True)
+
+
+# ===========================================================================
+# Fast-path write_line tests
+# ===========================================================================
+
+
+class TestFastPathWriteLine:
+    """Tests that follow-mode uses the fast-path single-line append."""
+
+    @pytest.mark.timeout(10)
+    async def test_follow_mode_appends_single_line(self) -> None:
+        """In follow mode, TaskOutput appends via write_line (not set_content)."""
+        rec = make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
+        app = MultiTaskTestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = _get_screen(app)
+            screen.set_records([rec])
+            await pilot.press("j")  # select task 0
+
+            log_panel = screen.query_one("#log-panel", LogPanelWidget)
+            assert log_panel.follow_mode is True
+
+            # Post output — should use write_line fast path
+            screen.post_message(TaskOutput(task_index=0, task_name="Build", line="hello"))
+            await pilot.pause()
+
+            # The mock buffer's get_tail should NOT have been called again
+            # after the initial selection (j press calls _update_log_panel once).
+            initial_call_count = rec.log_buffer.get_tail.call_count  # type: ignore[union-attr]
+
+            screen.post_message(TaskOutput(task_index=0, task_name="Build", line="world"))
+            await pilot.pause()
+
+            # get_tail call count should not increase (fast path skips it)
+            assert rec.log_buffer.get_tail.call_count == initial_call_count  # type: ignore[union-attr]
+
+    @pytest.mark.timeout(10)
+    async def test_paused_mode_uses_set_content(self) -> None:
+        """When follow_mode is off, TaskOutput calls _update_log_panel (set_content)."""
+        rec = make_record_with_log_buffer(0, "Build", status=TaskRunStatus.RUNNING)
+        app = MultiTaskTestApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = _get_screen(app)
+            screen.set_records([rec])
+            await pilot.press("j")  # select task 0
+            await pilot.press("f")  # toggle follow off
+
+            log_panel = screen.query_one("#log-panel", LogPanelWidget)
+            assert log_panel.follow_mode is False
+
+            call_count_before = rec.log_buffer.get_tail.call_count  # type: ignore[union-attr]
+
+            screen.post_message(TaskOutput(task_index=0, task_name="Build", line="output"))
+            await pilot.pause()
+
+            # get_tail SHOULD be called (full refresh path)
+            assert rec.log_buffer.get_tail.call_count > call_count_before  # type: ignore[union-attr]

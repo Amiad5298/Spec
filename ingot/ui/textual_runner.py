@@ -1,8 +1,7 @@
 """Textual-based task runner orchestrator.
 
-Wraps a Textual App running in a background thread, providing the same
-public API as :class:`TaskRunnerUI` so workflow code can be swapped
-with minimal changes.
+Wraps a Textual App running in a background thread, forwarding task
+events to the active screen via ``post_task_event``.
 
 Supports two modes:
 1. **Multi-task mode** (default): Uses :class:`MultiTaskScreen` for Step 3
@@ -22,13 +21,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from textual.app import App
+from textual.screen import Screen
 
 from ingot.ui.log_buffer import TaskLogBuffer
 from ingot.ui.messages import post_task_event
 from ingot.ui.screens.multi_task import MultiTaskScreen
 from ingot.ui.screens.single_operation import SingleOperationScreen
 from ingot.utils.console import console
-from ingot.workflow.events import TaskEvent, TaskRunRecord, TaskRunStatus
+from ingot.workflow.events import (
+    TaskEvent,
+    TaskRunRecord,
+    TaskRunStatus,
+    create_run_finished_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +57,25 @@ def should_use_tui(override: bool | None = None) -> bool:
     if env_setting == "false":
         return False
     return sys.stdout.isatty()
+
+
+# =============================================================================
+# Private Helpers
+# =============================================================================
+
+
+def _quit_with_confirmation(screen: Screen[None], message: str = "Quit?") -> None:
+    """Show a quit confirmation modal and exit the app if confirmed."""
+    from ingot.ui.screens.quit_modal import QuitConfirmModal
+
+    def _on_result(confirmed: bool | None) -> None:
+        if confirmed:
+            app = screen.app
+            if isinstance(app, _RunnerApp):
+                app.quit_by_user = True
+            app.exit()
+
+    screen.app.push_screen(QuitConfirmModal(message), callback=_on_result)
 
 
 # =============================================================================
@@ -80,19 +104,11 @@ class _ReadyMultiTaskScreen(MultiTaskScreen):
         if self._runner.records:
             self.set_records(self._runner.records)
         self.parallel_mode = self._runner.parallel_mode
+        self.verbose_mode = self._runner.verbose_mode
         self._runner._app_ready.set()
 
     def action_request_quit(self) -> None:
-        from ingot.ui.screens.quit_modal import QuitConfirmModal
-
-        def _on_result(confirmed: bool | None) -> None:
-            if confirmed:
-                app = self.app
-                if isinstance(app, _RunnerApp):
-                    app.quit_by_user = True
-                self.app.exit()
-
-        self.app.push_screen(QuitConfirmModal(), callback=_on_result)
+        _quit_with_confirmation(self)
 
 
 class _ReadySingleOpScreen(SingleOperationScreen):
@@ -113,19 +129,12 @@ class _ReadySingleOpScreen(SingleOperationScreen):
 
     def on_mount(self) -> None:
         super().on_mount()
+        self.status_message = self._runner.status_message
+        self.verbose_mode = self._runner.verbose_mode
         self._runner._app_ready.set()
 
     def action_request_quit(self) -> None:
-        from ingot.ui.screens.quit_modal import QuitConfirmModal
-
-        def _on_result(confirmed: bool | None) -> None:
-            if confirmed:
-                app = self.app
-                if isinstance(app, _RunnerApp):
-                    app.quit_by_user = True
-                self.app.exit()
-
-        self.app.push_screen(QuitConfirmModal("Cancel operation?"), callback=_on_result)
+        _quit_with_confirmation(self, "Cancel operation?")
 
 
 # =============================================================================
@@ -172,7 +181,7 @@ class _RunnerApp(App[None]):
 
 @dataclass
 class TextualTaskRunner:
-    """Textual-based task runner matching TaskRunnerUI's public API.
+    """Textual-based task runner orchestrator.
 
     Runs a Textual App in a background thread and forwards events to
     the active screen via ``post_task_event``.  Records are shared
@@ -316,20 +325,14 @@ class TextualTaskRunner:
         except Exception:
             logger.debug("Failed to post event (app may be shutting down)", exc_info=True)
 
-    def post_event(self, event: TaskEvent) -> None:
-        """Thread-safe event posting — identical to ``handle_event``.
-
-        Provided for API compatibility with ``TaskRunnerUI.post_event``
-        which is used by the parallel executor.
-        """
-        self.handle_event(event)
-
-    def refresh(self) -> None:
-        """No-op — Textual auto-refreshes on message receipt.
-
-        Provided for API compatibility with ``TaskRunnerUI.refresh``
-        which is called by the parallel executor's pump loop.
-        """
+    def emit_run_finished(self) -> None:
+        """Emit a RUN_FINISHED event derived from current record statuses."""
+        success_count = sum(1 for r in self.records if r.status == TaskRunStatus.SUCCESS)
+        failed_count = sum(1 for r in self.records if r.status == TaskRunStatus.FAILED)
+        skipped_count = sum(1 for r in self.records if r.status == TaskRunStatus.SKIPPED)
+        self.handle_event(
+            create_run_finished_event(len(self.records), success_count, failed_count, skipped_count)
+        )
 
     # =========================================================================
     # Single-operation callback
@@ -409,8 +412,7 @@ class TextualTaskRunner:
     def print_summary(self, success: bool | None = None) -> None:
         """Print execution summary after stop().
 
-        Replicates ``TaskRunnerUI.print_summary`` logic exactly using
-        Rich console output.
+        Prints a Rich console summary of task results.
 
         Args:
             success: For single-operation mode, whether operation succeeded.

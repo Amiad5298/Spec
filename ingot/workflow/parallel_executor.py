@@ -168,12 +168,12 @@ def _execute_parallel_with_tui(
     verbose: bool = False,
     execute_task_with_retry: ExecuteWithRetryFn,
 ) -> list[str]:
-    """Execute independent tasks in parallel with TUI display and rate limit handling.
+    """Execute independent tasks in parallel with Textual TUI display.
 
-    Thread-safe design per PARALLEL-EXECUTION-REMEDIATION-SPEC:
-    - Worker threads ONLY call tui.post_event() for TASK_STARTED and TASK_OUTPUT
-    - Main thread pumps with wait(timeout=0.1) and calls tui.refresh() each loop
-    - TASK_FINISHED events are emitted from main thread after future completes
+    Thread-safe design:
+    - Worker threads call tui.handle_event() for TASK_STARTED and TASK_OUTPUT
+    - Main thread pumps with wait(timeout=0.1) to process completed futures
+    - TASK_FINISHED and RUN_FINISHED events are emitted from main thread
     - Each worker creates a fresh backend instance via BackendFactory
     """
     from ingot.ui.textual_runner import TextualTaskRunner
@@ -197,8 +197,10 @@ def _execute_parallel_with_tui(
         if record:
             record.log_buffer = TaskLogBuffer(log_path)
 
-    def execute_single_task_worker(task_info: tuple[int, Task]) -> tuple[int, Task, bool]:
-        """Worker thread: execute task, post TASK_STARTED/TASK_OUTPUT via post_event.
+    def execute_single_task_worker(
+        task_info: tuple[int, Task],
+    ) -> tuple[int, Task, bool | None]:
+        """Worker thread: execute task, emit TASK_STARTED/TASK_OUTPUT via handle_event.
 
         Each worker creates its own fresh backend instance for thread safety.
         TASK_FINISHED is emitted by the main thread.
@@ -207,20 +209,20 @@ def _execute_parallel_with_tui(
 
         # Early exit if stop flag set (fail-fast triggered by another task)
         if stop_flag.is_set():
-            return idx, task, None  # type: ignore[return-value]
+            return idx, task, None
 
         # Create a fresh backend for this worker thread, forwarding the model
         worker_backend = BackendFactory.create(backend.platform, model=backend.model)
 
         # Post TASK_STARTED event to queue (thread-safe)
         start_event = create_task_started_event(idx, task.name)
-        tui.post_event(start_event)
+        tui.handle_event(start_event)
 
         try:
-            # Execute with streaming callback via post_event (thread-safe)
+            # Execute with streaming callback via handle_event (thread-safe)
             def make_parallel_callback(i: int, n: str) -> Callable[[str], None]:
                 def cb(line: str) -> None:
-                    tui.post_event(create_task_output_event(i, n, line))
+                    tui.handle_event(create_task_output_event(i, n, line))
 
                 return cb
 
@@ -235,7 +237,7 @@ def _execute_parallel_with_tui(
             return idx, task, success
         except Exception as e:
             # Unexpected crash - post error output and return failure
-            tui.post_event(create_task_output_event(idx, task.name, f"[ERROR] {e}"))
+            tui.handle_event(create_task_output_event(idx, task.name, f"[ERROR] {e}"))
             return idx, task, False
         finally:
             worker_backend.close()
@@ -253,9 +255,6 @@ def _execute_parallel_with_tui(
             while pending:
                 # Wait with timeout so we can refresh TUI periodically
                 done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
-
-                # Drain event queue and refresh TUI display
-                tui.refresh()
 
                 # Process completed futures
                 for future in done:
@@ -305,8 +304,8 @@ def _execute_parallel_with_tui(
                             for f in pending:
                                 f.cancel()
 
-            # Final refresh to ensure all events are processed
-            tui.refresh()
+        # Emit RUN_FINISHED so the screen can update its completed state
+        tui.emit_run_finished()
 
     tui.print_summary()
     return failed_tasks

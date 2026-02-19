@@ -1,14 +1,15 @@
 """MultiTaskScreen — split-pane layout composing task list and log panel.
 
-Replaces the ``_render_multi_task_layout()`` helper in ``ingot/ui/tui.py``
-with a native Textual Screen that composes :class:`TaskListWidget` and
-:class:`LogPanelWidget` side by side.
+Native Textual Screen that composes :class:`TaskListWidget` and
+:class:`LogPanelWidget` side by side for Step 3 task execution.
 """
 
 from __future__ import annotations
 
+import io
 import os
 import subprocess
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
@@ -29,6 +30,37 @@ _STATUS_STR_TO_ENUM: dict[str, TaskRunStatus] = {
     "failed": TaskRunStatus.FAILED,
     "skipped": TaskRunStatus.SKIPPED,
 }
+
+
+def _tail_file(path: Path, n: int) -> list[str]:
+    """Read the last *n* lines from a file without loading it all into memory.
+
+    Seeks backwards from the end of the file to find the last *n* newlines,
+    then reads only that trailing portion.  Falls back to a full read for
+    very small files (< 8 KiB).
+    """
+    if n <= 0:
+        return []
+
+    buf_size = 8192
+    with path.open("rb") as f:
+        f.seek(0, io.SEEK_END)
+        size = f.tell()
+        if size <= buf_size:
+            # Small file — just read the whole thing
+            f.seek(0)
+            return f.read().decode(errors="replace").splitlines()[-n:]
+
+        # Accumulate raw bytes from the end; split once after the loop
+        # to avoid breaking lines that span chunk boundaries.
+        data = b""
+        remaining = size
+        while data.count(b"\n") <= n and remaining > 0:
+            read_size = min(buf_size, remaining)
+            remaining -= read_size
+            f.seek(remaining)
+            data = f.read(read_size) + data
+        return data.decode(errors="replace").splitlines()[-n:]
 
 
 class MultiTaskScreen(Screen[None]):
@@ -154,7 +186,11 @@ class MultiTaskScreen(Screen[None]):
         if record.log_buffer is not None:
             record.log_buffer.write(msg.line)
         if self._task_list.selected_index == msg.task_index:
-            self._update_log_panel(msg.task_index)
+            # Fast path: append single line when following the active task
+            if self._log_panel.follow_mode:
+                self._log_panel.write_line(msg.line)
+            else:
+                self._update_log_panel(msg.task_index)
 
     def on_task_finished(self, msg: TaskFinished) -> None:
         record = self._get_record_at(msg.task_index)
@@ -167,8 +203,10 @@ class MultiTaskScreen(Screen[None]):
         record.status = _STATUS_STR_TO_ENUM.get(msg.status, TaskRunStatus.FAILED)
         if msg.error is not None:
             record.error = msg.error
-        # Close log buffer to release file descriptors (matches old tui.py)
+        # Preserve log path before closing buffer so completed tasks can
+        # still be viewed via action_view_log / action_show_log_path.
         if record.log_buffer is not None:
+            record.log_path = record.log_buffer.log_path
             try:
                 record.log_buffer.close()
             except Exception:  # noqa: BLE001
@@ -194,9 +232,14 @@ class MultiTaskScreen(Screen[None]):
 
     def action_view_log(self) -> None:
         record = self._get_selected_record()
-        if record is None or record.log_buffer is None:
+        if record is None:
             return
-        log_path = str(record.log_buffer.log_path)
+        if record.log_buffer is not None:
+            log_path = str(record.log_buffer.log_path)
+        elif record.log_path is not None:
+            log_path = str(record.log_path)
+        else:
+            return
         pager = os.environ.get("PAGER", "less")
         try:
             with self.app.suspend():
@@ -215,8 +258,12 @@ class MultiTaskScreen(Screen[None]):
 
     def action_show_log_path(self) -> None:
         record = self._get_selected_record()
-        if record is not None and record.log_buffer is not None:
+        if record is None:
+            return
+        if record.log_buffer is not None:
             self.notify(str(record.log_buffer.log_path))
+        elif record.log_path is not None:
+            self.notify(str(record.log_path))
 
     def action_request_quit(self) -> None:
         from ingot.ui.screens.quit_modal import QuitConfirmModal
@@ -234,9 +281,14 @@ class MultiTaskScreen(Screen[None]):
         if record is None:
             return
         self._log_panel.task_name = record.task_name
+        n = _VERBOSE_TAIL_LINES if self.verbose_mode else _DEFAULT_TAIL_LINES
         if record.log_buffer is not None:
-            n = _VERBOSE_TAIL_LINES if self.verbose_mode else _DEFAULT_TAIL_LINES
             self._log_panel.set_content(record.log_buffer.get_tail(n))
+        elif record.log_path is not None and record.log_path.exists():
+            try:
+                self._log_panel.set_content(_tail_file(record.log_path, n))
+            except OSError:
+                self._log_panel.set_content([])
         else:
             self._log_panel.set_content([])
 

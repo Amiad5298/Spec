@@ -282,7 +282,7 @@ class TestParallelMode:
     """Tests for parallel mode support."""
 
     @pytest.mark.timeout(15)
-    def test_post_event_from_multiple_threads(self) -> None:
+    def test_handle_event_from_multiple_threads(self) -> None:
         runner = TextualTaskRunner(ticket_id="PAR-1", headless=True)
         runner.initialize_records(["Task A", "Task B", "Task C"])
         runner.set_parallel_mode(True)
@@ -291,7 +291,7 @@ class TestParallelMode:
             threads = []
             for i, name in enumerate(["Task A", "Task B", "Task C"]):
                 t = threading.Thread(
-                    target=runner.post_event,
+                    target=runner.handle_event,
                     args=(create_task_started_event(i, name),),
                 )
                 threads.append(t)
@@ -305,16 +305,6 @@ class TestParallelMode:
         # All tasks should be RUNNING (or processed)
         running_count = sum(1 for r in runner.records if r.status == TaskRunStatus.RUNNING)
         assert running_count == 3
-
-    @pytest.mark.timeout(15)
-    def test_refresh_is_noop(self) -> None:
-        runner = TextualTaskRunner(headless=True)
-        runner.initialize_records(["Task 1"])
-
-        with runner:
-            # Should not raise
-            runner.refresh()
-            runner.refresh()
 
 
 # ===========================================================================
@@ -484,10 +474,10 @@ class TestEdgeCases:
         # No app running — should not raise
         runner.handle_event(event)
 
-    def test_post_event_after_stop(self) -> None:
+    def test_handle_event_after_stop_from_edge_case(self) -> None:
         runner = TextualTaskRunner()
         event = create_task_started_event(0, "Task A")
-        runner.post_event(event)  # Should not raise
+        runner.handle_event(event)  # Should not raise
 
     def test_handle_output_line_after_stop(self) -> None:
         runner = TextualTaskRunner(single_operation_mode=True)

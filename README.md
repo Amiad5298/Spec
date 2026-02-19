@@ -830,11 +830,19 @@ ingot/
 ├── onboarding/             # First-run setup
 │   └── flow.py            # Onboarding wizard
 ├── ui/                     # User interface
-│   ├── tui.py             # Rich-based Terminal UI
+│   ├── textual_runner.py  # Textual TUI orchestrator
+│   ├── messages.py        # Textual message types & event bridge
+│   ├── log_buffer.py      # Memory-efficient log buffer
 │   ├── menus.py           # Interactive menus
 │   ├── prompts.py         # User prompts (Questionary)
-│   ├── log_buffer.py      # Memory-efficient log buffer
-│   └── keyboard.py        # Keyboard event handling
+│   ├── screens/           # Textual screen classes
+│   │   ├── multi_task.py  # Split-pane task list + log panel
+│   │   ├── single_operation.py  # Single long-running operation
+│   │   └── quit_modal.py  # Quit confirmation modal
+│   └── widgets/           # Textual widget classes
+│       ├── task_list.py   # Task status list widget
+│       ├── log_panel.py   # Scrollable log panel widget
+│       └── single_operation.py  # Spinner + liveness widget
 ├── utils/                  # Utilities
 │   ├── errors.py          # Error hierarchy (IngotError base)
 │   ├── logging.py         # Logging setup

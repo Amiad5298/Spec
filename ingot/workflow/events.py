@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -95,6 +96,7 @@ class TaskRunRecord:
         end_time: Unix timestamp when execution ended.
         log_buffer: Optional log buffer for capturing output.
         error: Error message if task failed.
+        log_path: Path to the log file on disk, preserved after log_buffer is closed.
     """
 
     task_index: int
@@ -104,6 +106,7 @@ class TaskRunRecord:
     end_time: float | None = None
     log_buffer: TaskLogBuffer | None = field(default=None, repr=False)
     error: str | None = None
+    log_path: Path | None = None
 
     @property
     def duration(self) -> float | None:

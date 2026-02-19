@@ -47,6 +47,10 @@ ExecuteWithRetryFn = Callable[
 ]
 
 
+# Shared lock for serializing tasklist file writes across parallel workers
+_tasklist_write_lock = threading.Lock()
+
+
 def _execute_parallel_fallback(
     state: WorkflowState,
     tasks: list[Task],
@@ -140,7 +144,8 @@ def _execute_parallel_fallback(
                 skipped_tasks.append(task.name)
                 print_info(f"[PARALLEL] Skipped: {task.name}")
             elif success:
-                mark_task_complete(tasklist_path, task.name)
+                with _tasklist_write_lock:
+                    mark_task_complete(tasklist_path, task.name)
                 state.mark_task_complete(task.name)
                 print_success(f"[PARALLEL] Completed: {task.name}")
                 # Memory capture disabled for parallel tasks (contamination risk)
@@ -290,7 +295,8 @@ def _execute_parallel_with_tui(
 
                     # Update state based on status
                     if status == "success":
-                        mark_task_complete(tasklist_path, task.name)
+                        with _tasklist_write_lock:
+                            mark_task_complete(tasklist_path, task.name)
                         state.mark_task_complete(task.name)
                         # Memory capture disabled for parallel tasks (contamination risk)
                     elif status == "skipped":

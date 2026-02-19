@@ -25,6 +25,11 @@ ONBOARDING_SMOKE_TEST_TIMEOUT = 60
 # Safety cap on plan/tasklist review iterations to prevent runaway loops.
 MAX_REVIEW_ITERATIONS = 10
 
+
+def noop_output_callback(_line: str) -> None:
+    """No-op output callback for silent backend calls."""
+
+
 __all__ = [
     # Subagent constants
     "INGOT_AGENT_PLANNER",
@@ -40,4 +45,6 @@ __all__ = [
     "ONBOARDING_SMOKE_TEST_TIMEOUT",
     # Review iteration limit
     "MAX_REVIEW_ITERATIONS",
+    # Shared callbacks
+    "noop_output_callback",
 ]

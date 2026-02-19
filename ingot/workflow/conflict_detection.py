@@ -10,7 +10,7 @@ import re
 from ingot.integrations.backends.base import AIBackend
 from ingot.integrations.providers import GenericTicket
 from ingot.utils.logging import log_message
-from ingot.workflow.state import WorkflowState
+from ingot.workflow.constants import noop_output_callback
 
 # Prompt template for conflict detection between ticket and user constraints
 CONFLICT_DETECTION_PROMPT_TEMPLATE = """Analyze the following ticket information and user-provided constraints & preferences for semantic conflicts.
@@ -38,16 +38,10 @@ CONFLICT_PATTERN = re.compile(r"CONFLICT\s*:\s*(YES|NO)", re.IGNORECASE)
 SUMMARY_PATTERN = re.compile(r"SUMMARY\s*:\s*(.*)", re.IGNORECASE | re.DOTALL)
 
 
-def _noop_callback(_: str) -> None:
-    """No-op callback for silent LLM calls."""
-    pass
-
-
 def detect_context_conflict(
     ticket: GenericTicket,
     user_constraints: str,
     backend: AIBackend,
-    state: WorkflowState,
 ) -> tuple[bool, str]:
     """Detect semantic conflicts between ticket description and user constraints.
 
@@ -63,7 +57,6 @@ def detect_context_conflict(
         ticket: GenericTicket with title and description (platform-agnostic)
         user_constraints: User-provided constraints & preferences
         backend: AI backend instance for agent interactions
-        state: Workflow state for accessing subagent configuration
 
     Returns:
         Tuple of (conflict_detected: bool, conflict_summary: str)
@@ -93,7 +86,7 @@ def detect_context_conflict(
         success, output = backend.run_with_callback(
             prompt,
             subagent=None,
-            output_callback=_noop_callback,
+            output_callback=noop_output_callback,
             dont_save_session=True,
         )
 
@@ -130,5 +123,4 @@ __all__ = [
     "CONFLICT_DETECTION_PROMPT_TEMPLATE",
     "CONFLICT_PATTERN",
     "SUMMARY_PATTERN",
-    "_noop_callback",
 ]

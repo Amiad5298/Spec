@@ -20,6 +20,7 @@ from ingot.utils.console import (
 )
 from ingot.utils.errors import UserCancelledError
 from ingot.utils.logging import log_message
+from ingot.workflow.constants import noop_output_callback
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import _display_plan_summary
 
@@ -31,10 +32,6 @@ MAX_CLARIFICATION_ROUNDS = 10
 NO_MORE_QUESTIONS = "NO_MORE_QUESTIONS"
 _MAX_CONFLICT_SUMMARY_LENGTH = 500
 _MIN_PLAN_LENGTH_RATIO = 0.5  # Safety check: rewritten plan must be >= 50% of original
-
-
-def _noop_callback(line: str) -> None:
-    """No-op callback for silent backend calls."""
 
 
 # =============================================================================
@@ -152,7 +149,7 @@ def _run_interactive_qa_loop(
         success, output = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["planner"],
-            output_callback=_noop_callback,
+            output_callback=noop_output_callback,
             dont_save_session=True,
         )
 
@@ -226,7 +223,7 @@ def _rewrite_plan_with_clarifications(
     success, output = backend.run_with_callback(
         prompt,
         subagent=state.subagent_names["planner"],
-        output_callback=_noop_callback,
+        output_callback=noop_output_callback,
         dont_save_session=True,
     )
 

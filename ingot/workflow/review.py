@@ -24,6 +24,7 @@ from ingot.utils.console import (
     print_success,
     print_warning,
 )
+from ingot.workflow.constants import noop_output_callback
 from ingot.workflow.git_utils import get_smart_diff, get_smart_diff_from_baseline
 
 if TYPE_CHECKING:
@@ -426,7 +427,7 @@ def _run_review_fix_loop(
             success, output = backend.run_with_callback(
                 prompt,
                 subagent=state.subagent_names["reviewer"],
-                output_callback=lambda _line: None,
+                output_callback=noop_output_callback,
                 dont_save_session=True,
             )
         except Exception as e:
@@ -536,7 +537,7 @@ def run_phase_review(
         success, output = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["reviewer"],
-            output_callback=lambda _line: None,
+            output_callback=noop_output_callback,
             dont_save_session=True,
         )
     except Exception as e:

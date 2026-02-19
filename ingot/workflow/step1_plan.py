@@ -24,7 +24,7 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
-from ingot.workflow.constants import MAX_REVIEW_ITERATIONS
+from ingot.workflow.constants import MAX_REVIEW_ITERATIONS, noop_output_callback
 from ingot.workflow.events import format_run_directory
 from ingot.workflow.state import WorkflowState
 
@@ -276,7 +276,7 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                     print_warning("No feedback provided. Please describe what to change.")
                     continue
 
-                state.replan_count += 1
+                state.plan_revision_count += 1
                 if replan_with_feedback(state, backend, feedback):
                     _display_plan_summary(plan_path)
                     continue
@@ -348,12 +348,8 @@ def _display_plan_summary(plan_path: Path) -> None:
     content = plan_path.read_text()
     lines = content.splitlines()
 
-    # Show first 20 lines or until first major section
-    preview_lines = []
-    for line in lines[:30]:
-        preview_lines.append(line)
-        if len(preview_lines) >= 20:
-            break
+    # Show first 20 lines
+    preview_lines = lines[:20]
 
     console.print()
     console.print("[bold]Plan Preview:[/bold]")
@@ -482,7 +478,8 @@ def replan_with_feedback(
     existing_plan = ""
     if plan_path.exists():
         existing_plan = plan_path.read_text()
-        backup_path = plan_path.with_suffix(f".pre-replan-{state.replan_count}.md")
+        backup_idx = state.replan_count + state.plan_revision_count
+        backup_path = plan_path.with_suffix(f".pre-replan-{backup_idx}.md")
         backup_path.write_text(existing_plan)
         log_message(f"Backed up previous plan to {backup_path}")
 
@@ -504,7 +501,7 @@ Do not attempt to create or write any files."""
         success, output = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["planner"],
-            output_callback=lambda _line: None,
+            output_callback=noop_output_callback,
             dont_save_session=True,
             plan_mode=use_plan_mode,
         )

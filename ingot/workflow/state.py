@@ -4,6 +4,7 @@ This module provides the WorkflowState dataclass that tracks the
 current state of the workflow execution.
 """
 
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -119,7 +120,8 @@ class WorkflowState:
     enable_phase_review: bool = False  # Enable phase reviews after task execution
 
     # Re-planning state
-    replan_count: int = 0  # Number of replans performed this workflow run
+    replan_count: int = 0  # Number of execution replans (Step 3 post-review)
+    plan_revision_count: int = 0  # Number of plan revisions (Step 1 regenerations)
     max_replans: int = 2  # Maximum replan attempts (prevents infinite loops)
 
     # Snapshot of untracked files before step 3 execution, used by
@@ -137,7 +139,7 @@ class WorkflowState:
     backend_name: str | None = None
 
     # Subagent configuration (names loaded from settings)
-    # Defaults from auggie.py constants - the single source of truth
+    # Defaults from workflow constants - the single source of truth
     subagent_names: dict[str, str] = field(
         default_factory=lambda: {
             "planner": INGOT_AGENT_PLANNER,
@@ -148,6 +150,11 @@ class WorkflowState:
             "fixer": INGOT_AGENT_FIXER,
             "doc_updater": INGOT_AGENT_DOC_UPDATER,
         }
+    )
+
+    # Threading lock for thread-safe state mutations (parallel execution)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
     )
 
     def __post_init__(self) -> None:
@@ -193,9 +200,10 @@ class WorkflowState:
         return self.specs_dir / self.tasklist_filename
 
     def mark_task_complete(self, task_name: str) -> None:
-        """Mark a task as complete."""
-        if task_name not in self.completed_tasks:
-            self.completed_tasks.append(task_name)
+        """Mark a task as complete (thread-safe)."""
+        with self._lock:
+            if task_name not in self.completed_tasks:
+                self.completed_tasks.append(task_name)
 
 
 __all__ = [

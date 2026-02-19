@@ -15,6 +15,7 @@ from ingot.workflow.constants import (
     DEFAULT_EXECUTION_TIMEOUT,
     FIRST_RUN_TIMEOUT,
     INGOT_AGENT_DOC_UPDATER,
+    INGOT_AGENT_FIXER,
     INGOT_AGENT_IMPLEMENTER,
     INGOT_AGENT_PLANNER,
     INGOT_AGENT_REVIEWER,
@@ -44,6 +45,8 @@ from ingot.workflow.step1_5_clarification import step_1_5_clarification
 from ingot.workflow.step1_plan import step_1_create_plan
 from ingot.workflow.step2_tasklist import step_2_create_tasklist
 from ingot.workflow.step3_execute import step_3_execute
+from ingot.workflow.step4_update_docs import step_4_update_docs
+from ingot.workflow.step5_commit import step_5_commit
 from ingot.workflow.task_memory import (
     TaskMemory,
     build_pattern_context,
@@ -67,6 +70,7 @@ __all__ = [
     "INGOT_AGENT_TASKLIST_REFINER",
     "INGOT_AGENT_IMPLEMENTER",
     "INGOT_AGENT_REVIEWER",
+    "INGOT_AGENT_FIXER",
     "INGOT_AGENT_DOC_UPDATER",
     # Timeout Constants
     "DEFAULT_EXECUTION_TIMEOUT",
@@ -107,6 +111,8 @@ __all__ = [
     "step_1_create_plan",
     "step_2_create_tasklist",
     "step_3_execute",
+    "step_4_update_docs",
+    "step_5_commit",
     # Runner
     "WorkflowResult",
     "run_ingot_workflow",

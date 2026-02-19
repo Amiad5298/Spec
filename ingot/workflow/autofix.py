@@ -17,6 +17,7 @@ from ingot.utils.console import (
     print_success,
     print_warning,
 )
+from ingot.workflow.constants import noop_output_callback
 
 if TYPE_CHECKING:
     from ingot.workflow.state import WorkflowState
@@ -76,7 +77,7 @@ Do NOT commit any changes."""
         success, _ = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names.get("fixer", state.subagent_names["implementer"]),
-            output_callback=lambda _line: None,
+            output_callback=noop_output_callback,
             dont_save_session=True,
         )
         if success:

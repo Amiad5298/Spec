@@ -177,7 +177,7 @@ def run_ingot_workflow(
                 # Fail-Fast Semantic Check: Detect conflicts between ticket and user constraints
                 print_step("Checking for conflicts between ticket and your constraints...")
                 conflict_detected, conflict_summary = detect_context_conflict(
-                    state.ticket, state.user_constraints, backend, state
+                    state.ticket, state.user_constraints, backend
                 )
                 state.conflict_detected = conflict_detected
                 state.conflict_summary = conflict_summary

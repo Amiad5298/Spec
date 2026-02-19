@@ -851,8 +851,8 @@ class TestStep1PlanReviewLoop:
         assert result is True
         mock_replan.assert_called_once()
         assert "Add more error handling" in mock_replan.call_args[0][2]
-        # replan_count should be incremented
-        assert workflow_state.replan_count == 1
+        # plan_revision_count should be incremented (not replan_count)
+        assert workflow_state.plan_revision_count == 1
         # _display_plan_summary called: once initially + once after regenerate
         assert mock_display.call_count == 2
 

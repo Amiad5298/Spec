@@ -49,6 +49,7 @@ from ingot.utils.retry import (
     RateLimitExceededError,
     with_rate_limit_retry,
 )
+from ingot.workflow.constants import noop_output_callback
 from ingot.workflow.events import (
     create_task_finished_event,
     create_task_output_event,
@@ -335,6 +336,8 @@ def step_3_execute(
 
     print_info(f"Task logs saved to: {log_dir}")
 
+    if len(failed_tasks) == 0:
+        state.current_step = 4
     return Step3Result(success=len(failed_tasks) == 0)
 
 
@@ -582,7 +585,7 @@ def _execute_task(
         success, output = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["implementer"],
-            output_callback=lambda _line: None,
+            output_callback=noop_output_callback,
             dont_save_session=True,
         )
         if not success and backend.detect_rate_limit(output):
@@ -672,7 +675,7 @@ def _run_backend_capturing_output(
         success, output = backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["implementer"],
-            output_callback=callback or (lambda _line: None),
+            output_callback=callback or noop_output_callback,
             dont_save_session=True,
         )
         if not success and backend.detect_rate_limit(output):

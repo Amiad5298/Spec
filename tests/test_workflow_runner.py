@@ -1400,7 +1400,7 @@ class TestDetectContextConflict:
     def test_returns_false_when_user_constraints_empty(self, ticket, workflow_state):
         mock_auggie = MagicMock()
 
-        result = detect_context_conflict(ticket, "", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "", mock_auggie)
 
         assert result == (False, "")
         mock_auggie.run_with_callback.assert_not_called()
@@ -1408,7 +1408,7 @@ class TestDetectContextConflict:
     def test_returns_false_when_user_constraints_whitespace_only(self, ticket, workflow_state):
         mock_auggie = MagicMock()
 
-        result = detect_context_conflict(ticket, "   \n\t  ", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "   \n\t  ", mock_auggie)
 
         assert result == (False, "")
         mock_auggie.run_with_callback.assert_not_called()
@@ -1424,7 +1424,7 @@ class TestDetectContextConflict:
         )
         mock_auggie = MagicMock()
 
-        result = detect_context_conflict(empty_ticket, "Some context", mock_auggie, workflow_state)
+        result = detect_context_conflict(empty_ticket, "Some context", mock_auggie)
 
         assert result == (False, "")
         mock_auggie.run_with_callback.assert_not_called()
@@ -1436,7 +1436,7 @@ class TestDetectContextConflict:
             "CONFLICT: NO\nSUMMARY: No conflicts detected.",
         )
 
-        detect_context_conflict(ticket, "Additional context here", mock_auggie, workflow_state)
+        detect_context_conflict(ticket, "Additional context here", mock_auggie)
 
         mock_auggie.run_with_callback.assert_called_once()
         call_args = mock_auggie.run_with_callback.call_args
@@ -1454,7 +1454,7 @@ class TestDetectContextConflict:
             "CONFLICT: NO\nSUMMARY: No conflicts detected.",
         )
 
-        detect_context_conflict(ticket, "Additional context here", mock_auggie, workflow_state)
+        detect_context_conflict(ticket, "Additional context here", mock_auggie)
 
         call_kwargs = mock_auggie.run_with_callback.call_args[1]
         assert call_kwargs["subagent"] is None
@@ -1466,7 +1466,7 @@ class TestDetectContextConflict:
             "CONFLICT: YES\nSUMMARY: The ticket says add X but user says remove X.",
         )
 
-        result = detect_context_conflict(ticket, "Remove feature X", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Remove feature X", mock_auggie)
 
         assert result[0] is True
         assert "add X but user says remove X" in result[1]
@@ -1478,9 +1478,7 @@ class TestDetectContextConflict:
             "CONFLICT: NO\nSUMMARY: No conflicts detected.",
         )
 
-        result = detect_context_conflict(
-            ticket, "Extra implementation notes", mock_auggie, workflow_state
-        )
+        result = detect_context_conflict(ticket, "Extra implementation notes", mock_auggie)
 
         assert result == (False, "")
 
@@ -1488,7 +1486,7 @@ class TestDetectContextConflict:
         mock_auggie = MagicMock()
         mock_auggie.run_with_callback.return_value = (False, "")
 
-        result = detect_context_conflict(ticket, "Some context", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Some context", mock_auggie)
 
         assert result == (False, "")
 
@@ -1496,7 +1494,7 @@ class TestDetectContextConflict:
         mock_auggie = MagicMock()
         mock_auggie.run_with_callback.side_effect = Exception("API error")
 
-        result = detect_context_conflict(ticket, "Some context", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Some context", mock_auggie)
 
         assert result == (False, "")
 
@@ -1504,7 +1502,7 @@ class TestDetectContextConflict:
         mock_auggie = MagicMock()
         mock_auggie.run_with_callback.return_value = (True, "CONFLICT: NO\nSUMMARY: None.")
 
-        detect_context_conflict(ticket, "Context", mock_auggie, workflow_state)
+        detect_context_conflict(ticket, "Context", mock_auggie)
 
         call_kwargs = mock_auggie.run_with_callback.call_args[1]
         assert "output_callback" in call_kwargs
@@ -1516,7 +1514,7 @@ class TestDetectContextConflict:
         mock_auggie = MagicMock()
         mock_auggie.run_with_callback.return_value = (True, "CONFLICT: NO\nSUMMARY: None.")
 
-        detect_context_conflict(ticket, "Context", mock_auggie, workflow_state)
+        detect_context_conflict(ticket, "Context", mock_auggie)
 
         call_kwargs = mock_auggie.run_with_callback.call_args[1]
         assert call_kwargs["dont_save_session"] is True
@@ -1525,7 +1523,7 @@ class TestDetectContextConflict:
         mock_auggie = MagicMock()
         mock_auggie.run_with_callback.return_value = (True, "CONFLICT: YES")
 
-        result = detect_context_conflict(ticket, "Conflicting info", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Conflicting info", mock_auggie)
 
         assert result[0] is True
         assert "conflict detected" in result[1].lower()
@@ -1537,7 +1535,7 @@ class TestDetectContextConflict:
             "conflict: yes\nsummary: Scope mismatch detected.",
         )
 
-        result = detect_context_conflict(ticket, "Wrong scope", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Wrong scope", mock_auggie)
 
         assert result[0] is True
         assert "Scope mismatch" in result[1]
@@ -1549,7 +1547,7 @@ class TestDetectContextConflict:
             "CONFLICT: YES\nSUMMARY: The ticket requires adding feature X.\nHowever, user context says to remove it.",
         )
 
-        result = detect_context_conflict(ticket, "Remove feature X", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Remove feature X", mock_auggie)
 
         assert result[0] is True
         # Should capture the full multi-line summary
@@ -1563,7 +1561,7 @@ class TestDetectContextConflict:
             "CONFLICT:   YES\nSUMMARY:   Conflict found.",
         )
 
-        result = detect_context_conflict(ticket, "Context", mock_auggie, workflow_state)
+        result = detect_context_conflict(ticket, "Context", mock_auggie)
 
         assert result[0] is True
         assert "Conflict found" in result[1]

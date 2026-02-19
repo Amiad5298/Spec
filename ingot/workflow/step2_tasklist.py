@@ -20,7 +20,7 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
-from ingot.workflow.constants import MAX_REVIEW_ITERATIONS
+from ingot.workflow.constants import MAX_REVIEW_ITERATIONS, noop_output_callback
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.tasks import parse_task_list
 
@@ -286,12 +286,12 @@ Create an executable task list with FUNDAMENTAL and INDEPENDENT categories."""
     success, output = backend.run_with_callback(
         prompt,
         subagent=state.subagent_names["tasklist"],
-        output_callback=lambda _line: None,
+        output_callback=noop_output_callback,
         dont_save_session=True,
     )
 
     if not success:
-        log_message("Auggie command failed")
+        log_message("Task list generation failed")
         return False
 
     # Try to extract and persist the task list from AI output
@@ -414,7 +414,7 @@ Output ONLY the refined task list markdown."""
     success, output = backend.run_with_callback(
         prompt,
         subagent=state.subagent_names["tasklist_refiner"],
-        output_callback=lambda _line: None,
+        output_callback=noop_output_callback,
         dont_save_session=True,
     )
 
@@ -502,6 +502,7 @@ def _display_tasklist(tasklist_path: Path) -> None:
 def _edit_tasklist(tasklist_path: Path) -> None:
     """Allow user to edit the task list."""
     import os
+    import shlex
     import subprocess
 
     editor = os.environ.get("EDITOR", "vim")
@@ -510,7 +511,8 @@ def _edit_tasklist(tasklist_path: Path) -> None:
     print_info("Save and close the editor when done.")
 
     try:
-        subprocess.run([editor, str(tasklist_path)], check=True)
+        editor_cmd = shlex.split(editor)
+        subprocess.run([*editor_cmd, str(tasklist_path)], check=True)
         print_success("Task list updated")
     except subprocess.CalledProcessError:
         print_warning("Editor closed without saving")

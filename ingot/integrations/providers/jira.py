@@ -288,24 +288,41 @@ class JiraProvider(IssueTrackerProvider):
             Populated GenericTicket with normalized fields
         """
         raw_fields = raw_data.get("fields")
-        fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
+        if isinstance(raw_fields, dict):
+            fields: dict[str, Any] = raw_fields
+        elif "summary" in raw_data:
+            # Agent-mediated fetchers return a flat structure without the
+            # "fields" wrapper.  Treat the top-level dict as the fields.
+            fields = raw_data
+        else:
+            fields = {}
         ticket_id = str(raw_data.get("key", ""))
 
-        # Extract status and type with defensive handling for non-dict values
+        # Extract status and type with defensive handling for non-dict values.
+        # Agent-mediated fetchers may return plain strings instead of objects.
         status_obj = fields.get("status")
-        status_name = self.safe_nested_get(status_obj, "name", "")
+        if isinstance(status_obj, str):
+            status_name = status_obj
+        else:
+            status_name = self.safe_nested_get(status_obj, "name", "")
 
         issuetype_obj = fields.get("issuetype")
-        type_name = self.safe_nested_get(issuetype_obj, "name", "")
+        if isinstance(issuetype_obj, str):
+            type_name = issuetype_obj
+        else:
+            type_name = self.safe_nested_get(issuetype_obj, "name", "")
 
         # Extract timestamps
         created_at = self._parse_timestamp(fields.get("created"))
         updated_at = self._parse_timestamp(fields.get("updated"))
 
-        # Extract assignee with defensive handling
+        # Extract assignee with defensive handling.
+        # Agent-mediated fetchers may return a plain string.
         assignee = None
         assignee_obj = fields.get("assignee")
-        if isinstance(assignee_obj, dict):
+        if isinstance(assignee_obj, str):
+            assignee = assignee_obj or None
+        elif isinstance(assignee_obj, dict):
             assignee = assignee_obj.get("displayName") or assignee_obj.get("name")
 
         # Extract labels - ensure every element is a stripped string
@@ -317,9 +334,13 @@ class JiraProvider(IssueTrackerProvider):
             else []
         )
 
-        # Build project key for URL with defensive handling
+        # Build project key for URL with defensive handling.
+        # Agent-mediated fetchers may return a string or a dict.
         project_obj = fields.get("project")
-        project_key = self.safe_nested_get(project_obj, "key", "")
+        if isinstance(project_obj, str):
+            project_key = project_obj
+        else:
+            project_key = self.safe_nested_get(project_obj, "key", "")
 
         # Smart URL construction: parse scheme/netloc from 'self' API URL if available
         api_url = raw_data.get("self", "")
@@ -343,13 +364,21 @@ class JiraProvider(IssueTrackerProvider):
                 browse_url = f"{base_url}/browse/{ticket_id}"
             # If no base URL configured, leave browse_url as empty string
 
-        # Extract priority with defensive handling
+        # Extract priority with defensive handling.
+        # Agent-mediated fetchers may return a plain string.
         priority_obj = fields.get("priority")
-        priority_name = self.safe_nested_get(priority_obj, "name", "")
+        if isinstance(priority_obj, str):
+            priority_name = priority_obj
+        else:
+            priority_name = self.safe_nested_get(priority_obj, "name", "")
 
-        # Extract resolution with defensive handling
+        # Extract resolution with defensive handling.
+        # Agent-mediated fetchers may return a plain string.
         resolution_obj = fields.get("resolution")
-        resolution_name = self.safe_nested_get(resolution_obj, "name", "")
+        if isinstance(resolution_obj, str):
+            resolution_name = resolution_obj
+        else:
+            resolution_name = self.safe_nested_get(resolution_obj, "name", "")
 
         # Extract components (ensure it's a list of dicts)
         components_raw = fields.get("components")

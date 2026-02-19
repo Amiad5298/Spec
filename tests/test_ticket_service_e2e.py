@@ -28,10 +28,7 @@ from tests.fakes.fake_backend import FakeBackend
 # Valid JSON fixtures per ticket platform
 # ---------------------------------------------------------------------------
 
-# Jira: needs "key" + "fields" dict (JiraProvider.normalize reads fields)
-# Note: The fetcher validates top-level "key" + "summary" (REQUIRED_FIELDS),
-# while JiraProvider.normalize() reads from the "fields" dict. Agent-mediated
-# responses include both: top-level summary for validation and fields for normalization.
+# Jira: nested "fields" dict (direct API / Jira REST API format)
 JIRA_RESPONSE = {
     "key": "PROJ-123",
     "summary": "Fix login bug",
@@ -48,6 +45,22 @@ JIRA_RESPONSE = {
         "priority": {"name": "High"},
         "project": {"key": "PROJ", "name": "Project"},
     },
+}
+
+# Jira: flat format (agent-mediated fetcher returns top-level fields,
+# matching the prompt template in templates.py)
+JIRA_RESPONSE_FLAT = {
+    "key": "PROJ-123",
+    "summary": "Fix login bug",
+    "description": "Users cannot login with SSO",
+    "status": "In Progress",
+    "issuetype": "Bug",
+    "assignee": "Alice",
+    "labels": ["backend", "auth"],
+    "created": "2024-01-15T10:30:00Z",
+    "updated": "2024-01-16T14:20:00Z",
+    "priority": "High",
+    "project": {"key": "PROJ", "name": "Project"},
 }
 
 # Linear: flat format (LinearProvider.normalize reads top-level fields)
@@ -167,6 +180,50 @@ class TestE2EFullPipeline:
         assert ticket.platform == expected["platform"]
         assert ticket.title == expected["title"]
         assert backend.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# TestE2EFlatJiraNormalization
+# ---------------------------------------------------------------------------
+
+
+class TestE2EFlatJiraNormalization:
+    """Verify that JiraProvider.normalize() handles the flat JSON structure
+    returned by agent-mediated fetchers (no 'fields' wrapper)."""
+
+    @pytest.mark.asyncio
+    async def test_flat_jira_response_normalizes_correctly(self) -> None:
+        response_json = json.dumps(JIRA_RESPONSE_FLAT)
+        backend = FakeBackend(
+            responses=[(True, response_json)],
+            platform=AgentPlatform.AUGGIE,
+        )
+        service = await create_ticket_service(backend=backend, enable_fallback=False)
+        provider = JiraProvider()
+
+        with patch(
+            "ingot.integrations.ticket_service.ProviderRegistry.get_provider_for_input",
+            return_value=provider,
+        ):
+            ticket = await service.get_ticket("PROJ-123", skip_cache=True)
+
+        assert ticket.id == "PROJ-123"
+        assert ticket.title == "Fix login bug"
+        assert ticket.description == "Users cannot login with SSO"
+        assert ticket.labels == ["backend", "auth"]
+        assert ticket.assignee == "Alice"
+
+    @pytest.mark.asyncio
+    async def test_flat_jira_direct_normalize(self) -> None:
+        """Unit-level test: call normalize() directly with flat data."""
+        provider = JiraProvider()
+        ticket = provider.normalize(JIRA_RESPONSE_FLAT)
+
+        assert ticket.id == "PROJ-123"
+        assert ticket.title == "Fix login bug"
+        assert ticket.description == "Users cannot login with SSO"
+        assert ticket.assignee == "Alice"
+        assert ticket.labels == ["backend", "auth"]
 
 
 # ---------------------------------------------------------------------------

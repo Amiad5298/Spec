@@ -161,9 +161,9 @@ Reduce AI hallucinations and prevent file conflicts during parallel execution:
 - [ ] Implement authentication endpoint
 ```
 
-### Rich Terminal UI
-- Real-time task progress visualization with Rich
-- Log streaming with expandable panels
+### Terminal UI (Textual)
+- Real-time task progress visualization with Textual
+- Split-pane layout with task list and scrollable log panel
 - Interactive menus for task review and approval
 - Thread-safe parallel execution display
 - Works in both TUI mode and simple fallback for CI environments
@@ -1041,6 +1041,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 Built with:
 - [Typer](https://typer.tiangolo.com/) - CLI framework
+- [Textual](https://textual.textualize.io/) - Terminal UI framework
 - [Rich](https://rich.readthedocs.io/) - Terminal formatting
 - [Questionary](https://questionary.readthedocs.io/) - Interactive prompts
 - [httpx](https://www.python-httpx.org/) - HTTP client

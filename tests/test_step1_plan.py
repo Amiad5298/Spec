@@ -95,6 +95,7 @@ class TestGeneratePlanWithTui:
 
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         mock_backend.run_with_callback.return_value = (True, "Plan output")
@@ -113,6 +114,7 @@ class TestGeneratePlanWithTui:
 
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = True  # User requested quit
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         mock_backend.run_with_callback.return_value = (True, "Plan output")
@@ -131,6 +133,7 @@ class TestGeneratePlanWithTui:
 
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         mock_backend.run_with_callback.return_value = (True, "Plan output")
@@ -152,6 +155,7 @@ class TestGeneratePlanWithTui:
 
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         mock_backend.run_with_callback.return_value = (True, "Plan output")
@@ -173,6 +177,7 @@ class TestGeneratePlanWithTui:
 
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         mock_backend.run_with_callback.return_value = (False, "Error")
@@ -191,6 +196,7 @@ class TestGeneratePlanWithTui:
 
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         mock_backend.run_with_callback.return_value = (True, "Plan output")

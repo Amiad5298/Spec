@@ -176,15 +176,14 @@ def _execute_parallel_with_tui(
     """Execute independent tasks in parallel with Textual TUI display.
 
     Thread-safe design:
+    - Textual app runs on the main thread (required for POSIX signal handlers)
+    - Orchestration runs in a background thread via ``tui.run_with_work()``
     - Worker threads call tui.handle_event() for TASK_STARTED and TASK_OUTPUT
-    - Main thread pumps with wait(timeout=0.1) to process completed futures
-    - TASK_FINISHED and RUN_FINISHED events are emitted from main thread
+    - TASK_FINISHED and RUN_FINISHED events are emitted from the orchestration thread
     - Each worker creates a fresh backend instance via BackendFactory
     """
     from ingot.ui.textual_runner import TextualTaskRunner
 
-    failed_tasks: list[str] = []
-    skipped_tasks: list[str] = []
     stop_flag = threading.Event()
     max_workers = min(state.max_parallel_tasks, len(tasks))
 
@@ -208,7 +207,7 @@ def _execute_parallel_with_tui(
         """Worker thread: execute task, emit TASK_STARTED/TASK_OUTPUT via handle_event.
 
         Each worker creates its own fresh backend instance for thread safety.
-        TASK_FINISHED is emitted by the main thread.
+        TASK_FINISHED is emitted by the orchestration thread.
         """
         idx, task = task_info
 
@@ -247,19 +246,22 @@ def _execute_parallel_with_tui(
         finally:
             worker_backend.close()
 
-    with tui:
+    def _work() -> list[str]:
+        """Orchestrate parallel task execution in a background thread."""
+        _failed: list[str] = []
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             futures = {
                 executor.submit(execute_single_task_worker, (i, task)): (i, task)
                 for i, task in enumerate(tasks)
             }
-            pending = set(futures.keys())
+            remaining = set(futures.keys())
 
-            # Main thread: pump events while waiting for futures
-            while pending:
-                # Wait with timeout so we can refresh TUI periodically
-                done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+            # Pump events while waiting for futures
+            while remaining:
+                # Wait with timeout so TUI can refresh periodically
+                done, remaining = wait(remaining, timeout=0.1, return_when=FIRST_COMPLETED)
 
                 # Process completed futures
                 for future in done:
@@ -287,7 +289,7 @@ def _execute_parallel_with_tui(
                         status = "skipped"
                         error = None
 
-                    # Emit TASK_FINISHED from main thread (thread-safe log buffer close)
+                    # Emit TASK_FINISHED (thread-safe log buffer close)
                     finish_event = create_task_finished_event(
                         idx, task.name, status, duration, error=error
                     )
@@ -300,18 +302,21 @@ def _execute_parallel_with_tui(
                         state.mark_task_complete(task.name)
                         # Memory capture disabled for parallel tasks (contamination risk)
                     elif status == "skipped":
-                        skipped_tasks.append(task.name)
+                        pass  # skipped tasks don't need tracking
                     else:  # failed
-                        failed_tasks.append(task.name)
+                        _failed.append(task.name)
                         # Trigger fail-fast if enabled
                         if state.fail_fast:
                             stop_flag.set()
                             # Cancel pending futures
-                            for f in pending:
+                            for f in remaining:
                                 f.cancel()
 
         # Emit RUN_FINISHED so the screen can update its completed state
         tui.emit_run_finished()
+        return _failed
+
+    failed_tasks: list[str] = tui.run_with_work(_work)
 
     tui.print_summary()
     return failed_tasks

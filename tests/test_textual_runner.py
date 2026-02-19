@@ -453,6 +453,127 @@ class TestPrintSummary:
 
 
 # ===========================================================================
+# TestRunWithWork
+# ===========================================================================
+
+
+class TestRunWithWork:
+    """Tests for run_with_work() — inverted thread model."""
+
+    @pytest.mark.timeout(15)
+    def test_returns_work_result(self) -> None:
+        runner = TextualTaskRunner(headless=True)
+        runner.initialize_records(["Task 1"])
+
+        result = runner.run_with_work(lambda: 42)
+
+        assert result == 42
+        assert runner._app is None  # cleaned up
+
+    @pytest.mark.timeout(15)
+    def test_returns_tuple_result(self) -> None:
+        runner = TextualTaskRunner(
+            single_operation_mode=True,
+            headless=True,
+        )
+
+        result = runner.run_with_work(lambda: (True, "output text"))
+
+        assert result == (True, "output text")
+
+    @pytest.mark.timeout(15)
+    def test_propagates_exception(self) -> None:
+        runner = TextualTaskRunner(headless=True)
+        runner.initialize_records(["Task 1"])
+
+        def _failing_work() -> None:
+            raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            runner.run_with_work(_failing_work)
+
+        assert runner._app is None  # cleaned up despite error
+
+    @pytest.mark.timeout(15)
+    def test_handle_event_during_work(self) -> None:
+        runner = TextualTaskRunner(headless=True)
+        runner.initialize_records(["Task A"])
+
+        def _work() -> str:
+            event = create_task_started_event(0, "Task A")
+            runner.handle_event(event)
+            time.sleep(0.3)
+            finish = create_task_finished_event(0, "Task A", "success", 1.0)
+            runner.handle_event(finish)
+            time.sleep(0.2)
+            return "done"
+
+        result = runner.run_with_work(_work)
+
+        assert result == "done"
+        assert runner.records[0].status == TaskRunStatus.SUCCESS
+
+    @pytest.mark.timeout(15)
+    def test_single_op_output_line(self, tmp_path: Path) -> None:
+        runner = TextualTaskRunner(
+            single_operation_mode=True,
+            headless=True,
+        )
+        log_path = tmp_path / "work.log"
+        runner.set_log_path(log_path)
+
+        def _work() -> bool:
+            runner.handle_output_line("hello from work")
+            time.sleep(0.2)
+            return True
+
+        result = runner.run_with_work(_work)
+
+        assert result is True
+        assert log_path.exists()
+        assert "hello from work" in log_path.read_text()
+
+    @pytest.mark.timeout(15)
+    def test_sets_start_time(self) -> None:
+        runner = TextualTaskRunner(headless=True)
+        runner.initialize_records(["Task 1"])
+
+        before = time.time()
+        runner.run_with_work(lambda: None)
+        after = time.time()
+
+        assert before <= runner._start_time <= after
+
+    @pytest.mark.timeout(15)
+    def test_quit_flag_accessible_during_work(self) -> None:
+        runner = TextualTaskRunner(headless=True)
+        runner.initialize_records(["Task 1"])
+
+        quit_was_false = False
+
+        def _work() -> None:
+            nonlocal quit_was_false
+            quit_was_false = not runner.check_quit_requested()
+
+        runner.run_with_work(_work)
+
+        assert quit_was_false is True
+
+    @pytest.mark.timeout(15)
+    def test_propagates_keyboard_interrupt(self) -> None:
+        runner = TextualTaskRunner(headless=True)
+        runner.initialize_records(["Task 1"])
+
+        def _interrupted_work() -> None:
+            raise KeyboardInterrupt()
+
+        with pytest.raises(KeyboardInterrupt):
+            runner.run_with_work(_interrupted_work)
+
+        assert runner._app is None  # cleaned up despite BaseException
+
+
+# ===========================================================================
 # TestEdgeCases
 # ===========================================================================
 

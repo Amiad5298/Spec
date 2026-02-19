@@ -1,7 +1,13 @@
 """Textual-based task runner orchestrator.
 
-Wraps a Textual App running in a background thread, forwarding task
-events to the active screen via ``post_task_event``.
+Forwards task events to the active Textual screen via ``post_task_event``.
+
+**Threading model (Python 3.14+ compatible)**:
+The primary API is :meth:`TextualTaskRunner.run_with_work`, which runs the
+Textual app on the **main thread** (required for POSIX signal handlers) and
+executes the backend work in a **background thread**.  The legacy
+``start()``/``stop()`` context-manager interface is retained for headless
+testing only.
 
 Supports two modes:
 1. **Multi-task mode** (default): Uses :class:`MultiTaskScreen` for Step 3
@@ -17,8 +23,10 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from textual.app import App
 from textual.screen import Screen
@@ -291,6 +299,7 @@ class TextualTaskRunner:
 
         if self._log_buffer is not None:
             self._log_buffer.close()
+            self._log_buffer = None
 
         self._app = None
 
@@ -307,6 +316,100 @@ class TextualTaskRunner:
     ) -> None:
         """Context manager exit."""
         self.stop()
+
+    def run_with_work(self, work_fn: Callable[[], Any]) -> Any:
+        """Run TUI on the main thread while *work_fn* runs in a background thread.
+
+        Textual's POSIX driver registers signal handlers (``SIGTSTP``,
+        ``SIGCONT``), which Python requires to happen on the **main thread**.
+        This method ensures the Textual app owns the main thread while the
+        backend work executes in a daemon thread.
+
+        When *work_fn* returns (or raises), the Textual app is automatically
+        exited.  If the user quits the TUI first, the app exits immediately;
+        the work thread is still joined so its result (or exception) is
+        captured.
+
+        Args:
+            work_fn: Zero-argument callable executed in the background thread.
+                It may call ``self.handle_output_line`` or ``self.handle_event``
+                for thread-safe TUI updates.
+
+        Returns:
+            Whatever *work_fn* returns.
+
+        Raises:
+            RuntimeError: If the Textual app fails to become ready within 10 s.
+            Exception: Any exception raised by *work_fn* is re-raised.
+        """
+        self._start_time = time.time()
+        self._app_ready.clear()
+        self._app_crashed = None
+
+        app = _RunnerApp(
+            runner=self,
+            single_operation_mode=self.single_operation_mode,
+        )
+        self._app = app
+
+        work_result: Any = None
+        work_exception: BaseException | None = None
+
+        def _do_work() -> None:
+            nonlocal work_result, work_exception
+
+            # Block until the screen is mounted and ready
+            if not self._app_ready.wait(timeout=10):
+                work_exception = RuntimeError("Textual app failed to start within 10 seconds")
+                try:
+                    app.call_from_thread(app.exit)
+                except Exception:
+                    pass
+                return
+
+            if self._app_crashed is not None:
+                work_exception = RuntimeError(
+                    f"Textual app crashed on startup: {self._app_crashed}"
+                )
+                return
+
+            try:
+                work_result = work_fn()
+            except BaseException as exc:
+                work_exception = exc
+            finally:
+                # Signal the Textual app to exit once work is done
+                try:
+                    app.call_from_thread(app.exit)
+                except Exception:
+                    pass
+
+        work_thread = threading.Thread(target=_do_work, daemon=True)
+        work_thread.start()
+
+        # Run Textual on the MAIN thread – blocks until app.exit() is called
+        try:
+            app.run(headless=self.headless)
+        except Exception as exc:
+            # If the app itself crashes, unblock the work thread
+            self._app_crashed = exc
+            self._app_ready.set()
+            logger.debug("Textual app crashed during run", exc_info=True)
+
+        # Wait for the work thread to finish (backend calls may still be
+        # in progress if the user quit the TUI early)
+        work_thread.join()
+
+        # Clean up resources (log buffer close is idempotent, safe if
+        # stop() was also called via the legacy context-manager path)
+        if self._log_buffer is not None:
+            self._log_buffer.close()
+            self._log_buffer = None
+        self._app = None
+
+        if work_exception is not None:
+            raise work_exception  # type: ignore[misc]
+        return work_result
 
     # =========================================================================
     # Event forwarding

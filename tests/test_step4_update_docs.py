@@ -205,8 +205,7 @@ class TestStep4WithChanges:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -251,8 +250,7 @@ class TestStep4AgentFailure:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         mock_client = MagicMock()
@@ -294,8 +292,7 @@ class TestStep4AgentFailure:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         mock_client = MagicMock()
@@ -346,8 +343,7 @@ class TestStep4NonDocEnforcement:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -393,8 +389,7 @@ class TestStep4NonDocEnforcement:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -514,8 +509,7 @@ class TestStep4UntrackedOnly:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -580,8 +574,7 @@ class TestStep4MissingBaseCommit:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -630,8 +623,7 @@ class TestStep4ViolationTracking:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -674,8 +666,7 @@ class TestStep4ViolationTracking:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)
@@ -718,8 +709,7 @@ class TestStep4ViolationTracking:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Configure mock backend to use run_with_callback (TUI mode)

@@ -478,18 +478,20 @@ def step_4_update_docs(
     try:
         result.agent_ran = True
 
-        with ui:
-            success, output = backend.run_with_callback(
+        def _work() -> tuple[bool, str]:
+            return backend.run_with_callback(
                 prompt,
                 subagent=state.subagent_names.get("doc_updater", "ingot-doc-updater"),
                 output_callback=ui.handle_output_line,
                 dont_save_session=True,
             )
 
-            # Check if user requested quit
-            if ui.check_quit_requested():
-                print_warning("Documentation update cancelled by user.")
-                return result
+        success, output = ui.run_with_work(_work)
+
+        # Check if user requested quit
+        if ui.check_quit_requested():
+            print_warning("Documentation update cancelled by user.")
+            return result
 
         ui.print_summary(success)
 

@@ -356,9 +356,6 @@ def _execute_with_tui(
     # Lazy import to avoid circular dependency
     from ingot.ui.textual_runner import TextualTaskRunner
 
-    failed_tasks: list[str] = []
-    user_quit: bool = False
-
     # Initialize TUI
     tui = TextualTaskRunner(ticket_id=state.ticket.id, verbose_mode=verbose)
     tui.initialize_records([t.name for t in pending])
@@ -372,11 +369,15 @@ def _execute_with_tui(
         if record:
             record.log_buffer = TaskLogBuffer(log_path)
 
-    with tui:
+    def _work() -> tuple[list[str], bool]:
+        """Run task loop in background thread. Returns (failed_tasks, user_quit)."""
+        _failed: list[str] = []
+        _quit = False
+
         for i, task in enumerate(pending):
             # Check for quit request before starting next task
             if tui.check_quit_requested():
-                user_quit = True
+                _quit = True
                 tui.mark_remaining_skipped(i)
                 break
 
@@ -406,7 +407,7 @@ def _execute_with_tui(
 
             # Check for quit request during task execution
             if tui.check_quit_requested():
-                user_quit = True
+                _quit = True
                 # Emit task finished event first
                 duration = record.elapsed_time
                 status: TaskStatus = "success" if success else "failed"
@@ -422,7 +423,7 @@ def _execute_with_tui(
                     mark_task_complete(tasklist_path, task.name)
                     state.mark_task_complete(task.name)
                 else:
-                    failed_tasks.append(task.name)
+                    _failed.append(task.name)
                 tui.mark_remaining_skipped(i + 1)
                 break
 
@@ -442,13 +443,17 @@ def _execute_with_tui(
                 mark_task_complete(tasklist_path, task.name)
                 state.mark_task_complete(task.name)
             else:
-                failed_tasks.append(task.name)
+                _failed.append(task.name)
                 if state.fail_fast:
                     tui.mark_remaining_skipped(i + 1)
                     break
 
         # Emit RUN_FINISHED so the screen can update its completed state
         tui.emit_run_finished()
+        return _failed, _quit
+
+    result: tuple[list[str], bool] = tui.run_with_work(_work)
+    failed_tasks, user_quit = result
 
     tui.print_summary()
     if user_quit:
@@ -965,18 +970,21 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
     ui.set_log_path(log_path)
 
     try:
-        with ui:
-            success, _ = backend.run_with_callback(
+
+        def _work() -> tuple[bool, str]:
+            return backend.run_with_callback(
                 POST_IMPLEMENTATION_TEST_PROMPT,
                 subagent=state.subagent_names["implementer"],
                 output_callback=ui.handle_output_line,
                 dont_save_session=True,
             )
 
-            # Check if user requested quit
-            if ui.check_quit_requested():
-                print_warning("Test execution cancelled by user.")
-                return
+        success, _ = ui.run_with_work(_work)
+
+        # Check if user requested quit
+        if ui.check_quit_requested():
+            print_warning("Test execution cancelled by user.")
+            return
 
         ui.print_summary(success)
 

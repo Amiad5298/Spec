@@ -124,8 +124,8 @@ def _generate_plan_with_tui(
     # Build minimal prompt - agent has the instructions
     prompt = _build_minimal_prompt(state, plan_path, plan_mode=use_plan_mode)
 
-    with ui:
-        success, output = backend.run_with_callback(
+    def _work() -> tuple[bool, str]:
+        return backend.run_with_callback(
             prompt,
             subagent=state.subagent_names["planner"],
             output_callback=ui.handle_output_line,
@@ -133,10 +133,12 @@ def _generate_plan_with_tui(
             plan_mode=use_plan_mode,
         )
 
-        # Check if user requested quit
-        if ui.check_quit_requested():
-            print_warning("Plan generation cancelled by user.")
-            return False, ""
+    success, output = ui.run_with_work(_work)
+
+    # Check if user requested quit
+    if ui.check_quit_requested():
+        print_warning("Plan generation cancelled by user.")
+        return False, ""
 
     ui.print_summary(success)
     return success, output

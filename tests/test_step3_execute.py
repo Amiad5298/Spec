@@ -553,8 +553,7 @@ class TestRunPostImplementationTests:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         _run_post_implementation_tests(workflow_state, mock_backend)
@@ -574,8 +573,7 @@ class TestRunPostImplementationTests:
         # Setup mock UI
         mock_ui = MagicMock()
         mock_ui_class.return_value = mock_ui
-        mock_ui.__enter__ = MagicMock(return_value=mock_ui)
-        mock_ui.__exit__ = MagicMock(return_value=None)
+        mock_ui.run_with_work.side_effect = lambda fn: fn()
         mock_ui.check_quit_requested.return_value = False
 
         # Should not raise exception
@@ -729,6 +727,7 @@ class TestExecuteWithTui:
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0, log_buffer=None)
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
         mock_execute.return_value = True
 
@@ -763,6 +762,7 @@ class TestExecuteWithTui:
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0, log_buffer=None)
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
         mock_execute.return_value = True
 
@@ -797,6 +797,7 @@ class TestExecuteWithTui:
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0, log_buffer=None)
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
         mock_execute.side_effect = [True, False]
 
@@ -833,6 +834,7 @@ class TestExecuteWithTui:
         mock_tui = MagicMock()
         mock_tui.check_quit_requested.return_value = False
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0, log_buffer=None)
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
         mock_execute.side_effect = [True, False, True]
         workflow_state.fail_fast = True
@@ -1122,6 +1124,7 @@ class TestStep3Execute:
         # Simulate quit requested before the first task
         mock_tui.check_quit_requested.return_value = True
         mock_tui.get_record.return_value = MagicMock(elapsed_time=1.0)
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
         mock_tui_class.return_value = mock_tui
 
         tasks = [

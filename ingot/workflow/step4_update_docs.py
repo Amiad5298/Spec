@@ -424,10 +424,9 @@ def step_4_update_docs(
 
     This step is NON-BLOCKING: errors will be reported but won't fail the workflow.
 
-    Uses TextualTaskRunner in single-operation mode to provide a consistent
-    collapsible UI with verbose toggle, matching the UX of Steps 1 and 3.
+    Uses InlineRunner to provide a compact inline progress display.
     """
-    from ingot.ui.textual_runner import TextualTaskRunner
+    from ingot.ui.inline_runner import InlineRunner
     from ingot.workflow.events import format_run_directory
     from ingot.workflow.log_management import get_log_base_dir
 
@@ -467,11 +466,10 @@ def step_4_update_docs(
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    # Create UI with collapsible panel and verbose toggle (single-operation mode)
-    ui = TextualTaskRunner(
+    # Create UI with inline progress display (single-operation mode)
+    ui = InlineRunner(
         status_message="Updating documentation...",
         ticket_id=state.ticket.id,  # Keep original ID for display
-        single_operation_mode=True,
     )
     ui.set_log_path(log_path)
 

@@ -345,10 +345,10 @@ class TestQuitHandling:
             runner.clear_quit_request()
             assert runner.check_quit_requested() is False
 
-    def test_quit_true_when_app_is_none(self) -> None:
+    def test_quit_false_when_app_is_none(self) -> None:
         runner = TextualTaskRunner()
-        # No app started
-        assert runner.check_quit_requested() is True
+        # No app started — should default to False (no user quit)
+        assert runner.check_quit_requested() is False
 
 
 # ===========================================================================

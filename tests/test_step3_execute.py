@@ -542,7 +542,7 @@ class TestRunPostImplementationTests:
 
         mock_backend.run_with_callback.assert_not_called()
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_runs_auggie_with_test_prompt(
         self, mock_confirm, mock_ui_class, mock_backend, workflow_state
@@ -562,7 +562,7 @@ class TestRunPostImplementationTests:
         prompt = mock_backend.run_with_callback.call_args[0][0]
         assert "test" in prompt.lower()
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     @patch("ingot.workflow.step3_execute.prompt_confirm")
     def test_handles_auggie_exceptions(
         self, mock_confirm, mock_ui_class, mock_backend, workflow_state

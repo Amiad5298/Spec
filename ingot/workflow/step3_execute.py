@@ -943,10 +943,9 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
     This includes both modified test files AND tests that cover modified source files.
     Does NOT run the full project test suite.
 
-    Uses TextualTaskRunner in single-operation mode to provide a consistent
-    collapsible UI with verbose toggle, matching the UX of Steps 1 and 3.
+    Uses InlineRunner to provide a compact inline progress display.
     """
-    from ingot.ui.textual_runner import TextualTaskRunner
+    from ingot.ui.inline_runner import InlineRunner
     from ingot.workflow.events import format_run_directory
 
     # Prompt user to run tests
@@ -961,11 +960,10 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{format_run_directory()}.log"
 
-    # Create UI with collapsible panel and verbose toggle (single-operation mode)
-    ui = TextualTaskRunner(
+    # Create UI with inline progress display (single-operation mode)
+    ui = InlineRunner(
         status_message="Running tests for changed code...",
         ticket_id=state.ticket.id,  # Keep original ID for display
-        single_operation_mode=True,
     )
     ui.set_log_path(log_path)
 

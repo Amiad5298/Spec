@@ -87,7 +87,7 @@ class TestCreatePlanLogDir:
 
 
 class TestGeneratePlanWithTui:
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     def test_returns_true_on_successful_generation(
         self, mock_tui_class, workflow_state, tmp_path, monkeypatch, mock_backend
     ):
@@ -106,7 +106,7 @@ class TestGeneratePlanWithTui:
 
         assert success is True
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     def test_returns_false_when_user_requests_quit(
         self, mock_tui_class, workflow_state, tmp_path, monkeypatch, mock_backend
     ):
@@ -125,7 +125,7 @@ class TestGeneratePlanWithTui:
 
         assert success is False
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     def test_log_path_is_set_on_ui(
         self, mock_tui_class, workflow_state, tmp_path, monkeypatch, mock_backend
     ):
@@ -147,7 +147,7 @@ class TestGeneratePlanWithTui:
         assert isinstance(log_path_arg, Path)
         assert ".log" in str(log_path_arg)
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     def test_auggie_client_uses_subagent(
         self, mock_tui_class, workflow_state, tmp_path, monkeypatch, mock_backend
     ):
@@ -169,7 +169,7 @@ class TestGeneratePlanWithTui:
         assert "subagent" in call_kwargs
         assert call_kwargs["subagent"] == workflow_state.subagent_names["planner"]
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     def test_returns_false_on_auggie_failure(
         self, mock_tui_class, workflow_state, tmp_path, monkeypatch, mock_backend
     ):
@@ -188,7 +188,7 @@ class TestGeneratePlanWithTui:
 
         assert success is False
 
-    @patch("ingot.ui.textual_runner.TextualTaskRunner")
+    @patch("ingot.ui.inline_runner.InlineRunner")
     def test_dont_save_session_flag_is_passed(
         self, mock_tui_class, workflow_state, tmp_path, monkeypatch, mock_backend
     ):

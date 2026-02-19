@@ -6,6 +6,7 @@ This package contains:
 - log_buffer: Memory-efficient log buffer with file backing
 """
 
+from ingot.ui.inline_runner import InlineRunner
 from ingot.ui.log_buffer import TaskLogBuffer
 from ingot.ui.menus import (
     MainMenuChoice,
@@ -27,6 +28,8 @@ from ingot.ui.prompts import (
 )
 
 __all__ = [
+    # Inline Runner
+    "InlineRunner",
     # Log Buffer
     "TaskLogBuffer",
     # Prompts

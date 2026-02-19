@@ -214,6 +214,7 @@ class TextualTaskRunner:
     _app_thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _app_ready: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
     _app_crashed: Exception | None = field(default=None, init=False, repr=False)
+    _quit_by_user: bool = field(default=False, init=False, repr=False)
     headless: bool = field(default=False, init=True, repr=False)
 
     # =========================================================================
@@ -301,6 +302,7 @@ class TextualTaskRunner:
             self._log_buffer.close()
             self._log_buffer = None
 
+        self._quit_by_user = self._app.quit_by_user if self._app else self._quit_by_user
         self._app = None
 
     def __enter__(self) -> TextualTaskRunner:
@@ -405,6 +407,7 @@ class TextualTaskRunner:
         if self._log_buffer is not None:
             self._log_buffer.close()
             self._log_buffer = None
+        self._quit_by_user = self._app.quit_by_user if self._app else False
         self._app = None
 
         if work_exception is not None:
@@ -471,15 +474,15 @@ class TextualTaskRunner:
     def check_quit_requested(self) -> bool:
         """Check if the user has requested to quit.
 
-        Returns ``True`` if the user pressed quit in the TUI, or if the
-        app is no longer running.
+        Returns ``True`` only if the user explicitly pressed quit in the TUI.
         """
-        if self._app is None:
-            return True
-        return self._app.quit_by_user
+        if self._app is not None:
+            return self._app.quit_by_user
+        return self._quit_by_user
 
     def clear_quit_request(self) -> None:
         """Reset the quit request flag."""
+        self._quit_by_user = False
         if self._app is not None:
             self._app.quit_by_user = False
 

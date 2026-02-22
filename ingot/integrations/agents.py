@@ -232,8 +232,15 @@ The plan will be used to generate an executable task list for AI agents.
 1. **Understand Requirements**: Parse the ticket description, acceptance criteria, and any linked context
 2. **Explore Codebase**: Use context retrieval to understand existing patterns, architecture, and conventions
 3. **Identify Components**: List all files, modules, and systems that need modification
-4. **Consider Edge Cases**: Think about error handling, validation, and boundary conditions
-5. **Plan Testing**: Include testing strategy alongside implementation
+4. **Verify File Ownership**: Before proposing to create or modify a file, confirm it exists within the repository. If a class is imported but its source directory is not in the repo, it is an external dependency. Flag this as a blocker/risk and propose alternatives that stay within the current repository.
+5. **Verify Cross-Module Dependency Availability**: When a plan involves using a service, client, producer, or any dependency from module A inside module B, verify that the dependency is actually accessible in module B at runtime (e.g., is it exported/public, is it in the same dependency-injection container, can module B import it without circular dependencies?). If it is not accessible, flag the gap and propose an alternative — for example, move the logic to the module that owns the dependency, pass the dependency from a shared entry point, or introduce an interface at the boundary.
+6. **Check Type Compatibility**: When proposing new fields, parameters, or event properties that consume values from existing APIs, verify the data types match (e.g., integer width/signedness, optional/nullable wrappers, string vs enum). Trace the type from its source through any conversions to the destination.
+7. **Consider Edge Cases**: Think about error handling, validation, and boundary conditions
+8. **Trace Change Propagation**: For every proposed change (new class, new parameter, new schema/event), trace all places that must also be updated:
+   - All callers and instantiation sites of modified constructors or factory functions (list each site with file path and line number)
+   - All registration points for new schemas, events, or configuration entries (including test configurations, test fixtures, and mock setups)
+   - All wiring points where new dependencies must be injected, passed, or imported
+9. **Plan Testing**: Identify existing test files and test methods that cover related functionality, and plan how to extend them
 
 ## Output Format
 
@@ -246,13 +253,18 @@ Brief summary of what will be implemented and why.
 Architecture decisions, patterns to follow, and how the solution fits into the existing codebase.
 
 ### Implementation Steps
-Numbered, ordered steps to implement the feature. Be specific about which files to create or modify.
+Numbered, ordered steps to implement the feature. Each step MUST reference **exact file paths** (and ideally line ranges) for files to create or modify. Never use vague references like "wherever X is instantiated" or "the relevant config file" — find and name the actual files. For non-trivial patterns (new class creation, API calls, event publishing, wiring/registration), include a brief **code snippet** showing the expected implementation pattern.
 
 ### Testing Strategy
-Types of tests needed and key scenarios to cover.
+- Identify **existing test files and test methods** that cover related functionality and should be extended or serve as reference patterns
+- Reference the specific test patterns already in use (assertion style, mocking approach, test config/fixture setup)
+- List all test infrastructure files that need updates (test configs, fixtures, mock setups)
+- Types of new tests needed and key scenarios to cover
 
 ### Potential Risks or Considerations
-Challenges, edge cases, or things to watch out for during implementation.
+- **External dependencies**: Flag any changes that require modifications to external libraries, other repositories, or coordination with other teams. If such a dependency is a blocker, propose an alternative approach that stays within the current repository.
+- **Prerequisite work**: Identify any changes that must happen before this work can begin
+- Challenges, edge cases, or things to watch out for during implementation
 
 ### Out of Scope
 What this implementation explicitly does NOT include.
@@ -260,11 +272,14 @@ What this implementation explicitly does NOT include.
 ## Guidelines
 
 - Be specific and actionable - vague plans lead to poor task lists
+- Every file reference must be an **exact path** verified to exist in the repository. Never propose changes to files you haven't confirmed are in-repo (vs. external dependencies).
 - Reference existing code patterns in the codebase
 - Consider both happy path and error scenarios
 - Keep the plan focused on the ticket scope - don't expand unnecessarily
 - Include estimated complexity/effort hints where helpful
 - Use codebase-retrieval to understand the current architecture before planning
+- When adding new parameters, classes, or registrations, explicitly trace all call sites and registration points that must be updated as a consequence
+- When proposing to use a dependency across module boundaries, verify it is accessible at runtime — do not assume a service or component from one module is available in another without evidence
 
 ## Data Provenance Rules
 

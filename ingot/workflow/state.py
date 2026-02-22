@@ -18,6 +18,7 @@ from ingot.workflow.constants import (
     INGOT_AGENT_FIXER,
     INGOT_AGENT_IMPLEMENTER,
     INGOT_AGENT_PLANNER,
+    INGOT_AGENT_RESEARCHER,
     INGOT_AGENT_REVIEWER,
     INGOT_AGENT_TASKLIST,
     INGOT_AGENT_TASKLIST_REFINER,
@@ -119,6 +120,9 @@ class WorkflowState:
     # Review configuration
     enable_phase_review: bool = False  # Enable phase reviews after task execution
 
+    # Plan validation
+    enable_plan_validation: bool = True
+
     # Re-planning state
     replan_count: int = 0  # Number of execution replans (Step 3 post-review)
     plan_revision_count: int = 0  # Number of plan revisions (Step 1 regenerations)
@@ -149,6 +153,7 @@ class WorkflowState:
             "reviewer": INGOT_AGENT_REVIEWER,
             "fixer": INGOT_AGENT_FIXER,
             "doc_updater": INGOT_AGENT_DOC_UPDATER,
+            "researcher": INGOT_AGENT_RESEARCHER,
         }
     )
 

@@ -7,17 +7,22 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ingot.ui.menus import ReviewChoice
+from ingot.validation.base import ValidationFinding, ValidationReport, ValidationSeverity
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import (
     _build_minimal_prompt,
     _build_replan_prompt,
     _create_plan_log_dir,
     _display_plan_summary,
+    _display_validation_report,
     _edit_plan,
     _extract_plan_markdown,
     _generate_plan_with_tui,
     _get_log_base_dir,
+    _run_researcher,
     _save_plan_from_output,
+    _truncate_researcher_context,
+    _validate_plan,
     step_1_create_plan,
 )
 
@@ -550,6 +555,7 @@ class TestDisplayPlanSummary:
 
 
 class TestStep1CreatePlanTuiMode:
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
@@ -560,6 +566,7 @@ class TestStep1CreatePlanTuiMode:
         mock_generate,
         mock_display,
         mock_review_menu,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -568,6 +575,7 @@ class TestStep1CreatePlanTuiMode:
         mock_should_tui.return_value = True
         mock_generate.return_value = (True, "# Plan")
         mock_review_menu.return_value = ReviewChoice.APPROVE
+        workflow_state.enable_plan_validation = False
 
         # Create plan file to simulate successful generation
         specs_dir = tmp_path / "specs"
@@ -585,14 +593,23 @@ class TestStep1CreatePlanTuiMode:
 
         assert specs_dir.exists()
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_calls_generate_plan_with_tui(
-        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -609,12 +626,14 @@ class TestStep1CreatePlanTuiMode:
 
         mock_generate.assert_called_once()
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_returns_false_when_plan_generation_fails(
-        self, mock_generate, workflow_state, tmp_path, monkeypatch
+        self, mock_generate, mock_researcher, workflow_state, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
         mock_generate.return_value = (False, "")  # Generation fails
+        workflow_state.enable_plan_validation = False
 
         result = step_1_create_plan(workflow_state, MagicMock())
 
@@ -622,14 +641,23 @@ class TestStep1CreatePlanTuiMode:
 
 
 class TestStep1CreatePlanFileHandling:
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_saves_plan_file_on_success(
-        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -647,6 +675,7 @@ class TestStep1CreatePlanFileHandling:
         # Compare resolved paths since the function uses relative paths
         assert workflow_state.plan_file.resolve() == plan_path.resolve()
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._save_plan_from_output")
@@ -657,6 +686,7 @@ class TestStep1CreatePlanFileHandling:
         mock_save_plan,
         mock_display,
         mock_review_menu,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -664,6 +694,7 @@ class TestStep1CreatePlanFileHandling:
         monkeypatch.chdir(tmp_path)
         mock_generate.return_value = (True, "# Plan output")  # Success but no file
         mock_review_menu.return_value = ReviewChoice.APPROVE
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
@@ -680,14 +711,23 @@ class TestStep1CreatePlanFileHandling:
 
         mock_save_plan.assert_called_once()
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.print_error")
     @patch("ingot.workflow.step1_plan._save_plan_from_output")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_returns_false_when_save_fails_to_create_file(
-        self, mock_generate, mock_save_plan, mock_print_error, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_save_plan,
+        mock_print_error,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_generate.return_value = (True, "# Plan output")  # Generation succeeds but no file
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
@@ -710,14 +750,23 @@ class TestStep1CreatePlanFileHandling:
 
 
 class TestStep1CreatePlanConfirmation:
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_returns_true_when_plan_approved(
-        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -734,14 +783,23 @@ class TestStep1CreatePlanConfirmation:
 
         assert result is True
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_returns_false_when_plan_aborted(
-        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.ABORT
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -758,14 +816,23 @@ class TestStep1CreatePlanConfirmation:
 
         assert result is False
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_updates_current_step_to_2_on_approve(
-        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -784,14 +851,23 @@ class TestStep1CreatePlanConfirmation:
 
         assert workflow_state.current_step == 2  # Updated to 2
 
+    @patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_does_not_update_current_step_on_abort(
-        self, mock_generate, mock_display, mock_review_menu, workflow_state, tmp_path, monkeypatch
+        self,
+        mock_generate,
+        mock_display,
+        mock_review_menu,
+        mock_researcher,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.ABORT
+        workflow_state.enable_plan_validation = False
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -811,6 +887,7 @@ class TestStep1CreatePlanConfirmation:
         assert workflow_state.current_step == 1  # Unchanged
 
 
+@patch("ingot.workflow.step1_plan._run_researcher", return_value=(False, ""))
 class TestStep1PlanReviewLoop:
     """Tests for the plan review loop (regenerate, edit, abort flows)."""
 
@@ -826,6 +903,7 @@ class TestStep1PlanReviewLoop:
 
         mock_generate.side_effect = create_plan
         workflow_state.skip_clarification = True
+        workflow_state.enable_plan_validation = False
         return plan_path
 
     @patch("ingot.workflow.step1_plan.replan_with_feedback")
@@ -840,6 +918,7 @@ class TestStep1PlanReviewLoop:
         mock_review_menu,
         mock_prompt_input,
         mock_replan,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -872,6 +951,7 @@ class TestStep1PlanReviewLoop:
         mock_display,
         mock_review_menu,
         mock_prompt_input,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -904,6 +984,7 @@ class TestStep1PlanReviewLoop:
         mock_review_menu,
         mock_prompt_input,
         mock_replan,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -931,6 +1012,7 @@ class TestStep1PlanReviewLoop:
         mock_display,
         mock_review_menu,
         mock_edit_plan,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -956,6 +1038,7 @@ class TestStep1PlanReviewLoop:
         mock_generate,
         mock_display,
         mock_review_menu,
+        mock_researcher,
         workflow_state,
         tmp_path,
         monkeypatch,
@@ -1105,3 +1188,431 @@ class TestBuildReplanPrompt:
         result = _build_replan_prompt(workflow_state, plan_path, "# Old plan", "Needs work")
 
         assert "[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]" not in result
+
+
+# =============================================================================
+# Researcher Agent Tests
+# =============================================================================
+
+
+class TestRunResearcher:
+    @patch("ingot.ui.inline_runner.InlineRunner")
+    def test_successful_researcher_call(self, mock_tui_class, workflow_state, mock_backend):
+        mock_tui = MagicMock()
+        mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
+        mock_tui_class.return_value = mock_tui
+
+        mock_backend.run_with_callback.return_value = (
+            True,
+            "### Verified Files\n- `src/main.py:1`",
+        )
+
+        success, output = _run_researcher(workflow_state, mock_backend)
+
+        assert success is True
+        assert "Verified Files" in output
+
+    @patch("ingot.ui.inline_runner.InlineRunner")
+    def test_failed_researcher_returns_false(self, mock_tui_class, workflow_state, mock_backend):
+        mock_tui = MagicMock()
+        mock_tui.check_quit_requested.return_value = False
+        mock_tui.run_with_work.side_effect = lambda fn: fn()
+        mock_tui_class.return_value = mock_tui
+
+        mock_backend.run_with_callback.return_value = (False, "")
+
+        success, output = _run_researcher(workflow_state, mock_backend)
+
+        assert success is False
+
+    def test_missing_researcher_key_graceful(self, workflow_state, mock_backend):
+        # Remove researcher from subagent_names
+        workflow_state.subagent_names.pop("researcher", None)
+
+        success, output = _run_researcher(workflow_state, mock_backend)
+
+        assert success is False
+        assert output == ""
+        # No KeyError raised
+
+    @patch("ingot.ui.inline_runner.InlineRunner")
+    def test_researcher_exception_returns_false(self, mock_tui_class, workflow_state, mock_backend):
+        mock_tui = MagicMock()
+        mock_tui.run_with_work.side_effect = RuntimeError("network error")
+        mock_tui_class.return_value = mock_tui
+
+        success, output = _run_researcher(workflow_state, mock_backend)
+
+        assert success is False
+        assert output == ""
+
+
+# =============================================================================
+# Truncation Tests
+# =============================================================================
+
+
+class TestTruncateResearcherContext:
+    def test_short_context_unchanged(self):
+        context = "### Verified Files\n- `src/main.py:1` — Main file"
+        result = _truncate_researcher_context(context)
+        assert result == context
+        assert "[NOTE:" not in result
+
+    def test_long_context_truncated(self):
+        # Create context that exceeds the budget
+        context = "### Verified Files\n" + "- `src/file.py:1` — Description\n" * 500
+        result = _truncate_researcher_context(context, budget=500)
+        assert len(result) <= 600  # Budget + header overhead
+        assert "[NOTE: Research context truncated" in result
+
+    def test_empty_context_returned(self):
+        result = _truncate_researcher_context("")
+        assert result == ""
+
+    def test_sections_dropped_in_priority_order(self):
+        context = (
+            "### Verified Files\nFile list\n"
+            "### Existing Code Patterns\nPatterns\n"
+            "### Unresolved\nUnresolved items long text " + "x" * 500
+        )
+        result = _truncate_researcher_context(context, budget=200)
+        # Should keep Verified Files (highest priority) and drop Unresolved (lowest)
+        assert "Verified Files" in result
+
+
+# =============================================================================
+# Build Prompt with Researcher Context Tests
+# =============================================================================
+
+
+class TestBuildMinimalPromptWithResearcherContext:
+    def test_includes_discovery_section_when_context_provided(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        researcher = "### Verified Files\n- `src/main.py:1`"
+
+        result = _build_minimal_prompt(workflow_state, plan_path, researcher_context=researcher)
+
+        assert "[SOURCE: CODEBASE DISCOVERY" in result
+        assert "Verified Files" in result
+
+    def test_omits_discovery_section_when_empty(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+
+        result = _build_minimal_prompt(workflow_state, plan_path, researcher_context="")
+
+        assert "[SOURCE: CODEBASE DISCOVERY" not in result
+
+    def test_truncation_applied_before_injection(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        # Create very long researcher output
+        researcher = "### Verified Files\n" + "- `src/file.py:1` — Desc\n" * 2000
+
+        result = _build_minimal_prompt(workflow_state, plan_path, researcher_context=researcher)
+
+        # Should contain the truncation note
+        assert "[SOURCE: CODEBASE DISCOVERY" in result
+        # The full 2000-line output should NOT be in the prompt
+        assert result.count("src/file.py") < 2000
+
+
+# =============================================================================
+# Validation Integration Tests
+# =============================================================================
+
+
+class TestValidatePlan:
+    def test_validation_runs_with_complete_plan(self, workflow_state, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        plan = """\
+# Plan
+
+## Summary
+Summary.
+
+## Technical Approach
+Approach.
+
+## Implementation Steps
+Steps.
+
+## Testing Strategy
+Tests.
+
+## Potential Risks
+Risks.
+
+## Out of Scope
+Nothing.
+"""
+        report = _validate_plan(plan, workflow_state)
+        # Complete plan should have no section errors
+        section_errors = [f for f in report.findings if f.validator_name == "Required Sections"]
+        assert section_errors == []
+
+
+class TestDisplayValidationReport:
+    @patch("ingot.workflow.step1_plan.console")
+    def test_empty_report_no_output(self, mock_console):
+        report = ValidationReport()
+        _display_validation_report(report)
+        # Should not print anything significant
+        mock_console.print.assert_not_called()
+
+    @patch("ingot.workflow.step1_plan.print_warning")
+    @patch("ingot.workflow.step1_plan.console")
+    @patch("ingot.workflow.step1_plan.print_step")
+    def test_report_with_errors_displayed(self, mock_step, mock_console, mock_warning):
+        report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Something is wrong",
+                    suggestion="Fix it",
+                ),
+            ]
+        )
+        _display_validation_report(report)
+        mock_step.assert_called_once()
+        # Should warn about error count
+        mock_warning.assert_called_once()
+
+
+# =============================================================================
+# Step 1 with Validation Tests
+# =============================================================================
+
+
+class TestStep1WithValidation:
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_validation_runs_when_enabled(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_display,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "### Verified Files\n")
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+        mock_validate.return_value = ValidationReport()
+        workflow_state.enable_plan_validation = True
+
+        step_1_create_plan(workflow_state, MagicMock())
+
+        mock_validate.assert_called_once()
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_validation_skipped_when_disabled(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_display,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+        workflow_state.enable_plan_validation = False
+
+        step_1_create_plan(workflow_state, MagicMock())
+
+        mock_validate.assert_not_called()
+
+
+class TestStep1RetryOnValidationError:
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_retry_on_errors_reruns_pipeline(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_confirm,
+        mock_display_report,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "### Verified Files\n")
+        mock_confirm.return_value = True
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        # First call: errors -> retry, second call: clean
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Bad",
+                ),
+            ]
+        )
+        clean_report = ValidationReport()
+        mock_validate.side_effect = [error_report, clean_report]
+        workflow_state.enable_plan_validation = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        assert mock_generate.call_count == 2
+        assert mock_researcher.call_count == 2
+        assert workflow_state.plan_revision_count == 1
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_decline_retry_proceeds_to_review(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_confirm,
+        mock_display_report,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+        mock_confirm.return_value = False  # Decline retry
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Bad",
+                ),
+            ]
+        )
+        mock_validate.return_value = error_report
+        workflow_state.enable_plan_validation = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        # Only generated once (no retry)
+        assert mock_generate.call_count == 1
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_warnings_only_no_retry_prompt(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        warning_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.WARNING,
+                    message="Minor issue",
+                ),
+            ]
+        )
+        mock_validate.return_value = warning_report
+        workflow_state.enable_plan_validation = True
+
+        with patch("ingot.workflow.step1_plan.prompt_confirm") as mock_confirm:
+            result = step_1_create_plan(workflow_state, MagicMock())
+            # prompt_confirm should NOT be called (only warnings, no errors)
+            mock_confirm.assert_not_called()
+
+        assert result is True

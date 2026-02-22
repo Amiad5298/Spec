@@ -12,8 +12,9 @@ import sys
 from pathlib import Path
 
 from ingot.integrations.backends.base import AIBackend
+from ingot.integrations.git import find_repo_root
 from ingot.ui.menus import ReviewChoice, show_plan_review_menu
-from ingot.ui.prompts import prompt_enter, prompt_input
+from ingot.ui.prompts import prompt_confirm, prompt_enter, prompt_input
 from ingot.utils.console import (
     console,
     print_error,
@@ -24,7 +25,12 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
-from ingot.workflow.constants import MAX_REVIEW_ITERATIONS, noop_output_callback
+from ingot.validation.base import ValidationReport, ValidationSeverity
+from ingot.workflow.constants import (
+    MAX_GENERATION_RETRIES,
+    MAX_REVIEW_ITERATIONS,
+    noop_output_callback,
+)
 from ingot.workflow.events import format_run_directory
 from ingot.workflow.state import WorkflowState
 
@@ -63,6 +69,19 @@ _UNVERIFIED_NOTE = (
     'Do NOT reference "the ticket" as a source of requirements.'
 )
 
+# Researcher context truncation settings
+_RESEARCHER_CONTEXT_BUDGET = 12000  # chars (~3000 tokens)
+
+# Section priority order for truncation (highest priority first)
+_SECTION_PRIORITY = [
+    "### Verified Files",
+    "### Existing Code Patterns",
+    "### Interface & Class Hierarchy",
+    "### Call Sites",
+    "### Test Files",
+    "### Unresolved",
+]
+
 
 # =============================================================================
 # Log Directory Management
@@ -98,8 +117,15 @@ def _generate_plan_with_tui(
     state: WorkflowState,
     plan_path: Path,
     backend: AIBackend,
+    researcher_context: str = "",
 ) -> tuple[bool, str]:
     """Generate plan with TUI progress display using subagent.
+
+    Args:
+        state: Current workflow state.
+        plan_path: Path where the plan should be saved.
+        backend: AI backend for agent calls.
+        researcher_context: Optional researcher output to inject into the prompt.
 
     Returns:
         Tuple of (success, captured_output).
@@ -121,7 +147,9 @@ def _generate_plan_with_tui(
     use_plan_mode = backend.supports_plan_mode
 
     # Build minimal prompt - agent has the instructions
-    prompt = _build_minimal_prompt(state, plan_path, plan_mode=use_plan_mode)
+    prompt = _build_minimal_prompt(
+        state, plan_path, plan_mode=use_plan_mode, researcher_context=researcher_context
+    )
 
     def _work() -> tuple[bool, str]:
         return backend.run_with_callback(
@@ -143,7 +171,13 @@ def _generate_plan_with_tui(
     return success, output
 
 
-def _build_minimal_prompt(state: WorkflowState, plan_path: Path, *, plan_mode: bool = False) -> str:
+def _build_minimal_prompt(
+    state: WorkflowState,
+    plan_path: Path,
+    *,
+    plan_mode: bool = False,
+    researcher_context: str = "",
+) -> str:
     """Build minimal prompt for plan generation.
 
     The subagent has detailed instructions - we just pass context.
@@ -153,6 +187,7 @@ def _build_minimal_prompt(state: WorkflowState, plan_path: Path, *, plan_mode: b
         plan_path: Path where the plan should be saved.
         plan_mode: If True, instruct the AI to output the plan to stdout
             instead of writing a file (for read-only backends).
+        researcher_context: Optional researcher output to inject into the prompt.
     """
     source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
@@ -172,6 +207,18 @@ Description: {state.ticket.description or "Not available"}"""
 [SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
 {state.user_constraints}"""
 
+    # Inject researcher context if provided
+    if researcher_context:
+        trimmed = _truncate_researcher_context(researcher_context)
+        prompt += f"""
+
+[SOURCE: CODEBASE DISCOVERY (from automated research)]
+The following codebase context was discovered by a research agent. Use it as your
+primary source of truth for file paths, code patterns, and call sites. Do NOT
+re-search for information already provided here.
+
+{trimmed}"""
+
     if plan_mode:
         prompt += """
 
@@ -187,6 +234,182 @@ Save the plan to: {plan_path}
 Codebase context will be retrieved automatically."""
 
     return prompt
+
+
+# =============================================================================
+# Researcher Agent Functions
+# =============================================================================
+
+
+def _run_researcher(
+    state: WorkflowState,
+    backend: AIBackend,
+) -> tuple[bool, str]:
+    """Run the researcher agent to discover codebase context.
+
+    Returns (success, researcher_output_markdown).
+    """
+    from ingot.ui.inline_runner import InlineRunner
+
+    researcher_name = state.subagent_names.get("researcher")
+    if not researcher_name:
+        log_message("No researcher agent configured, skipping discovery phase")
+        return False, ""
+
+    source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
+
+    prompt = f"""Research the codebase for: {state.ticket.id}
+
+{source_label}
+Ticket: {state.ticket.title or state.ticket.branch_summary or "Not available"}
+Description: {state.ticket.description or "Not available"}"""
+
+    if state.user_constraints:
+        prompt += f"""
+
+[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
+{state.user_constraints}"""
+
+    ui = InlineRunner(
+        status_message="Researching codebase...",
+        ticket_id=state.ticket.id,
+    )
+
+    def _work() -> tuple[bool, str]:
+        return backend.run_with_callback(
+            prompt,
+            subagent=researcher_name,
+            output_callback=ui.handle_output_line,
+            dont_save_session=True,
+        )
+
+    try:
+        success, output = ui.run_with_work(_work)
+    except Exception as e:
+        log_message(f"Researcher agent failed: {e}")
+        return False, ""
+
+    if ui.check_quit_requested():
+        return False, ""
+
+    ui.print_summary(success)
+    return success, output
+
+
+def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT_BUDGET) -> str:
+    """Truncate researcher context to fit within character budget.
+
+    Preserves sections in priority order. When budget is exceeded, drops
+    lowest-priority sections entirely, then truncates within the last
+    kept section.
+
+    Returns truncated context. Prepends a note header if truncation occurred.
+    """
+    if len(context) <= budget:
+        return context
+
+    # Split context into sections by ### headings
+    sections: list[tuple[str, str]] = []  # (heading, content)
+    current_heading = ""
+    current_lines: list[str] = []
+
+    for line in context.splitlines():
+        if line.strip().startswith("### "):
+            if current_heading or current_lines:
+                sections.append((current_heading, "\n".join(current_lines)))
+            current_heading = line.strip()
+            current_lines = []
+        else:
+            current_lines.append(line)
+
+    # Add final section
+    if current_heading or current_lines:
+        sections.append((current_heading, "\n".join(current_lines)))
+
+    # Build a map of heading -> (heading, content)
+    section_map: dict[str, tuple[str, str]] = {}
+    for heading, content in sections:
+        section_map[heading] = (heading, content)
+
+    # Accumulate sections in priority order
+    result_parts: list[str] = []
+    total_len = 0
+    truncated = False
+
+    for priority_heading in _SECTION_PRIORITY:
+        if priority_heading not in section_map:
+            continue
+        heading, content = section_map[priority_heading]
+        section_text = f"{heading}\n{content}"
+        if total_len + len(section_text) + 1 <= budget:
+            result_parts.append(section_text)
+            total_len += len(section_text) + 1  # +1 for joining newline
+        else:
+            # Truncate within this section
+            remaining = budget - total_len
+            if remaining > len(heading) + 20:  # Only include if meaningful content fits
+                truncated_content = content[: remaining - len(heading) - 5]
+                result_parts.append(f"{heading}\n{truncated_content}\n...")
+            truncated = True
+            break
+
+    result = "\n".join(result_parts)
+
+    if truncated or len(result) < len(context):
+        header = "[NOTE: Research context truncated to fit budget. Full output saved to research file.]\n\n"
+        result = header + result
+
+    return result
+
+
+# =============================================================================
+# Plan Validation Functions
+# =============================================================================
+
+
+def _validate_plan(
+    plan_content: str,
+    state: WorkflowState,
+    researcher_output: str = "",
+) -> ValidationReport:
+    """Run all registered plan validators."""
+    from ingot.validation.base import ValidationContext
+    from ingot.validation.plan_validators import create_plan_validator_registry
+
+    registry = create_plan_validator_registry(researcher_output=researcher_output)
+    context = ValidationContext(
+        repo_root=find_repo_root(),
+        ticket_id=state.ticket.id,
+    )
+    return registry.validate_all(plan_content, context)
+
+
+def _display_validation_report(report: ValidationReport) -> None:
+    """Display validation findings to the user."""
+    if not report.findings:
+        return
+    console.print()
+    print_step("Plan Validation Results:")
+    for finding in report.findings:
+        severity_prefix = {
+            ValidationSeverity.ERROR: "[red]ERROR[/red]",
+            ValidationSeverity.WARNING: "[yellow]WARN[/yellow]",
+            ValidationSeverity.INFO: "[dim]INFO[/dim]",
+        }[finding.severity]
+        console.print(f"  {severity_prefix} [{finding.validator_name}] {finding.message}")
+        if finding.suggestion:
+            console.print(f"         Suggestion: {finding.suggestion}")
+    if report.error_count:
+        console.print()
+        print_warning(
+            f"Plan has {report.error_count} error(s) and {report.warning_count} warning(s)"
+        )
+    console.print()
+
+
+# =============================================================================
+# Plan Extraction
+# =============================================================================
 
 
 def _extract_plan_markdown(output: str) -> str:
@@ -221,9 +444,13 @@ def _extract_plan_markdown(output: str) -> str:
 def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
     """Execute Step 1: Create implementation plan.
 
-    This step:
-    1. Generates an implementation plan
-    2. Saves the plan to specs/{ticket}-plan.md
+    This step runs a 3-phase pipeline:
+    1. Discovery: Researcher agent explores the codebase
+    2. Synthesis: Planner agent creates a plan from verified researcher output
+    3. Inspection: Python validators check the plan for structural issues
+
+    If validation finds errors, offers a retry (up to MAX_GENERATION_RETRIES).
+    Then proceeds to the standard user review loop.
 
     Note: Ticket information is already fetched in the workflow runner
     before this step is called. Clarification is handled separately
@@ -240,67 +467,105 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
     if state.ticket.description:
         print_info(f"Description: {state.ticket.description[:200]}...")
 
-    # Generate implementation plan using subagent
-    print_step("Generating implementation plan...")
     plan_path = state.get_plan_path()
+    researcher_output = ""
 
-    success, output = _generate_plan_with_tui(state, plan_path, backend)
+    # 3-phase generation loop with retry on validation errors
+    for attempt in range(1, MAX_GENERATION_RETRIES + 1):
+        # Phase 1: Discovery
+        researcher_name = state.subagent_names.get("researcher")
+        if researcher_name:
+            print_step("Researching codebase...")
+            researcher_success, researcher_output = _run_researcher(state, backend)
+            if researcher_success and researcher_output.strip():
+                # Persist researcher output for audit/debug
+                research_path = plan_path.with_suffix(".research.md")
+                research_path.write_text(researcher_output)
+                log_message(f"Persisted researcher output to {research_path}")
+            else:
+                print_warning("Researcher failed, planner will search independently")
+                researcher_output = ""
+        else:
+            log_message("No researcher agent configured, skipping discovery phase")
 
-    if not success:
-        print_error("Failed to generate implementation plan")
-        return False
+        # Phase 2: Synthesis
+        print_step("Generating implementation plan...")
+        success, output = _generate_plan_with_tui(
+            state, plan_path, backend, researcher_context=researcher_output
+        )
 
-    # Check if plan file was created
-    if not plan_path.exists():
-        # Plan might be in output, save it
-        print_info("Saving plan to file...")
-        _save_plan_from_output(plan_path, state, output=output)
+        if not success:
+            print_error("Failed to generate implementation plan")
+            return False
 
-    if plan_path.exists():
-        print_success(f"Implementation plan saved to: {plan_path}")
+        # Handle plan file creation
+        if not plan_path.exists():
+            print_info("Saving plan to file...")
+            _save_plan_from_output(plan_path, state, output=output)
+
+        if not plan_path.exists():
+            print_error("Plan file was not created")
+            return False
+
         state.plan_file = plan_path
 
-        # Display plan summary
-        _display_plan_summary(plan_path)
+        # Phase 3: Inspection
+        if state.enable_plan_validation:
+            plan_content = plan_path.read_text()
+            report = _validate_plan(plan_content, state, researcher_output=researcher_output)
+            if report.findings:
+                _display_validation_report(report)
 
-        # Plan review loop
-        for _iteration in range(MAX_REVIEW_ITERATIONS):
-            choice = show_plan_review_menu()
+            # Offer retry on errors (not on warnings/info)
+            if report.has_errors and attempt < MAX_GENERATION_RETRIES:
+                retry = prompt_confirm(
+                    "Validation found errors. Retry plan generation?",
+                    default=True,
+                )
+                if retry:
+                    state.plan_revision_count += 1
+                    continue  # Re-run researcher + planner
 
-            if choice == ReviewChoice.APPROVE:
-                state.current_step = 2
-                return True
+        break  # No errors or user declined retry — proceed to review
 
-            elif choice == ReviewChoice.REGENERATE:
-                feedback = prompt_input("What changes would you like?", default="")
-                if not feedback or not feedback.strip():
-                    print_warning("No feedback provided. Please describe what to change.")
-                    continue
+    # Display and user review loop (unchanged from before)
+    print_success(f"Implementation plan saved to: {plan_path}")
+    _display_plan_summary(plan_path)
 
-                state.plan_revision_count += 1
-                if replan_with_feedback(state, backend, feedback):
-                    _display_plan_summary(plan_path)
-                    continue
-                else:
-                    print_error("Failed to regenerate plan. You can retry or edit manually.")
-                    continue
+    for _iteration in range(MAX_REVIEW_ITERATIONS):
+        choice = show_plan_review_menu()
 
-            elif choice == ReviewChoice.EDIT:
-                _edit_plan(plan_path)
-                _display_plan_summary(plan_path)
+        if choice == ReviewChoice.APPROVE:
+            state.current_step = 2
+            return True
+
+        elif choice == ReviewChoice.REGENERATE:
+            feedback = prompt_input("What changes would you like?", default="")
+            if not feedback or not feedback.strip():
+                print_warning("No feedback provided. Please describe what to change.")
                 continue
 
-            elif choice == ReviewChoice.ABORT:
-                print_warning("Workflow aborted by user")
-                return False
-        else:
-            print_warning(
-                f"Maximum review iterations ({MAX_REVIEW_ITERATIONS}) reached. "
-                "Please re-run the workflow."
-            )
+            state.plan_revision_count += 1
+            if replan_with_feedback(state, backend, feedback):
+                _display_plan_summary(plan_path)
+                continue
+            else:
+                print_error("Failed to regenerate plan. You can retry or edit manually.")
+                continue
+
+        elif choice == ReviewChoice.EDIT:
+            _edit_plan(plan_path)
+            _display_plan_summary(plan_path)
+            continue
+
+        elif choice == ReviewChoice.ABORT:
+            print_warning("Workflow aborted by user")
             return False
     else:
-        print_error("Plan file was not created")
+        print_warning(
+            f"Maximum review iterations ({MAX_REVIEW_ITERATIONS}) reached. "
+            "Please re-run the workflow."
+        )
         return False
 
 

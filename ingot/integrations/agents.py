@@ -224,6 +224,8 @@ AGENT_METADATA = {
 }
 
 # Agent body content (prompts) - without frontmatter
+# NOTE: Researcher prompt section headings must match RESEARCHER_SECTION_HEADINGS
+# in ingot.workflow.constants to stay in sync with truncation logic.
 AGENT_BODIES = {
     INGOT_AGENT_RESEARCHER: """
 You are a codebase research assistant for the INGOT workflow.
@@ -310,6 +312,9 @@ The plan will be used to generate an executable task list for AI agents.
 2. **Consume Codebase Discovery**: The prompt includes a `[SOURCE: CODEBASE DISCOVERY]` section
    with verified file paths, code patterns, call sites, and test files discovered by a research agent.
    Use this as your primary source of truth. Do NOT re-search for files already listed there.
+   If no `[SOURCE: CODEBASE DISCOVERY]` section is present in the prompt, the research
+   phase did not produce results. You MUST independently explore the codebase using your
+   available tools to discover file paths, patterns, and call sites before planning.
 3. **Verify File Ownership**: Before proposing to modify a file, confirm it appears in the Codebase
    Discovery section or the Unresolved section. If a file is in neither, flag it with
    `<!-- UNVERIFIED: reason -->`.
@@ -1116,10 +1121,10 @@ def verify_agents_available() -> tuple[bool, list[str]]:
     agents_dir = get_agents_dir()
     missing = []
 
-    for agent_name in ["ingot-planner", "ingot-tasklist", "ingot-implementer", "ingot-researcher"]:
-        agent_path = agents_dir / f"{agent_name}.md"
+    for meta in AGENT_METADATA.values():
+        agent_path = agents_dir / f"{meta['name']}.md"
         if not agent_path.exists():
-            missing.append(agent_name)
+            missing.append(meta["name"])
 
     return len(missing) == 0, missing
 

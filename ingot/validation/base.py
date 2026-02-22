@@ -34,7 +34,7 @@ class ValidationContext:
     """Context passed to validators for their checks."""
 
     repo_root: Path | None = None  # For filesystem checks (must be injected, not auto-discovered)
-    ticket_id: str = ""
+    ticket_id: str = ""  # Reserved for future validator use
 
 
 @dataclass
@@ -58,6 +58,10 @@ class ValidationReport:
     @property
     def warning_count(self) -> int:
         return sum(1 for f in self.findings if f.severity == ValidationSeverity.WARNING)
+
+    @property
+    def info_count(self) -> int:
+        return sum(1 for f in self.findings if f.severity == ValidationSeverity.INFO)
 
 
 class Validator(ABC):
@@ -91,8 +95,17 @@ class ValidatorRegistry:
     def validate_all(self, content: str, context: ValidationContext) -> ValidationReport:
         report = ValidationReport()
         for validator in self._validators:
-            findings = validator.validate(content, context)
-            report.findings.extend(findings)
+            try:
+                findings = validator.validate(content, context)
+                report.findings.extend(findings)
+            except Exception as exc:
+                report.findings.append(
+                    ValidationFinding(
+                        validator_name=validator.name,
+                        severity=ValidationSeverity.ERROR,
+                        message=f"Validator crashed: {exc}",
+                    )
+                )
         return report
 
     @property

@@ -5,6 +5,7 @@ from ingot.validation.base import (
     ValidationFinding,
     ValidationReport,
     ValidationSeverity,
+    Validator,
     ValidatorRegistry,
 )
 from ingot.validation.plan_validators import (
@@ -41,35 +42,6 @@ Architecture decisions and patterns.
 
 ## Out of Scope
 - Not included
-"""
-
-PLAN_WITH_CODE_BLOCKS = """\
-# Plan
-
-## Summary
-Summary here.
-
-## Technical Approach
-Approach here.
-
-## Implementation Steps
-
-Pattern source: `src/main.py:10-20`
-```python
-def example():
-    a = 1
-    b = 2
-    return a + b
-```
-
-## Testing Strategy
-Tests here.
-
-## Potential Risks
-Risks here.
-
-## Out of Scope
-Nothing.
 """
 
 
@@ -500,3 +472,156 @@ class TestValidatorRegistry:
         assert report.has_warnings
         assert report.error_count == 1
         assert report.warning_count == 1
+
+
+# =============================================================================
+# TestValidatorRegistryCrashIsolation
+# =============================================================================
+
+
+class TestValidatorRegistryCrashIsolation:
+    """Ensure a crashing validator doesn't skip others."""
+
+    def test_crash_does_not_skip_remaining_validators(self):
+        class CrashingValidator(Validator):
+            @property
+            def name(self) -> str:
+                return "Crasher"
+
+            def validate(self, content, context):
+                raise RuntimeError("boom")
+
+        registry = ValidatorRegistry()
+        registry.register(CrashingValidator())
+        registry.register(UnresolvedMarkersValidator())
+
+        plan = "<!-- UNVERIFIED: test -->"
+        ctx = ValidationContext()
+        report = registry.validate_all(plan, ctx)
+
+        # Should have one ERROR from crash + one INFO from marker
+        names = [f.validator_name for f in report.findings]
+        assert "Crasher" in names
+        assert "Unresolved Markers" in names
+        crash_finding = [f for f in report.findings if f.validator_name == "Crasher"][0]
+        assert crash_finding.severity == ValidationSeverity.ERROR
+        assert "Validator crashed" in crash_finding.message
+
+
+# =============================================================================
+# TestFileExistsValidatorEdgeCases
+# =============================================================================
+
+
+class TestFileExistsValidatorEdgeCases:
+    def test_duplicate_paths_deduplicated(self, tmp_path):
+        plan = "Modify `src/foo.py` and also `src/foo.py` again."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # Should report the missing file only once despite two references
+        assert len(findings) == 1
+
+    def test_path_traversal_ignored(self, tmp_path):
+        # Create a file outside repo root to prove traversal is blocked
+        plan = "Modify `../../etc/passwd.txt` for the feature."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # Path traversal should be silently skipped (no error reported)
+        assert findings == []
+
+
+# =============================================================================
+# TestPatternSourceValidatorEdgeCases
+# =============================================================================
+
+
+class TestPatternSourceValidatorEdgeCases:
+    def test_exactly_three_line_block_checked(self):
+        """A code block with exactly 3 content lines should be validated."""
+        plan = """\
+```python
+a = 1
+b = 2
+c = 3
+```
+"""
+        validator = PatternSourceValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.WARNING
+
+
+# =============================================================================
+# TestDiscoveryCoverageValidatorEdgeCases
+# =============================================================================
+
+
+class TestDiscoveryCoverageValidatorEdgeCases:
+    def test_short_name_no_false_match(self):
+        """Word-boundary fix: 'get' should NOT match 'getUser'."""
+        researcher = """\
+### Call Sites
+#### `get()`
+- Called from: `Service.fetch()` (`src/service.py:10`)
+"""
+        plan = "## Implementation Steps\nUpdate getUser to handle errors."
+        validator = DiscoveryCoverageValidator(researcher_output=researcher)
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert "get" in findings[0].message
+
+    def test_multiple_missing_items_all_reported(self):
+        researcher = """\
+### Interface & Class Hierarchy
+#### `Alpha`
+- Implemented by: `AlphaImpl` (`src/alpha.py:1`)
+#### `Beta`
+- Implemented by: `BetaImpl` (`src/beta.py:1`)
+### Call Sites
+#### `gamma()`
+- Called from: `Runner.go()` (`src/run.py:1`)
+"""
+        plan = "## Implementation Steps\nDo something unrelated entirely."
+        validator = DiscoveryCoverageValidator(researcher_output=researcher)
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        missing_names = {f.message.split("'")[1] for f in findings}
+        assert missing_names == {"Alpha", "Beta", "gamma"}
+
+
+# =============================================================================
+# TestValidationReport
+# =============================================================================
+
+
+class TestValidationReport:
+    def test_info_count_property(self):
+        report = ValidationReport()
+        assert report.info_count == 0
+
+        report.findings.append(
+            ValidationFinding(
+                validator_name="test",
+                severity=ValidationSeverity.INFO,
+                message="info 1",
+            )
+        )
+        report.findings.append(
+            ValidationFinding(
+                validator_name="test",
+                severity=ValidationSeverity.WARNING,
+                message="warning",
+            )
+        )
+        report.findings.append(
+            ValidationFinding(
+                validator_name="test",
+                severity=ValidationSeverity.INFO,
+                message="info 2",
+            )
+        )
+        assert report.info_count == 2

@@ -25,10 +25,12 @@ from ingot.utils.console import (
     print_warning,
 )
 from ingot.utils.logging import log_message
-from ingot.validation.base import ValidationReport, ValidationSeverity
+from ingot.validation.base import ValidationContext, ValidationReport, ValidationSeverity
+from ingot.validation.plan_validators import create_plan_validator_registry
 from ingot.workflow.constants import (
     MAX_GENERATION_RETRIES,
     MAX_REVIEW_ITERATIONS,
+    RESEARCHER_SECTION_HEADINGS,
     noop_output_callback,
 )
 from ingot.workflow.events import format_run_directory
@@ -73,14 +75,7 @@ _UNVERIFIED_NOTE = (
 _RESEARCHER_CONTEXT_BUDGET = 12000  # chars (~3000 tokens)
 
 # Section priority order for truncation (highest priority first)
-_SECTION_PRIORITY = [
-    "### Verified Files",
-    "### Existing Code Patterns",
-    "### Interface & Class Hierarchy",
-    "### Call Sites",
-    "### Test Files",
-    "### Unresolved",
-]
+_SECTION_PRIORITY = RESEARCHER_SECTION_HEADINGS
 
 
 # =============================================================================
@@ -218,6 +213,12 @@ primary source of truth for file paths, code patterns, and call sites. Do NOT
 re-search for information already provided here.
 
 {trimmed}"""
+    else:
+        prompt += """
+
+[NOTE: No automated codebase discovery was performed for this ticket.]
+You must independently explore the codebase to discover relevant files,
+patterns, and call sites before creating the plan."""
 
     if plan_mode:
         prompt += """
@@ -305,8 +306,16 @@ def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT
 
     Returns truncated context. Prepends a note header if truncation occurred.
     """
+    # Header prepended when truncation occurs — account for its length in the budget.
+    _TRUNCATION_HEADER = (
+        "[NOTE: Research context truncated to fit budget. Full output saved to research file.]\n\n"
+    )
+
     if len(context) <= budget:
         return context
+
+    # Reserve space for the header so the final output stays within budget.
+    effective_budget = budget - len(_TRUNCATION_HEADER)
 
     # Split context into sections by ### headings
     sections: list[tuple[str, str]] = []  # (heading, content)
@@ -341,12 +350,12 @@ def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT
             continue
         heading, content = section_map[priority_heading]
         section_text = f"{heading}\n{content}"
-        if total_len + len(section_text) + 1 <= budget:
+        if total_len + len(section_text) + 1 <= effective_budget:
             result_parts.append(section_text)
             total_len += len(section_text) + 1  # +1 for joining newline
         else:
             # Truncate within this section
-            remaining = budget - total_len
+            remaining = effective_budget - total_len
             if remaining > len(heading) + 20:  # Only include if meaningful content fits
                 truncated_content = content[: remaining - len(heading) - 5]
                 result_parts.append(f"{heading}\n{truncated_content}\n...")
@@ -356,8 +365,7 @@ def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT
     result = "\n".join(result_parts)
 
     if truncated or len(result) < len(context):
-        header = "[NOTE: Research context truncated to fit budget. Full output saved to research file.]\n\n"
-        result = header + result
+        result = _TRUNCATION_HEADER + result
 
     return result
 
@@ -373,9 +381,6 @@ def _validate_plan(
     researcher_output: str = "",
 ) -> ValidationReport:
     """Run all registered plan validators."""
-    from ingot.validation.base import ValidationContext
-    from ingot.validation.plan_validators import create_plan_validator_registry
-
     registry = create_plan_validator_registry(researcher_output=researcher_output)
     context = ValidationContext(
         repo_root=find_repo_root(),
@@ -470,24 +475,24 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
     plan_path = state.get_plan_path()
     researcher_output = ""
 
-    # 3-phase generation loop with retry on validation errors
-    for attempt in range(1, MAX_GENERATION_RETRIES + 1):
-        # Phase 1: Discovery
-        researcher_name = state.subagent_names.get("researcher")
-        if researcher_name:
-            print_step("Researching codebase...")
-            researcher_success, researcher_output = _run_researcher(state, backend)
-            if researcher_success and researcher_output.strip():
-                # Persist researcher output for audit/debug
-                research_path = plan_path.with_suffix(".research.md")
-                research_path.write_text(researcher_output)
-                log_message(f"Persisted researcher output to {research_path}")
-            else:
-                print_warning("Researcher failed, planner will search independently")
-                researcher_output = ""
+    # Phase 1: Discovery (runs once — not repeated on retry)
+    researcher_name = state.subagent_names.get("researcher")
+    if researcher_name:
+        print_step("Researching codebase...")
+        researcher_success, researcher_output = _run_researcher(state, backend)
+        if researcher_success and researcher_output.strip():
+            # Persist researcher output for audit/debug
+            research_path = plan_path.with_suffix(".research.md")
+            research_path.write_text(researcher_output)
+            log_message(f"Persisted researcher output to {research_path}")
         else:
-            log_message("No researcher agent configured, skipping discovery phase")
+            print_warning("Researcher failed, planner will search independently")
+            researcher_output = ""
+    else:
+        log_message("No researcher agent configured, skipping discovery phase")
 
+    # Planner + inspector retry loop (researcher output is fixed)
+    for attempt in range(1, MAX_GENERATION_RETRIES + 1):
         # Phase 2: Synthesis
         print_step("Generating implementation plan...")
         success, output = _generate_plan_with_tui(
@@ -524,7 +529,7 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                 )
                 if retry:
                     state.plan_revision_count += 1
-                    continue  # Re-run researcher + planner
+                    continue  # Re-run planner + inspector
 
         break  # No errors or user declined retry — proceed to review
 

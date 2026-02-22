@@ -108,9 +108,7 @@ class FileExistsValidator(Validator):
             if skip:
                 continue
 
-            # Compute line number
-            line_number = content[: match.start()].count("\n") + 1
-            results.append((raw_path, line_number))
+            results.append((raw_path, line_num + 1))
 
         return results
 
@@ -128,7 +126,13 @@ class FileExistsValidator(Validator):
             seen.add(path_str)
 
             full_path = context.repo_root / path_str
-            if not full_path.exists():
+            try:
+                resolved = full_path.resolve()
+                if not resolved.is_relative_to(context.repo_root.resolve()):
+                    continue
+            except (ValueError, OSError):
+                continue
+            if not resolved.exists():
                 findings.append(
                     ValidationFinding(
                         validator_name=self.name,
@@ -155,9 +159,6 @@ class PatternSourceValidator(Validator):
     _NO_PATTERN_MARKER_RE = re.compile(r"<!--\s*NO_EXISTING_PATTERN:", re.IGNORECASE)
 
     _WINDOW_LINES = 5  # Lines before/after code block to search for citation
-
-    # Match fenced code block openings
-    _CODE_FENCE_RE = re.compile(r"^```", re.MULTILINE)
 
     @property
     def name(self) -> str:
@@ -308,7 +309,7 @@ class DiscoveryCoverageValidator(Validator):
                 if name_match:
                     name = name_match.group(1)
                     # Strip parentheses for method names
-                    name = name.rstrip("()")
+                    name = name.removesuffix("()")
                     names.append(name)
                 else:
                     # Plain text name
@@ -332,7 +333,8 @@ class DiscoveryCoverageValidator(Validator):
         all_names = interface_names + method_names
 
         for name in all_names:
-            if name not in content:
+            pattern = re.compile(r"\b" + re.escape(name) + r"\b")
+            if not pattern.search(content):
                 findings.append(
                     ValidationFinding(
                         validator_name=self.name,

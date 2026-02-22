@@ -40,15 +40,6 @@ def workflow_state(generic_ticket, tmp_path):
     return state
 
 
-@pytest.fixture
-def mock_backend():
-    """Create a mock AIBackend."""
-    backend = MagicMock()
-    backend.run_streaming.return_value = (True, "Plan generated successfully")
-    backend.run_with_callback.return_value = (True, "Plan generated successfully")
-    return backend
-
-
 class TestGetLogBaseDir:
     def test_default_returns_spec_runs(self, monkeypatch):
         monkeypatch.delenv("INGOT_LOG_DIR", raising=False)
@@ -698,7 +689,6 @@ class TestStep1CreatePlanFileHandling:
 
         specs_dir = tmp_path / "specs"
         specs_dir.mkdir(parents=True, exist_ok=True)
-        specs_dir / "TEST-123-plan.md"
 
         # Mock _save_plan_from_output to create the file
         def create_plan_file(path, state, *, output=""):
@@ -1512,7 +1502,8 @@ class TestStep1RetryOnValidationError:
 
         assert result is True
         assert mock_generate.call_count == 2
-        assert mock_researcher.call_count == 2
+        # Researcher runs once (before the retry loop), not on each retry
+        assert mock_researcher.call_count == 1
         assert workflow_state.plan_revision_count == 1
 
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
@@ -1616,3 +1607,123 @@ class TestStep1RetryOnValidationError:
             mock_confirm.assert_not_called()
 
         assert result is True
+
+
+# =============================================================================
+# Additional Tests for PR #72 Fixes
+# =============================================================================
+
+
+class TestTruncationBudgetRespected:
+    """Verify truncated output (including header) stays within budget."""
+
+    def test_truncated_output_within_budget(self):
+        budget = 500
+        context = "### Verified Files\n" + "- `src/file.py:1` — Description\n" * 200
+        result = _truncate_researcher_context(context, budget=budget)
+        assert len(result) <= budget
+
+    def test_small_budget_still_within_limit(self):
+        budget = 200
+        context = "### Verified Files\n" + "- `src/file.py:1` — Desc\n" * 100
+        result = _truncate_researcher_context(context, budget=budget)
+        assert len(result) <= budget
+
+
+class TestBuildMinimalPromptFallback:
+    """Empty researcher context produces fallback instruction."""
+
+    def test_empty_researcher_context_has_fallback(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_minimal_prompt(workflow_state, plan_path, researcher_context="")
+        assert "No automated codebase discovery was performed" in result
+        assert "independently explore" in result
+
+    def test_non_empty_researcher_context_no_fallback(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_minimal_prompt(
+            workflow_state, plan_path, researcher_context="### Verified Files\n- `a.py:1`"
+        )
+        assert "No automated codebase discovery was performed" not in result
+        assert "[SOURCE: CODEBASE DISCOVERY" in result
+
+
+class TestResearcherNotRerunOnRetry:
+    """Verify researcher runs once, not on every retry."""
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_researcher_called_once_on_retry(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_confirm,
+        mock_display_report,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "### Verified Files\n")
+        mock_confirm.return_value = True
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Bad",
+                ),
+            ]
+        )
+        clean_report = ValidationReport()
+        mock_validate.side_effect = [error_report, clean_report]
+        workflow_state.enable_plan_validation = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        # Researcher should be called only once (before the loop)
+        assert mock_researcher.call_count == 1
+        # Planner should be called twice (initial + retry)
+        assert mock_generate.call_count == 2
+
+
+class TestSectionsNotInPriority:
+    """Unknown sections are dropped during truncation."""
+
+    def test_unknown_sections_dropped(self):
+        # Make context long enough to trigger truncation, with an unknown section
+        context = (
+            "### Verified Files\n"
+            + "- `src/f.py:1` — Desc\n" * 20
+            + "### Custom Unknown Section\nCustom content\n"
+            + "### Existing Code Patterns\nPatterns"
+        )
+        # Use a budget that is smaller than the full context but large enough
+        # to fit at least the Verified Files section
+        budget = len(context) - 10
+        result = _truncate_researcher_context(context, budget=budget)
+        # Known sections should be present
+        assert "Verified Files" in result
+        # Unknown sections should be dropped (not in priority list)
+        assert "Custom Unknown Section" not in result

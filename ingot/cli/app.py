@@ -192,6 +192,20 @@ def main(
             help="Enable automatic commit after workflow (default: from config)",
         ),
     ] = None,
+    plan_validation: Annotated[
+        bool | None,
+        typer.Option(
+            "--plan-validation/--no-plan-validation",
+            help="Enable plan validation after generation (default: from config)",
+        ),
+    ] = None,
+    plan_validation_strict: Annotated[
+        bool | None,
+        typer.Option(
+            "--plan-validation-strict/--no-plan-validation-strict",
+            help="Block workflow on validation errors vs. warn-and-proceed (default: from config)",
+        ),
+    ] = None,
     backend: Annotated[
         str | None,
         typer.Option(
@@ -285,6 +299,8 @@ def main(
                 dirty_tree_policy=dirty_tree_policy,
                 auto_update_docs=auto_update_docs,
                 auto_commit=auto_commit,
+                plan_validation=plan_validation,
+                plan_validation_strict=plan_validation_strict,
             )
         else:
             # Show main menu

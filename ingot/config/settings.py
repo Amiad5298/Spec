@@ -98,6 +98,9 @@ class Settings:
 
     # Plan validation settings
     enable_plan_validation: bool = True
+    plan_validation_strict: bool = (
+        True  # Block workflow on validation errors (vs. warn-and-proceed)
+    )
 
     # Documentation update settings
     auto_update_docs: bool = True  # Enable automatic documentation updates
@@ -147,6 +150,7 @@ class Settings:
             "SUBAGENT_DOC_UPDATER": "subagent_doc_updater",
             "SUBAGENT_RESEARCHER": "subagent_researcher",
             "ENABLE_PLAN_VALIDATION": "enable_plan_validation",
+            "PLAN_VALIDATION_STRICT": "plan_validation_strict",
             "AUTO_UPDATE_DOCS": "auto_update_docs",
             "AUTO_COMMIT": "auto_commit",
             # Platform settings

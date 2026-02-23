@@ -355,6 +355,88 @@ class TestAutoUpdateDocsFlags:
         assert call_kwargs["auto_update_docs"] is None
 
 
+class TestPlanValidationFlags:
+    @patch("ingot.cli.app.show_banner")
+    @patch("ingot.cli.app.ConfigManager")
+    @patch("ingot.cli.app._check_prerequisites")
+    @patch("ingot.cli.app._run_workflow")
+    def test_plan_validation_flag_enables(
+        self, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        runner.invoke(app, ["--plan-validation", "TEST-123"])
+
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["plan_validation"] is True
+
+    @patch("ingot.cli.app.show_banner")
+    @patch("ingot.cli.app.ConfigManager")
+    @patch("ingot.cli.app._check_prerequisites")
+    @patch("ingot.cli.app._run_workflow")
+    def test_no_plan_validation_flag_disables(
+        self, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        runner.invoke(app, ["--no-plan-validation", "TEST-123"])
+
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["plan_validation"] is False
+
+    @patch("ingot.cli.app.show_banner")
+    @patch("ingot.cli.app.ConfigManager")
+    @patch("ingot.cli.app._check_prerequisites")
+    @patch("ingot.cli.app._run_workflow")
+    def test_plan_validation_none_uses_config(
+        self, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        runner.invoke(app, ["TEST-123"])
+
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["plan_validation"] is None
+
+    @patch("ingot.cli.app.show_banner")
+    @patch("ingot.cli.app.ConfigManager")
+    @patch("ingot.cli.app._check_prerequisites")
+    @patch("ingot.cli.app._run_workflow")
+    def test_plan_validation_strict_flag_enables(
+        self, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        runner.invoke(app, ["--plan-validation-strict", "TEST-123"])
+
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["plan_validation_strict"] is True
+
+    @patch("ingot.cli.app.show_banner")
+    @patch("ingot.cli.app.ConfigManager")
+    @patch("ingot.cli.app._check_prerequisites")
+    @patch("ingot.cli.app._run_workflow")
+    def test_no_plan_validation_strict_flag_disables(
+        self, mock_run, mock_prereq, mock_config_class, mock_banner
+    ):
+        mock_prereq.return_value = True
+        mock_config = MagicMock()
+        mock_config_class.return_value = mock_config
+
+        runner.invoke(app, ["--no-plan-validation-strict", "TEST-123"])
+
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["plan_validation_strict"] is False
+
+
 class TestShowHelp:
     def test_show_help_displays_usage(self, capsys):
         from ingot.cli import show_help
@@ -729,6 +811,108 @@ class TestEffectiveValueOverrides:
 
         call_kwargs = mock_run_workflow.call_args[1]
         assert call_kwargs["auto_update_docs"] is False  # Uses config value
+
+    @patch("ingot.cli.workflow._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.ticket.run_async")
+    def test_plan_validation_strict_override_cli_beats_config(
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
+    ):
+        from ingot.cli import _run_workflow
+
+        mock_run_async.return_value = (MagicMock(), MagicMock())
+        mock_config = MagicMock()
+        mock_config.settings.max_parallel_tasks = 3
+        mock_config.settings.parallel_execution_enabled = True
+        mock_config.settings.fail_fast = False
+        mock_config.settings.default_model = "test-model"
+        mock_config.settings.planning_model = ""
+        mock_config.settings.implementation_model = ""
+        mock_config.settings.skip_clarification = False
+        mock_config.settings.squash_at_end = True
+        mock_config.settings.auto_update_docs = True
+        mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
+        mock_config.settings.auto_commit = True
+        mock_config.settings.enable_plan_validation = True
+        mock_config.settings.plan_validation_strict = True  # Config says strict
+
+        _run_workflow(
+            ticket="TEST-123",
+            config=mock_config,
+            plan_validation_strict=False,  # CLI says --no-plan-validation-strict
+        )
+
+        call_kwargs = mock_run_workflow.call_args[1]
+        assert call_kwargs["plan_validation_strict"] is False  # CLI wins
+
+    @patch("ingot.cli.workflow._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.ticket.run_async")
+    def test_plan_validation_strict_none_uses_config(
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
+    ):
+        from ingot.cli import _run_workflow
+
+        mock_run_async.return_value = (MagicMock(), MagicMock())
+        mock_config = MagicMock()
+        mock_config.settings.max_parallel_tasks = 3
+        mock_config.settings.parallel_execution_enabled = True
+        mock_config.settings.fail_fast = False
+        mock_config.settings.default_model = "test-model"
+        mock_config.settings.planning_model = ""
+        mock_config.settings.implementation_model = ""
+        mock_config.settings.skip_clarification = False
+        mock_config.settings.squash_at_end = True
+        mock_config.settings.auto_update_docs = True
+        mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
+        mock_config.settings.auto_commit = True
+        mock_config.settings.enable_plan_validation = True
+        mock_config.settings.plan_validation_strict = False  # Config says lenient
+
+        _run_workflow(
+            ticket="TEST-123",
+            config=mock_config,
+            plan_validation_strict=None,  # CLI not provided
+        )
+
+        call_kwargs = mock_run_workflow.call_args[1]
+        assert call_kwargs["plan_validation_strict"] is False  # Uses config value
+
+    @patch("ingot.cli.workflow._is_ambiguous_ticket_id", return_value=False)
+    @patch("ingot.workflow.runner.run_ingot_workflow")
+    @patch("ingot.cli.ticket.run_async")
+    def test_plan_validation_override_cli_beats_config(
+        self, mock_run_async, mock_run_workflow, mock_is_ambiguous
+    ):
+        from ingot.cli import _run_workflow
+
+        mock_run_async.return_value = (MagicMock(), MagicMock())
+        mock_config = MagicMock()
+        mock_config.settings.max_parallel_tasks = 3
+        mock_config.settings.parallel_execution_enabled = True
+        mock_config.settings.fail_fast = False
+        mock_config.settings.default_model = "test-model"
+        mock_config.settings.planning_model = ""
+        mock_config.settings.implementation_model = ""
+        mock_config.settings.skip_clarification = False
+        mock_config.settings.squash_at_end = True
+        mock_config.settings.auto_update_docs = True
+        mock_config.settings.max_self_corrections = 3
+        mock_config.settings.max_review_fix_attempts = 3
+        mock_config.settings.auto_commit = True
+        mock_config.settings.enable_plan_validation = True  # Config says enabled
+        mock_config.settings.plan_validation_strict = True
+
+        _run_workflow(
+            ticket="TEST-123",
+            config=mock_config,
+            plan_validation=False,  # CLI says --no-plan-validation
+        )
+
+        call_kwargs = mock_run_workflow.call_args[1]
+        assert call_kwargs["enable_plan_validation"] is False  # CLI wins
 
 
 class TestValidatePlatform:

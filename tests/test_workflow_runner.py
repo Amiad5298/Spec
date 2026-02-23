@@ -58,30 +58,30 @@ def mock_config():
 
 
 class TestSetupBranchNameGeneration:
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_generates_branch_name_with_summary(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state, ticket
+        self, mock_get_branch, mock_create, mock_select, workflow_state, ticket
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         result = _setup_branch(workflow_state, ticket)
 
         assert result is True
         # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
-        assert workflow_state.branch_name == "feature/test-123-test-feature"
+        assert workflow_state.branch_name == "feat/test-123-test-feature"
 
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_generates_fallback_branch_name_without_summary(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state, ticket_no_summary
+        self, mock_get_branch, mock_create, mock_select, workflow_state, ticket_no_summary
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         # Update workflow_state with no-summary ticket
@@ -91,11 +91,11 @@ class TestSetupBranchNameGeneration:
 
         assert result is True
         # When no branch_summary, GenericTicket uses title to generate branch name
-        assert workflow_state.branch_name == "feature/test-456-test-feature-no-summary"
+        assert workflow_state.branch_name == "feat/test-456-test-feature-no-summary"
 
 
 class TestSetupBranchSemanticPrefix:
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     @pytest.mark.parametrize(
@@ -105,20 +105,22 @@ class TestSetupBranchSemanticPrefix:
             (TicketType.BUG, "fix"),
             (TicketType.TASK, "chore"),
             (TicketType.MAINTENANCE, "refactor"),
-            (TicketType.UNKNOWN, "feature"),
+            (TicketType.DOCS, "docs"),
+            (TicketType.CI, "ci"),
+            (TicketType.UNKNOWN, "feat"),
         ],
     )
     def test_uses_semantic_prefix_based_on_ticket_type(
         self,
         mock_get_branch,
         mock_create,
-        mock_confirm,
+        mock_select,
         workflow_state,
         ticket_type,
         expected_prefix,
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         typed_ticket = GenericTicket(
@@ -145,7 +147,7 @@ class TestSetupBranchAlreadyOnFeature:
         self, mock_get_branch, workflow_state, ticket
     ):
         # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
-        expected_branch = "feature/test-123-test-feature"
+        expected_branch = "feat/test-123-test-feature"
         mock_get_branch.return_value = expected_branch
 
         result = _setup_branch(workflow_state, ticket)
@@ -156,7 +158,7 @@ class TestSetupBranchAlreadyOnFeature:
     @patch("ingot.workflow.runner.get_current_branch")
     def test_updates_state_branch_name_correctly(self, mock_get_branch, workflow_state, ticket):
         # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
-        expected_branch = "feature/test-123-test-feature"
+        expected_branch = "feat/test-123-test-feature"
         mock_get_branch.return_value = expected_branch
 
         _setup_branch(workflow_state, ticket)
@@ -165,44 +167,44 @@ class TestSetupBranchAlreadyOnFeature:
 
 
 class TestSetupBranchCreateNew:
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
-    def test_creates_new_branch_when_user_confirms(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state, ticket
+    def test_creates_new_branch_when_user_selects_create(
+        self, mock_get_branch, mock_create, mock_select, workflow_state, ticket
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         result = _setup_branch(workflow_state, ticket)
 
         assert result is True
         # From conftest: branch_summary="test-feature" → slug="test-123-test-feature"
-        mock_create.assert_called_once_with("feature/test-123-test-feature")
+        mock_create.assert_called_once_with("feat/test-123-test-feature")
 
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_returns_true_on_successful_branch_creation(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state, ticket
+        self, mock_get_branch, mock_create, mock_select, workflow_state, ticket
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         result = _setup_branch(workflow_state, ticket)
 
         assert result is True
 
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_returns_false_on_branch_creation_failure(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state, ticket
+        self, mock_get_branch, mock_create, mock_select, workflow_state, ticket
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = False  # Branch creation fails
 
         result = _setup_branch(workflow_state, ticket)
@@ -210,30 +212,99 @@ class TestSetupBranchCreateNew:
         assert result is False
 
 
-class TestSetupBranchUserDeclines:
-    @patch("ingot.workflow.runner.prompt_confirm")
+class TestSetupBranchUserSkips:
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.get_current_branch")
-    def test_stays_on_current_branch_when_user_declines(
-        self, mock_get_branch, mock_confirm, workflow_state, ticket
+    def test_stays_on_current_branch_when_user_skips(
+        self, mock_get_branch, mock_select, workflow_state, ticket
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = False  # User declines
+        mock_select.return_value = "Skip"
 
         result = _setup_branch(workflow_state, ticket)
 
         assert result is True
 
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_updates_state_branch_name_to_current_branch(
-        self, mock_get_branch, mock_confirm, workflow_state, ticket
+        self, mock_get_branch, mock_select, workflow_state, ticket
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = False  # User declines
+        mock_select.return_value = "Skip"
 
         _setup_branch(workflow_state, ticket)
 
         assert workflow_state.branch_name == "main"
+
+
+class TestSetupBranchUserEdits:
+    @patch("ingot.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_select")
+    @patch("ingot.workflow.runner.create_branch")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_creates_branch_with_edited_name(
+        self, mock_get_branch, mock_create, mock_select, mock_input, workflow_state, ticket
+    ):
+        mock_get_branch.return_value = "main"
+        mock_select.return_value = "Edit"
+        mock_input.return_value = "custom/my-branch"
+        mock_create.return_value = True
+
+        result = _setup_branch(workflow_state, ticket)
+
+        assert result is True
+        assert workflow_state.branch_name == "custom/my-branch"
+        mock_create.assert_called_once_with("custom/my-branch")
+
+    @patch("ingot.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_select")
+    @patch("ingot.workflow.runner.create_branch")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_edit_pre_fills_with_suggested_name(
+        self, mock_get_branch, mock_create, mock_select, mock_input, workflow_state, ticket
+    ):
+        mock_get_branch.return_value = "main"
+        mock_select.return_value = "Edit"
+        mock_input.return_value = "feat/test-123-test-feature"
+        mock_create.return_value = True
+
+        _setup_branch(workflow_state, ticket)
+
+        mock_input.assert_called_once_with("Branch name:", default="feat/test-123-test-feature")
+
+    @patch("ingot.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_select")
+    @patch("ingot.workflow.runner.create_branch")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_edit_returns_false_on_creation_failure(
+        self, mock_get_branch, mock_create, mock_select, mock_input, workflow_state, ticket
+    ):
+        mock_get_branch.return_value = "main"
+        mock_select.return_value = "Edit"
+        mock_input.return_value = "custom/branch"
+        mock_create.return_value = False
+
+        result = _setup_branch(workflow_state, ticket)
+
+        assert result is False
+
+    @patch("ingot.workflow.runner.prompt_input")
+    @patch("ingot.workflow.runner.prompt_select")
+    @patch("ingot.workflow.runner.create_branch")
+    @patch("ingot.workflow.runner.get_current_branch")
+    def test_edit_returns_false_on_empty_branch_name(
+        self, mock_get_branch, mock_create, mock_select, mock_input, workflow_state, ticket
+    ):
+        mock_get_branch.return_value = "main"
+        mock_select.return_value = "Edit"
+        mock_input.return_value = "   "
+        mock_create.return_value = True
+
+        result = _setup_branch(workflow_state, ticket)
+
+        assert result is False
+        mock_create.assert_not_called()
 
 
 class TestShowCompletion:
@@ -1053,14 +1124,14 @@ class TestRunIngotWorkflowResumeLogic:
 
 
 class TestSetupBranchSpecialCharacters:
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_branch_name_with_spaces_and_special_chars(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state
+        self, mock_get_branch, mock_create, mock_select, workflow_state
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         # Create ticket with special characters in branch_summary
@@ -1077,19 +1148,19 @@ class TestSetupBranchSpecialCharacters:
         result = _setup_branch(workflow_state, special_ticket)
 
         assert result is True
-        # _setup_branch uses ticket.semantic_branch_prefix (UNKNOWN→"feature") + branch_slug
-        expected_branch = "feature/test-789-update-graphql-query"
+        # _setup_branch uses ticket.semantic_branch_prefix (UNKNOWN→"feat") + branch_slug
+        expected_branch = "feat/test-789-update-graphql-query"
         assert workflow_state.branch_name == expected_branch
         mock_create.assert_called_once_with(expected_branch)
 
-    @patch("ingot.workflow.runner.prompt_confirm")
+    @patch("ingot.workflow.runner.prompt_select")
     @patch("ingot.workflow.runner.create_branch")
     @patch("ingot.workflow.runner.get_current_branch")
     def test_branch_name_with_multiple_special_chars(
-        self, mock_get_branch, mock_create, mock_confirm, workflow_state
+        self, mock_get_branch, mock_create, mock_select, workflow_state
     ):
         mock_get_branch.return_value = "main"
-        mock_confirm.return_value = True
+        mock_select.return_value = "Create"
         mock_create.return_value = True
 
         # Create ticket with multiple special characters
@@ -1106,8 +1177,8 @@ class TestSetupBranchSpecialCharacters:
         result = _setup_branch(workflow_state, special_ticket)
 
         assert result is True
-        # _setup_branch uses ticket.semantic_branch_prefix (UNKNOWN→"feature") + branch_slug
-        expected_branch = "feature/test-999-fix-api-endpoint-v2-urgent"
+        # _setup_branch uses ticket.semantic_branch_prefix (UNKNOWN→"feat") + branch_slug
+        expected_branch = "feat/test-999-fix-api-endpoint-v2-urgent"
         assert workflow_state.branch_name == expected_branch
 
 

@@ -19,7 +19,7 @@ from ingot.integrations.git import (
 )
 from ingot.integrations.providers import GenericTicket
 from ingot.ui.menus import show_git_dirty_menu
-from ingot.ui.prompts import prompt_confirm, prompt_enter, prompt_input
+from ingot.ui.prompts import prompt_confirm, prompt_enter, prompt_input, prompt_select
 from ingot.utils.console import (
     console,
     print_error,
@@ -344,7 +344,7 @@ def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:
     """Set up the feature branch for the workflow."""
     current_branch = get_current_branch()
 
-    # Use the ticket's semantic prefix (feat, fix, chore, refactor, feature)
+    # Use the ticket's semantic prefix (feat, fix, chore, refactor, docs, ci)
     branch_name = f"{ticket.semantic_branch_prefix}/{ticket.branch_slug}"
 
     state.branch_name = branch_name
@@ -354,8 +354,21 @@ def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:
         print_info(f"Already on branch: {branch_name}")
         return True
 
-    # Ask to create branch
-    if prompt_confirm(f"Create branch '{branch_name}'?", default=True):
+    # Ask user what to do with the suggested branch name
+    choice = prompt_select(
+        f"Branch '{branch_name}':",
+        choices=["Create", "Edit", "Skip"],
+        default="Create",
+    )
+
+    if choice == "Edit":
+        branch_name = prompt_input("Branch name:", default=branch_name)
+        if not branch_name.strip():
+            print_error("Branch name cannot be empty.")
+            return False
+        state.branch_name = branch_name
+
+    if choice in ("Create", "Edit"):
         if create_branch(branch_name):
             print_success(f"Created and switched to branch: {branch_name}")
             return True
@@ -363,7 +376,7 @@ def _setup_branch(state: WorkflowState, ticket: GenericTicket) -> bool:
             print_error(f"Failed to create branch: {branch_name}")
             return False
     else:
-        # Stay on current branch
+        # Skip — stay on current branch
         state.branch_name = current_branch
         print_info(f"Staying on branch: {current_branch}")
         return True

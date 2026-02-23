@@ -170,6 +170,12 @@ class TestTicketTypeEnum:
     def test_has_maintenance(self):
         assert TicketType.MAINTENANCE is not None
 
+    def test_has_docs(self):
+        assert TicketType.DOCS is not None
+
+    def test_has_ci(self):
+        assert TicketType.CI is not None
+
     def test_has_unknown(self):
         assert TicketType.UNKNOWN is not None
 
@@ -254,14 +260,32 @@ class TestGenericTicketSemanticBranchPrefix:
         )
         assert ticket.semantic_branch_prefix == "refactor"
 
-    def test_unknown_returns_feature(self):
+    def test_docs_returns_docs(self):
+        ticket = GenericTicket(
+            id="T-1",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/T-1",
+            type=TicketType.DOCS,
+        )
+        assert ticket.semantic_branch_prefix == "docs"
+
+    def test_ci_returns_ci(self):
+        ticket = GenericTicket(
+            id="T-1",
+            platform=Platform.JIRA,
+            url="https://jira.example.com/T-1",
+            type=TicketType.CI,
+        )
+        assert ticket.semantic_branch_prefix == "ci"
+
+    def test_unknown_returns_feat(self):
         ticket = GenericTicket(
             id="T-1",
             platform=Platform.JIRA,
             url="https://jira.example.com/T-1",
             type=TicketType.UNKNOWN,
         )
-        assert ticket.semantic_branch_prefix == "feature"
+        assert ticket.semantic_branch_prefix == "feat"
 
 
 class TestGenericTicketBranchSlug:

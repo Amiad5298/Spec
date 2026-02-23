@@ -164,6 +164,8 @@ class TicketType(Enum):
     BUG = "bug"  # Defects, issues, fixes
     TASK = "task"  # General tasks, chores, housekeeping
     MAINTENANCE = "maintenance"  # Tech debt, refactoring, infrastructure
+    DOCS = "docs"  # Documentation changes
+    CI = "ci"  # CI/CD pipeline changes
     UNKNOWN = "unknown"  # Unable to determine type
 
 
@@ -373,9 +375,11 @@ class GenericTicket:
             TicketType.BUG: "fix",
             TicketType.TASK: "chore",
             TicketType.MAINTENANCE: "refactor",
-            TicketType.UNKNOWN: "feature",
+            TicketType.DOCS: "docs",
+            TicketType.CI: "ci",
+            TicketType.UNKNOWN: "feat",
         }
-        return prefix_map.get(self.type, "feature")
+        return prefix_map.get(self.type, "feat")
 
     # Default max length for branch summary (same as sanitize_title_for_branch)
     _BRANCH_SUMMARY_MAX_LENGTH: ClassVar[int] = 50

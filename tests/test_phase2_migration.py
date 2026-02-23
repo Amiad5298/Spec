@@ -82,6 +82,7 @@ class TestSubagentFixer:
             "reviewer",
             "fixer",
             "doc_updater",
+            "researcher",
         }
         assert set(state.subagent_names.keys()) == expected_keys
 

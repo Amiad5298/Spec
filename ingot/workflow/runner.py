@@ -75,6 +75,8 @@ def run_ingot_workflow(
     dirty_tree_policy: DirtyTreePolicy = DirtyTreePolicy.FAIL_FAST,
     auto_update_docs: bool = True,
     auto_commit: bool = True,
+    enable_plan_validation: bool = True,
+    plan_validation_strict: bool = True,
 ) -> WorkflowResult:
     """Run the complete spec-driven development workflow.
 
@@ -113,6 +115,8 @@ def run_ingot_workflow(
         rate_limit_config=rate_limit_config or RateLimitConfig(),
         enable_phase_review=enable_phase_review,
         dirty_tree_policy=dirty_tree_policy,
+        enable_plan_validation=enable_plan_validation,
+        validation_strict=plan_validation_strict,
         backend_platform=backend.platform,
         backend_model=backend.model or "",
         backend_name=backend.name,

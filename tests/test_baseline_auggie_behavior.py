@@ -388,6 +388,7 @@ class TestWorkflowStepBehavior:
             "reviewer",
             "fixer",
             "doc_updater",
+            "researcher",
         }
         assert set(mock_state.subagent_names.keys()) == expected_keys
 

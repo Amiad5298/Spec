@@ -203,6 +203,7 @@ class TestWorkflowStateParallelFields:
             "reviewer": "ingot-reviewer",
             "fixer": "ingot-implementer",
             "doc_updater": "ingot-doc-updater",
+            "researcher": "ingot-researcher",
         }
 
     def test_subagent_names_custom(self, generic_ticket):

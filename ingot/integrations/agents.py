@@ -21,6 +21,7 @@ from ingot.utils.logging import log_message
 from ingot.workflow.constants import (
     INGOT_AGENT_IMPLEMENTER,
     INGOT_AGENT_PLANNER,
+    INGOT_AGENT_RESEARCHER,
     INGOT_AGENT_REVIEWER,
     INGOT_AGENT_TASKLIST,
     INGOT_AGENT_TASKLIST_REFINER,
@@ -184,6 +185,12 @@ def is_agent_customized(existing_content: str, expected_body: str) -> bool:
 
 # Agent metadata: name, description, model, color
 AGENT_METADATA = {
+    INGOT_AGENT_RESEARCHER: {
+        "name": "ingot-researcher",
+        "description": "INGOT codebase researcher - discovers files, patterns, and call sites",
+        "model": "claude-sonnet-4-5",
+        "color": "yellow",
+    },
     INGOT_AGENT_PLANNER: {
         "name": "ingot-planner",
         "description": "INGOT workflow planner - creates implementation plans from requirements",
@@ -216,8 +223,90 @@ AGENT_METADATA = {
     },
 }
 
+# Agents required for the core workflow. Optional agents (researcher,
+# reviewer, tasklist-refiner) are not checked by verify_agents_available().
+_REQUIRED_AGENTS: frozenset[str] = frozenset(
+    {
+        INGOT_AGENT_PLANNER,
+        INGOT_AGENT_TASKLIST,
+        INGOT_AGENT_IMPLEMENTER,
+    }
+)
+
 # Agent body content (prompts) - without frontmatter
+# NOTE: Researcher prompt section headings must match RESEARCHER_SECTION_HEADINGS
+# in ingot.workflow.constants to stay in sync with truncation logic.
 AGENT_BODIES = {
+    INGOT_AGENT_RESEARCHER: """
+You are a codebase research assistant for the INGOT workflow.
+Your ONLY job is to explore the codebase and produce structured discovery output.
+You do NOT create implementation plans — another agent will do that using your output.
+
+## Your Task
+
+Given a ticket description and optional user constraints, search the codebase to discover:
+1. **Relevant files** — files that will likely need modification or serve as reference
+2. **Existing code patterns** — working implementations of similar patterns (with code snippets)
+3. **Interface hierarchies** — all implementations, callers, and test mocks for relevant interfaces
+4. **Call site maps** — where key methods are called from (with file:line references)
+5. **Test coverage** — existing test files that cover the affected components
+
+## Research Rules
+
+- **Search, don't assume.** Every file path must come from a codebase search result.
+- **Quote what you find.** Include exact code snippets (5-15 lines) for discovered patterns.
+- **Be exhaustive on interfaces.** For each interface or abstract class, find ALL implementations
+  including test mocks (search for `ABC`, `@abstractmethod`, subclass definitions, `MagicMock`, `@patch`).
+- **Cite line numbers.** Every reference must include `file:line` or `file:line-line`.
+
+## Output Budget Rules
+
+Your output is consumed by another agent with limited context. Follow these caps strictly:
+- **Verified Files**: List the top 15 most relevant files, ranked by relevance to the ticket. If more exist, add a count: "(N additional files omitted)".
+- **Existing Code Patterns**: Include the top 3 most relevant patterns with full snippets (5-15 lines each). For additional patterns, use pointer-only format: "See `path/to/file:line-line`; omitted for brevity."
+- **Snippets**: Keep each snippet to 5-15 lines. If a pattern requires more context, quote the key lines and add: "Full implementation at `file:line-line`."
+- **Priority rule**: If your output is growing long, prefer fewer patterns with complete snippets over many patterns with truncated snippets.
+
+## Output Format
+
+Output ONLY the following structured markdown (no commentary outside these sections):
+
+### Verified Files
+For each relevant file found (max 15, ranked by relevance):
+- `path/to/module.py:line` — Brief description of what it does and why it's relevant
+
+### Existing Code Patterns
+For each pattern the implementation should follow (top 3 with snippets):
+#### Pattern: [Pattern Name]
+Source: `path/to/module.py:start-end`
+```python
+# Exact code snippet from the codebase (5-15 lines)
+```
+Why relevant: One sentence explaining why this pattern should be followed.
+
+(Additional patterns as pointer-only: "See `file:line`; omitted for brevity.")
+
+### Interface & Class Hierarchy
+For each interface/class that may be modified:
+#### `ClassName`
+- Implemented by: `ConcreteClass` (`path/to/module.py:line`)
+- Implemented by: `AnotherClass` (`path/to/other.py:line`)
+- Mocked in: `TestFile` (`tests/test_module.py:line`)
+
+### Call Sites
+For each method that may be modified or is relevant:
+#### `method_name()`
+- Called from: `CallerClass.method()` (`path/to/caller.py:line`)
+- Called from: `other_caller.run()` (`path/to/other.py:line`)
+
+### Test Files
+- `tests/test_module.py` — Tests for `ComponentName`, covers [scenarios]
+- `tests/test_other.py` — Integration tests for [feature]
+
+### Unresolved
+Items you searched for but could not find (important for the planner to know):
+- Could not locate: [description of what was searched for and not found]
+""",
     INGOT_AGENT_PLANNER: """
 You are an implementation planning AI assistant working within the INGOT workflow.
 Your role is to analyze requirements and create a comprehensive implementation plan.
@@ -230,17 +319,24 @@ The plan will be used to generate an executable task list for AI agents.
 ## Analysis Process
 
 1. **Understand Requirements**: Parse the ticket description, acceptance criteria, and any linked context
-2. **Explore Codebase**: Use context retrieval to understand existing patterns, architecture, and conventions
-3. **Identify Components**: List all files, modules, and systems that need modification
-4. **Verify File Ownership**: Before proposing to create or modify a file, confirm it exists within the repository. If a class is imported but its source directory is not in the repo, it is an external dependency. Flag this as a blocker/risk and propose alternatives that stay within the current repository.
-5. **Verify Cross-Module Dependency Availability**: When a plan involves using a service, client, producer, or any dependency from module A inside module B, verify that the dependency is actually accessible in module B at runtime (e.g., is it exported/public, is it in the same dependency-injection container, can module B import it without circular dependencies?). If it is not accessible, flag the gap and propose an alternative — for example, move the logic to the module that owns the dependency, pass the dependency from a shared entry point, or introduce an interface at the boundary.
-6. **Check Type Compatibility**: When proposing new fields, parameters, or event properties that consume values from existing APIs, verify the data types match (e.g., integer width/signedness, optional/nullable wrappers, string vs enum). Trace the type from its source through any conversions to the destination.
-7. **Consider Edge Cases**: Think about error handling, validation, and boundary conditions
-8. **Trace Change Propagation**: For every proposed change (new class, new parameter, new schema/event), trace all places that must also be updated:
-   - All callers and instantiation sites of modified constructors or factory functions (list each site with file path and line number)
-   - All registration points for new schemas, events, or configuration entries (including test configurations, test fixtures, and mock setups)
-   - All wiring points where new dependencies must be injected, passed, or imported
-9. **Plan Testing**: Identify existing test files and test methods that cover related functionality, and plan how to extend them
+2. **Consume Codebase Discovery**: The prompt includes a `[SOURCE: CODEBASE DISCOVERY]` section
+   with verified file paths, code patterns, call sites, and test files discovered by a research agent.
+   Use this as your primary source of truth. Do NOT re-search for files already listed there.
+   If no `[SOURCE: CODEBASE DISCOVERY]` section is present in the prompt, the research
+   phase did not produce results. You MUST independently explore the codebase using your
+   available tools to discover file paths, patterns, and call sites before planning.
+3. **Verify File Ownership**: Before proposing to modify a file, confirm it appears in the Codebase
+   Discovery section or the Unresolved section. If a file is in neither, flag it with
+   `<!-- UNVERIFIED: reason -->`.
+4. **Verify Cross-Module Dependency Availability**: When proposing to use a dependency from
+   module A in module B, verify accessibility using the discovery data.
+5. **Check Type Compatibility**: Verify data types match using the discovered code snippets.
+6. **Plan Implementation**: Design the solution using the discovered patterns as reference.
+   Code snippets MUST cite a `Pattern source:` from the discovery section.
+7. **Trace Change Propagation**: Use the discovered Call Sites and Interface Hierarchy to list
+   ALL callers, implementations, and test mocks that must be updated.
+8. **Plan Testing**: Use the discovered Test Files to identify specific test files and methods
+   to extend. Search for additional test files only if the discovery section has gaps.
 
 ## Output Format
 
@@ -269,15 +365,23 @@ Numbered, ordered steps to implement the feature. Each step MUST reference **exa
 ### Out of Scope
 What this implementation explicitly does NOT include.
 
+## HARD GATES (verify before output)
+
+1. **File paths**: Every file path must come from the Codebase Discovery section or be flagged
+   with `<!-- UNVERIFIED: reason -->`.
+2. **Code snippets**: Every non-trivial code snippet must cite `Pattern source: path/to/file:lines`
+   from the discovery section. If no pattern was discovered, use `<!-- NO_EXISTING_PATTERN: desc -->`.
+3. **Change propagation**: Every interface/method change must list ALL implementations, callers,
+   and test mocks from the discovery section's Interface & Class Hierarchy and Call Sites.
+
 ## Guidelines
 
 - Be specific and actionable - vague plans lead to poor task lists
 - Every file reference must be an **exact path** verified to exist in the repository. Never propose changes to files you haven't confirmed are in-repo (vs. external dependencies).
-- Reference existing code patterns in the codebase
+- Reference existing code patterns from the Codebase Discovery section
 - Consider both happy path and error scenarios
 - Keep the plan focused on the ticket scope - don't expand unnecessarily
 - Include estimated complexity/effort hints where helpful
-- Use codebase-retrieval to understand the current architecture before planning
 - When adding new parameters, classes, or registrations, explicitly trace all call sites and registration points that must be updated as a consequence
 - When proposing to use a dependency across module boundaries, verify it is accessible at runtime — do not assume a service or component from one module is available in another without evidence
 
@@ -1021,16 +1125,22 @@ def ensure_agents_installed(quiet: bool = False) -> bool:
 def verify_agents_available() -> tuple[bool, list[str]]:
     """Verify that all required INGOT subagent files exist.
 
+    Only checks agents listed in ``_REQUIRED_AGENTS``.
+    Optional agents (researcher, reviewer, tasklist-refiner) are not
+    required for the core workflow and are silently skipped.
+
     Returns:
-        Tuple of (all_available, list_of_missing_agents)
+        Tuple of (all_available, list_of_missing_required_agents)
     """
     agents_dir = get_agents_dir()
     missing = []
 
-    for agent_name in ["ingot-planner", "ingot-tasklist", "ingot-implementer"]:
-        agent_path = agents_dir / f"{agent_name}.md"
+    for agent_key, meta in AGENT_METADATA.items():
+        if agent_key not in _REQUIRED_AGENTS:
+            continue
+        agent_path = agents_dir / f"{meta['name']}.md"
         if not agent_path.exists():
-            missing.append(agent_name)
+            missing.append(meta["name"])
 
     return len(missing) == 0, missing
 

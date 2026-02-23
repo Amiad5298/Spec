@@ -63,6 +63,8 @@ def _run_workflow(
     dirty_tree_policy: str | None = None,
     auto_update_docs: bool | None = None,
     auto_commit: bool | None = None,
+    plan_validation: bool | None = None,
+    plan_validation_strict: bool | None = None,
 ) -> None:
     """Run the AI-assisted workflow."""
     from ingot.workflow.runner import run_ingot_workflow
@@ -152,6 +154,16 @@ def _run_workflow(
     # Determine auto_commit setting
     effective_auto_commit = auto_commit if auto_commit is not None else config.settings.auto_commit
 
+    # Determine plan validation settings
+    effective_plan_validation = (
+        plan_validation if plan_validation is not None else config.settings.enable_plan_validation
+    )
+    effective_plan_validation_strict = (
+        plan_validation_strict
+        if plan_validation_strict is not None
+        else config.settings.plan_validation_strict
+    )
+
     # Run workflow
     result = run_ingot_workflow(
         ticket=generic_ticket,
@@ -173,6 +185,8 @@ def _run_workflow(
         dirty_tree_policy=effective_dirty_tree_policy,
         auto_update_docs=effective_auto_update_docs,
         auto_commit=effective_auto_commit,
+        enable_plan_validation=effective_plan_validation,
+        plan_validation_strict=effective_plan_validation_strict,
     )
     if not result:
         raise typer.Exit(code=ExitCode.GENERAL_ERROR)

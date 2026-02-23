@@ -188,6 +188,37 @@ class TestDefaultPlatformSettings:
         assert Settings(default_platform="trello").get_default_platform() == Platform.TRELLO
 
 
+class TestPlanValidationSettings:
+    def test_enable_plan_validation_default(self):
+        settings = Settings()
+        assert settings.enable_plan_validation is True
+
+    def test_enable_plan_validation_can_be_disabled(self):
+        settings = Settings(enable_plan_validation=False)
+        assert settings.enable_plan_validation is False
+
+    def test_enable_plan_validation_config_key_mapping(self):
+        settings = Settings()
+        assert settings.get_attribute_for_key("ENABLE_PLAN_VALIDATION") == "enable_plan_validation"
+
+    def test_plan_validation_strict_default(self):
+        settings = Settings()
+        assert settings.plan_validation_strict is True
+
+    def test_plan_validation_strict_can_be_disabled(self):
+        settings = Settings(plan_validation_strict=False)
+        assert settings.plan_validation_strict is False
+
+    def test_plan_validation_strict_config_key_mapping(self):
+        settings = Settings()
+        assert settings.get_attribute_for_key("PLAN_VALIDATION_STRICT") == "plan_validation_strict"
+
+    def test_plan_validation_strict_in_config_keys(self):
+        keys = Settings.get_config_keys()
+        assert "PLAN_VALIDATION_STRICT" in keys
+        assert "ENABLE_PLAN_VALIDATION" in keys
+
+
 class TestConfigFile:
     def test_config_file_in_home(self):
         assert CONFIG_FILE.parent == Path.home()

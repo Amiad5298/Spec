@@ -16,6 +16,21 @@ INGOT_AGENT_IMPLEMENTER = "ingot-implementer"
 INGOT_AGENT_REVIEWER = "ingot-reviewer"
 INGOT_AGENT_FIXER = "ingot-implementer"  # Autofix reuses the implementer agent
 INGOT_AGENT_DOC_UPDATER = "ingot-doc-updater"
+INGOT_AGENT_RESEARCHER = "ingot-researcher"
+
+# Section headings emitted by the researcher agent.
+# Used by both the researcher prompt and the truncation logic in step1_plan.
+RESEARCHER_SECTION_HEADINGS = [
+    "### Verified Files",
+    "### Existing Code Patterns",
+    "### Interface & Class Hierarchy",
+    "### Call Sites",
+    "### Test Files",
+    "### Unresolved",
+]
+
+# Maximum auto-retry attempts when plan validation finds errors
+MAX_GENERATION_RETRIES = 2
 
 # Default timeout values (seconds)
 DEFAULT_EXECUTION_TIMEOUT = 60
@@ -39,6 +54,11 @@ __all__ = [
     "INGOT_AGENT_REVIEWER",
     "INGOT_AGENT_FIXER",
     "INGOT_AGENT_DOC_UPDATER",
+    "INGOT_AGENT_RESEARCHER",
+    # Researcher section headings
+    "RESEARCHER_SECTION_HEADINGS",
+    # Generation retry limit
+    "MAX_GENERATION_RETRIES",
     # Timeout constants
     "DEFAULT_EXECUTION_TIMEOUT",
     "FIRST_RUN_TIMEOUT",

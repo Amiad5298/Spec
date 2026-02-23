@@ -25,6 +25,7 @@ _INGOT_AGENT_IMPLEMENTER = "ingot-implementer"
 _INGOT_AGENT_REVIEWER = "ingot-reviewer"
 _INGOT_AGENT_FIXER = "ingot-implementer"  # Autofix reuses the implementer agent
 _INGOT_AGENT_DOC_UPDATER = "ingot-doc-updater"
+_INGOT_AGENT_RESEARCHER = "ingot-researcher"
 
 
 @dataclass
@@ -93,6 +94,13 @@ class Settings:
     subagent_reviewer: str = _INGOT_AGENT_REVIEWER
     subagent_fixer: str = _INGOT_AGENT_FIXER
     subagent_doc_updater: str = _INGOT_AGENT_DOC_UPDATER
+    subagent_researcher: str = _INGOT_AGENT_RESEARCHER
+
+    # Plan validation settings
+    enable_plan_validation: bool = True
+    plan_validation_strict: bool = (
+        True  # Block workflow on validation errors (vs. warn-and-proceed)
+    )
 
     # Documentation update settings
     auto_update_docs: bool = True  # Enable automatic documentation updates
@@ -140,6 +148,9 @@ class Settings:
             "SUBAGENT_REVIEWER": "subagent_reviewer",
             "SUBAGENT_FIXER": "subagent_fixer",
             "SUBAGENT_DOC_UPDATER": "subagent_doc_updater",
+            "SUBAGENT_RESEARCHER": "subagent_researcher",
+            "ENABLE_PLAN_VALIDATION": "enable_plan_validation",
+            "PLAN_VALIDATION_STRICT": "plan_validation_strict",
             "AUTO_UPDATE_DOCS": "auto_update_docs",
             "AUTO_COMMIT": "auto_commit",
             # Platform settings

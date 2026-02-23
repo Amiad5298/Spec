@@ -1608,6 +1608,63 @@ class TestStep1RetryOnValidationError:
 
         assert result is True
 
+    @patch("ingot.workflow.step1_plan.print_warning")
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_exhausted_retries_shows_warning(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_confirm,
+        mock_display_report,
+        mock_display_summary,
+        mock_review_menu,
+        mock_print_warning,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+        mock_confirm.return_value = True  # Accept retry on first attempt
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        # Both attempts produce errors — retries will be exhausted
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Bad",
+                ),
+            ]
+        )
+        mock_validate.return_value = error_report
+        workflow_state.enable_plan_validation = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        # On the last attempt, a warning about proceeding despite errors is shown
+        warning_calls = [str(c) for c in mock_print_warning.call_args_list]
+        assert any("Proceeding to review despite" in w for w in warning_calls)
+
 
 # =============================================================================
 # Additional Tests for PR #72 Fixes

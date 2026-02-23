@@ -531,6 +531,17 @@ class TestFileExistsValidatorEdgeCases:
         # Path traversal should be silently skipped (no error reported)
         assert findings == []
 
+    def test_url_paths_skipped(self, tmp_path):
+        """URLs should not be treated as file paths."""
+        plan = (
+            "See `https://example.com/docs/guide.html` and "
+            "`http://api.example.com/v1/resource.json` for details."
+        )
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
 
 # =============================================================================
 # TestPatternSourceValidatorEdgeCases

@@ -66,6 +66,7 @@ class FileExistsValidator(Validator):
     _SKIP_PATTERNS = [
         re.compile(r"[{}<>*]"),  # Templated or glob
         re.compile(r"^path/to/"),  # Placeholder
+        re.compile(r"^https?://|^ftp://"),  # URLs
     ]
 
     # Detect UNVERIFIED markers

@@ -250,6 +250,8 @@ def _run_researcher(
 
     Returns (success, researcher_output_markdown).
     """
+    # Lazy import: InlineRunner pulls in heavy TUI dependencies that are
+    # unnecessary at module-load time and slow down CLI startup.
     from ingot.ui.inline_runner import InlineRunner
 
     researcher_name = state.subagent_names.get("researcher")
@@ -350,9 +352,11 @@ def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT
             continue
         heading, content = section_map[priority_heading]
         section_text = f"{heading}\n{content}"
-        if total_len + len(section_text) + 1 <= effective_budget:
+        # Account for "\n" separator between sections (first section has no separator)
+        separator_len = 1 if result_parts else 0
+        if total_len + separator_len + len(section_text) <= effective_budget:
             result_parts.append(section_text)
-            total_len += len(section_text) + 1  # +1 for joining newline
+            total_len += separator_len + len(section_text)
         else:
             # Truncate within this section
             remaining = effective_budget - total_len
@@ -521,15 +525,21 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
             if report.findings:
                 _display_validation_report(report)
 
-            # Offer retry on errors (not on warnings/info)
-            if report.has_errors and attempt < MAX_GENERATION_RETRIES:
-                retry = prompt_confirm(
-                    "Validation found errors. Retry plan generation?",
-                    default=True,
-                )
-                if retry:
-                    state.plan_revision_count += 1
-                    continue  # Re-run planner + inspector
+            if report.has_errors:
+                if attempt < MAX_GENERATION_RETRIES:
+                    # Offer retry on errors (not on warnings/info)
+                    retry = prompt_confirm(
+                        "Validation found errors. Retry plan generation?",
+                        default=True,
+                    )
+                    if retry:
+                        state.plan_revision_count += 1
+                        continue  # Re-run planner + inspector
+                else:
+                    print_warning(
+                        f"Proceeding to review despite {report.error_count} "
+                        f"validation error(s)."
+                    )
 
         break  # No errors or user declined retry — proceed to review
 

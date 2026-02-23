@@ -1,6 +1,7 @@
 """Tests for ingot.integrations.agents module."""
 
 from ingot.integrations.agents import (
+    _REQUIRED_AGENTS,
     AGENT_BODIES,
     AGENT_METADATA,
     get_agents_dir,
@@ -13,28 +14,34 @@ from ingot.workflow.constants import (
 
 
 class TestVerifyAgentsAvailable:
-    """All agents from AGENT_METADATA are checked (including reviewer)."""
+    """Only required agents from AGENT_METADATA are checked."""
 
-    def test_all_agents_checked_when_missing(self, tmp_path, monkeypatch):
+    def test_only_required_agents_checked_when_missing(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        # No agents dir — everything should be missing
+        # No agents dir — only required agents should be missing
         all_ok, missing = verify_agents_available()
         assert not all_ok
-        # Every agent in AGENT_METADATA should appear in missing
-        expected_names = {meta["name"] for meta in AGENT_METADATA.values()}
+        expected_names = {
+            meta["name"] for key, meta in AGENT_METADATA.items() if key in _REQUIRED_AGENTS
+        }
         assert set(missing) == expected_names
 
-    def test_reviewer_included(self, tmp_path, monkeypatch):
+    def test_optional_agents_not_reported(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         all_ok, missing = verify_agents_available()
-        assert "ingot-reviewer" in missing
+        # Optional agents should NOT appear in missing list
+        assert "ingot-reviewer" not in missing
+        assert "ingot-researcher" not in missing
+        assert "ingot-tasklist-refiner" not in missing
 
-    def test_all_present_returns_true(self, tmp_path, monkeypatch):
+    def test_all_required_present_returns_true(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         agents_dir = get_agents_dir()
         agents_dir.mkdir(parents=True, exist_ok=True)
-        for meta in AGENT_METADATA.values():
-            (agents_dir / f"{meta['name']}.md").write_text("# agent")
+        # Only create required agents
+        for key, meta in AGENT_METADATA.items():
+            if key in _REQUIRED_AGENTS:
+                (agents_dir / f"{meta['name']}.md").write_text("# agent")
 
         all_ok, missing = verify_agents_available()
         assert all_ok

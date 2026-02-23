@@ -223,6 +223,16 @@ AGENT_METADATA = {
     },
 }
 
+# Agents required for the core workflow. Optional agents (researcher,
+# reviewer, tasklist-refiner) are not checked by verify_agents_available().
+_REQUIRED_AGENTS: frozenset[str] = frozenset(
+    {
+        INGOT_AGENT_PLANNER,
+        INGOT_AGENT_TASKLIST,
+        INGOT_AGENT_IMPLEMENTER,
+    }
+)
+
 # Agent body content (prompts) - without frontmatter
 # NOTE: Researcher prompt section headings must match RESEARCHER_SECTION_HEADINGS
 # in ingot.workflow.constants to stay in sync with truncation logic.
@@ -246,7 +256,7 @@ Given a ticket description and optional user constraints, search the codebase to
 - **Search, don't assume.** Every file path must come from a codebase search result.
 - **Quote what you find.** Include exact code snippets (5-15 lines) for discovered patterns.
 - **Be exhaustive on interfaces.** For each interface or abstract class, find ALL implementations
-  including test mocks (search for `implements`, `extends`, `mock(`, `@Mock`, `when(`).
+  including test mocks (search for `ABC`, `@abstractmethod`, subclass definitions, `MagicMock`, `@patch`).
 - **Cite line numbers.** Every reference must include `file:line` or `file:line-line`.
 
 ## Output Budget Rules
@@ -263,14 +273,14 @@ Output ONLY the following structured markdown (no commentary outside these secti
 
 ### Verified Files
 For each relevant file found (max 15, ranked by relevance):
-- `path/to/File.java:line` — Brief description of what it does and why it's relevant
+- `path/to/module.py:line` — Brief description of what it does and why it's relevant
 
 ### Existing Code Patterns
 For each pattern the implementation should follow (top 3 with snippets):
 #### Pattern: [Pattern Name]
-Source: `path/to/file.ext:start-end`
-```language
-// Exact code snippet from the codebase (5-15 lines)
+Source: `path/to/module.py:start-end`
+```python
+# Exact code snippet from the codebase (5-15 lines)
 ```
 Why relevant: One sentence explaining why this pattern should be followed.
 
@@ -278,20 +288,20 @@ Why relevant: One sentence explaining why this pattern should be followed.
 
 ### Interface & Class Hierarchy
 For each interface/class that may be modified:
-#### `InterfaceName`
-- Implemented by: `ConcreteClass` (`path/to/file.ext:line`)
-- Implemented by: `AnotherClass` (`path/to/other.ext:line`)
-- Mocked in: `TestFile` (`path/to/test.ext:line`)
+#### `ClassName`
+- Implemented by: `ConcreteClass` (`path/to/module.py:line`)
+- Implemented by: `AnotherClass` (`path/to/other.py:line`)
+- Mocked in: `TestFile` (`tests/test_module.py:line`)
 
 ### Call Sites
 For each method that may be modified or is relevant:
-#### `methodName()`
-- Called from: `CallerClass.method()` (`path/to/caller.ext:line`)
-- Called from: `OtherCaller.run()` (`path/to/other.ext:line`)
+#### `method_name()`
+- Called from: `CallerClass.method()` (`path/to/caller.py:line`)
+- Called from: `other_caller.run()` (`path/to/other.py:line`)
 
 ### Test Files
-- `path/to/test/File.ext` — Tests for `ComponentName`, covers [scenarios]
-- `path/to/test/Other.ext` — Integration tests for [feature]
+- `tests/test_module.py` — Tests for `ComponentName`, covers [scenarios]
+- `tests/test_other.py` — Integration tests for [feature]
 
 ### Unresolved
 Items you searched for but could not find (important for the planner to know):
@@ -1115,13 +1125,19 @@ def ensure_agents_installed(quiet: bool = False) -> bool:
 def verify_agents_available() -> tuple[bool, list[str]]:
     """Verify that all required INGOT subagent files exist.
 
+    Only checks agents listed in ``_REQUIRED_AGENTS``.
+    Optional agents (researcher, reviewer, tasklist-refiner) are not
+    required for the core workflow and are silently skipped.
+
     Returns:
-        Tuple of (all_available, list_of_missing_agents)
+        Tuple of (all_available, list_of_missing_required_agents)
     """
     agents_dir = get_agents_dir()
     missing = []
 
-    for meta in AGENT_METADATA.values():
+    for agent_key, meta in AGENT_METADATA.items():
+        if agent_key not in _REQUIRED_AGENTS:
+            continue
         agent_path = agents_dir / f"{meta['name']}.md"
         if not agent_path.exists():
             missing.append(meta["name"])

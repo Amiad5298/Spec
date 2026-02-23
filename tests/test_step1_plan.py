@@ -17,6 +17,7 @@ from ingot.workflow.step1_plan import (
     _display_validation_report,
     _edit_plan,
     _extract_plan_markdown,
+    _format_validation_feedback,
     _generate_plan_with_tui,
     _get_log_base_dir,
     _run_researcher,
@@ -1657,6 +1658,7 @@ class TestStep1RetryOnValidationError:
         )
         mock_validate.return_value = error_report
         workflow_state.enable_plan_validation = True
+        workflow_state.validation_strict = False  # Allow warn-and-proceed
 
         result = step_1_create_plan(workflow_state, MagicMock())
 
@@ -1784,3 +1786,204 @@ class TestSectionsNotInPriority:
         assert "Verified Files" in result
         # Unknown sections should be dropped (not in priority list)
         assert "Custom Unknown Section" not in result
+
+
+class TestTruncationAtLineBoundary:
+    """A5: Verify truncated content ends at a newline boundary."""
+
+    def test_truncation_at_line_boundary(self):
+        # Build content long enough to trigger within-section truncation
+        lines = [f"- `src/file_{i}.py:1` — Description line {i}" for i in range(200)]
+        context = "### Verified Files\n" + "\n".join(lines)
+        # Budget small enough to truncate within the section
+        budget = 400
+        result = _truncate_researcher_context(context, budget=budget)
+        assert "[NOTE: Research context truncated" in result
+        # The truncated section should end with "..." on its own line
+        # and the line before "..." should be a complete line (not mid-word)
+        result_lines = result.splitlines()
+        # Find the "..." marker
+        ellipsis_indices = [i for i, ln in enumerate(result_lines) if ln.strip() == "..."]
+        assert len(ellipsis_indices) > 0
+        # The line before "..." should be a complete entry (starts with "- ")
+        for idx in ellipsis_indices:
+            if idx > 0:
+                prev_line = result_lines[idx - 1]
+                # Should not be cut mid-word — either a complete list item or heading
+                assert prev_line.startswith("- ") or prev_line.startswith("###")
+
+
+class TestBuildMinimalPromptWithValidationFeedback:
+    """A2: Verify validation feedback is injected into retry prompts."""
+
+    def test_feedback_included_when_provided(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        feedback = "- [ERROR] Missing section: Summary"
+        result = _build_minimal_prompt(workflow_state, plan_path, validation_feedback=feedback)
+        assert "[VALIDATION FEEDBACK FROM PREVIOUS ATTEMPT]" in result
+        assert "Missing section: Summary" in result
+        assert "Please fix these issues" in result
+
+    def test_no_feedback_section_when_empty(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_minimal_prompt(workflow_state, plan_path, validation_feedback="")
+        assert "[VALIDATION FEEDBACK FROM PREVIOUS ATTEMPT]" not in result
+
+
+class TestFormatValidationFeedback:
+    """Tests for _format_validation_feedback."""
+
+    def test_formats_errors_and_warnings(self):
+        report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Missing section: Summary",
+                    suggestion="Add a Summary section.",
+                ),
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.WARNING,
+                    message="Code block uncited",
+                    suggestion="Add Pattern source.",
+                ),
+            ]
+        )
+        result = _format_validation_feedback(report)
+        assert "[ERROR]" in result
+        assert "Missing section: Summary" in result
+        assert "[WARNING]" in result
+        assert "Code block uncited" in result
+        assert "Add a Summary section" in result
+
+    def test_excludes_info_findings(self):
+        report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.INFO,
+                    message="UNVERIFIED marker",
+                ),
+            ]
+        )
+        result = _format_validation_feedback(report)
+        assert result == ""
+
+    def test_empty_report_returns_empty(self):
+        report = ValidationReport()
+        result = _format_validation_feedback(report)
+        assert result == ""
+
+
+class TestStrictValidationGate:
+    """A1: Test validation_strict blocks workflow on exhausted retries."""
+
+    @patch("ingot.workflow.step1_plan.print_error")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_strict_mode_blocks_on_exhausted_retries(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_confirm,
+        mock_display_report,
+        mock_print_error,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_researcher.return_value = (True, "")
+        mock_confirm.return_value = True  # Accept retry
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Bad",
+                ),
+            ]
+        )
+        mock_validate.return_value = error_report
+        workflow_state.enable_plan_validation = True
+        workflow_state.validation_strict = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is False
+        # Should have printed an error about strict mode
+        error_calls = [str(c) for c in mock_print_error.call_args_list]
+        assert any("strict mode" in c.lower() for c in error_calls)
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan.print_warning")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.prompt_confirm")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_non_strict_mode_proceeds_on_exhausted_retries(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_confirm,
+        mock_display_report,
+        mock_print_warning,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+        mock_confirm.return_value = True  # Accept retry
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Test",
+                    severity=ValidationSeverity.ERROR,
+                    message="Bad",
+                ),
+            ]
+        )
+        mock_validate.return_value = error_report
+        workflow_state.enable_plan_validation = True
+        workflow_state.validation_strict = False
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        # Should have printed a warning (not error) about proceeding
+        warning_calls = [str(c) for c in mock_print_warning.call_args_list]
+        assert any("Proceeding to review despite" in w for w in warning_calls)

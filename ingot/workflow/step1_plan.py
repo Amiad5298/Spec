@@ -113,6 +113,7 @@ def _generate_plan_with_tui(
     plan_path: Path,
     backend: AIBackend,
     researcher_context: str = "",
+    validation_feedback: str = "",
 ) -> tuple[bool, str]:
     """Generate plan with TUI progress display using subagent.
 
@@ -121,10 +122,13 @@ def _generate_plan_with_tui(
         plan_path: Path where the plan should be saved.
         backend: AI backend for agent calls.
         researcher_context: Optional researcher output to inject into the prompt.
+        validation_feedback: Optional feedback from previous validation to guide retry.
 
     Returns:
         Tuple of (success, captured_output).
     """
+    # Lazy import: startup-perf optimization, NOT circular-dep workaround —
+    # InlineRunner only imports from ingot.ui.log_buffer and ingot.utils.console
     from ingot.ui.inline_runner import InlineRunner
 
     # Create log directory and log path (use safe_filename_stem for paths)
@@ -143,7 +147,11 @@ def _generate_plan_with_tui(
 
     # Build minimal prompt - agent has the instructions
     prompt = _build_minimal_prompt(
-        state, plan_path, plan_mode=use_plan_mode, researcher_context=researcher_context
+        state,
+        plan_path,
+        plan_mode=use_plan_mode,
+        researcher_context=researcher_context,
+        validation_feedback=validation_feedback,
     )
 
     def _work() -> tuple[bool, str]:
@@ -172,6 +180,7 @@ def _build_minimal_prompt(
     *,
     plan_mode: bool = False,
     researcher_context: str = "",
+    validation_feedback: str = "",
 ) -> str:
     """Build minimal prompt for plan generation.
 
@@ -183,6 +192,7 @@ def _build_minimal_prompt(
         plan_mode: If True, instruct the AI to output the plan to stdout
             instead of writing a file (for read-only backends).
         researcher_context: Optional researcher output to inject into the prompt.
+        validation_feedback: Optional feedback from previous validation to guide retry.
     """
     source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
@@ -234,6 +244,13 @@ Save the plan to: {plan_path}
 
 Codebase context will be retrieved automatically."""
 
+    if validation_feedback:
+        prompt += f"""
+
+[VALIDATION FEEDBACK FROM PREVIOUS ATTEMPT]
+{validation_feedback}
+Please fix these issues in the new plan."""
+
     return prompt
 
 
@@ -250,8 +267,8 @@ def _run_researcher(
 
     Returns (success, researcher_output_markdown).
     """
-    # Lazy import: InlineRunner pulls in heavy TUI dependencies that are
-    # unnecessary at module-load time and slow down CLI startup.
+    # Lazy import: startup-perf optimization, NOT circular-dep workaround —
+    # InlineRunner only imports from ingot.ui.log_buffer and ingot.utils.console
     from ingot.ui.inline_runner import InlineRunner
 
     researcher_name = state.subagent_names.get("researcher")
@@ -362,6 +379,10 @@ def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT
             remaining = effective_budget - total_len
             if remaining > len(heading) + 20:  # Only include if meaningful content fits
                 truncated_content = content[: remaining - len(heading) - 5]
+                # Cut at last newline to avoid mid-line truncation
+                last_nl = truncated_content.rfind("\n")
+                if last_nl > 0:
+                    truncated_content = truncated_content[:last_nl]
                 result_parts.append(f"{heading}\n{truncated_content}\n...")
             truncated = True
             break
@@ -414,6 +435,24 @@ def _display_validation_report(report: ValidationReport) -> None:
             f"Plan has {report.error_count} error(s) and {report.warning_count} warning(s)"
         )
     console.print()
+
+
+def _format_validation_feedback(report: ValidationReport) -> str:
+    """Format actionable validation findings for retry prompt injection.
+
+    Only includes ERROR and WARNING findings. Returns empty string if no
+    actionable findings exist.
+    """
+    lines: list[str] = []
+    for finding in report.findings:
+        if finding.severity not in (ValidationSeverity.ERROR, ValidationSeverity.WARNING):
+            continue
+        severity = "ERROR" if finding.severity == ValidationSeverity.ERROR else "WARNING"
+        line = f"- [{severity}] {finding.message}"
+        if finding.suggestion:
+            line += f" — Suggestion: {finding.suggestion}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 # =============================================================================
@@ -496,11 +535,16 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         log_message("No researcher agent configured, skipping discovery phase")
 
     # Planner + inspector retry loop (researcher output is fixed)
+    validation_feedback = ""
     for attempt in range(1, MAX_GENERATION_RETRIES + 1):
         # Phase 2: Synthesis
         print_step("Generating implementation plan...")
         success, output = _generate_plan_with_tui(
-            state, plan_path, backend, researcher_context=researcher_output
+            state,
+            plan_path,
+            backend,
+            researcher_context=researcher_output,
+            validation_feedback=validation_feedback,
         )
 
         if not success:
@@ -534,8 +578,16 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                     )
                     if retry:
                         state.plan_revision_count += 1
+                        validation_feedback = _format_validation_feedback(report)
                         continue  # Re-run planner + inspector
                 else:
+                    if state.validation_strict:
+                        print_error(
+                            f"Plan has {report.error_count} validation error(s) "
+                            f"after {MAX_GENERATION_RETRIES} attempt(s). "
+                            f"Cannot proceed in strict mode."
+                        )
+                        return False
                     print_warning(
                         f"Proceeding to review despite {report.error_count} "
                         f"validation error(s)."

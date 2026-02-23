@@ -4,10 +4,13 @@ Provides the Validator ABC, finding/report data classes, and the
 ValidatorRegistry that runs all registered validators against content.
 """
 
+import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+
+from ingot.utils.logging import log_message
 
 
 class ValidationSeverity(Enum):
@@ -99,6 +102,7 @@ class ValidatorRegistry:
                 findings = validator.validate(content, context)
                 report.findings.extend(findings)
             except Exception as exc:
+                log_message(f"Validator '{validator.name}' crashed:\n{traceback.format_exc()}")
                 report.findings.append(
                     ValidationFinding(
                         validator_name=validator.name,

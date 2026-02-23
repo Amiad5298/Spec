@@ -1,5 +1,7 @@
 """Tests for ingot.validation.plan_validators module."""
 
+from unittest.mock import patch
+
 from ingot.validation.base import (
     ValidationContext,
     ValidationFinding,
@@ -636,3 +638,350 @@ class TestValidationReport:
             )
         )
         assert report.info_count == 2
+
+
+# =============================================================================
+# A3: TestRequiredSectionsValidatorCodeBlocks
+# =============================================================================
+
+
+class TestRequiredSectionsValidatorCodeBlocks:
+    def test_heading_inside_code_block_not_matched(self):
+        """A heading inside a fenced code block should NOT satisfy the section requirement."""
+        plan = """\
+# Implementation Plan
+
+## Summary
+Brief summary.
+
+## Technical Approach
+Approach.
+
+```markdown
+## Testing Strategy
+This is inside a code block, not a real section.
+```
+
+## Implementation Steps
+1. Step one
+
+## Potential Risks
+- Risk one
+
+## Out of Scope
+- Not included
+"""
+        validator = RequiredSectionsValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        # "Testing Strategy" is only inside a code block — should be reported missing
+        assert len(findings) == 1
+        assert "Testing Strategy" in findings[0].message
+
+    def test_heading_outside_code_block_still_matched(self):
+        """A real heading outside code blocks should still pass."""
+        plan = COMPLETE_PLAN
+        validator = RequiredSectionsValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+
+# =============================================================================
+# A4: TestFileExistsValidatorRootFiles
+# =============================================================================
+
+
+class TestFileExistsValidatorRootFiles:
+    def test_root_file_with_extension_found(self, tmp_path):
+        (tmp_path / "setup.py").write_text("# setup")
+        plan = "Check `setup.py` for configuration."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_root_file_with_extension_missing(self, tmp_path):
+        plan = "Check `setup.py` for configuration."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert "setup.py" in findings[0].message
+
+    def test_known_extensionless_found(self, tmp_path):
+        (tmp_path / "Makefile").write_text("all:")
+        plan = "See `Makefile` for build instructions."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_known_extensionless_missing(self, tmp_path):
+        plan = "See `Dockerfile` for container setup."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert "Dockerfile" in findings[0].message
+
+    def test_random_word_not_matched_as_file(self, tmp_path):
+        """Words like `os.path` or `re.compile` should NOT be matched as root files."""
+        plan = "Use `os.path` and `re.compile` for processing."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # These should not be treated as files (no common extension)
+        assert findings == []
+
+
+# =============================================================================
+# B12: TestFileExistsValidatorURLSchemes
+# =============================================================================
+
+
+class TestFileExistsValidatorURLSchemes:
+    def test_s3_url_skipped(self, tmp_path):
+        plan = "Download from `s3://my-bucket/data/file.csv` for the dataset."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_ssh_url_skipped(self, tmp_path):
+        plan = "Clone from `ssh://git@github.com/org/repo.git` for source."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_file_url_skipped(self, tmp_path):
+        plan = "Open `file:///usr/local/config.json` for reference."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_git_url_skipped(self, tmp_path):
+        plan = "Fetch from `git://github.com/org/repo.git` for source."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_gs_url_skipped(self, tmp_path):
+        plan = "Download from `gs://bucket/path/data.parquet` for data."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+
+# =============================================================================
+# A6: TestPatternSourceValidatorUnbalancedFences
+# =============================================================================
+
+
+class TestPatternSourceValidatorUnbalancedFences:
+    def test_single_unbalanced_fence_warning(self):
+        """A single opening ``` without a close should emit a warning."""
+        plan = """\
+Some text before.
+
+```python
+def orphan():
+    pass
+"""
+        validator = PatternSourceValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert any("Unbalanced code fence" in f.message for f in findings)
+
+    def test_odd_fences_handled(self):
+        """Three fences: first two pair up, third is unbalanced."""
+        plan = """\
+```python
+a = 1
+```
+
+```python
+def orphan():
+    pass
+"""
+        validator = PatternSourceValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        # Should have an unbalanced fence warning
+        assert any("Unbalanced code fence" in f.message for f in findings)
+
+    def test_balanced_fences_no_unbalanced_warning(self):
+        """Balanced fences should NOT produce an unbalanced warning."""
+        plan = """\
+```python
+a = 1
+```
+"""
+        validator = PatternSourceValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert not any("Unbalanced" in f.message for f in findings)
+
+
+# =============================================================================
+# A7: TestDiscoveryCoverageValidatorSectionAware
+# =============================================================================
+
+
+class TestDiscoveryCoverageValidatorSectionAware:
+    def test_name_in_summary_only_still_warns(self):
+        """A name mentioned only in Summary (not a target section) should warn."""
+        researcher = """\
+### Interface & Class Hierarchy
+#### `MyService`
+- Implemented by: `MyServiceImpl` (`src/service.py:10`)
+"""
+        plan = """\
+## Summary
+MyService needs changes.
+
+## Technical Approach
+Use the adapter pattern.
+
+## Implementation Steps
+1. Modify the adapter.
+
+## Testing Strategy
+- Unit tests
+
+## Potential Risks
+- None
+
+## Out of Scope
+- Nothing
+"""
+        validator = DiscoveryCoverageValidator(researcher_output=researcher)
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert "MyService" in findings[0].message
+
+    def test_name_in_implementation_steps_passes(self):
+        """A name mentioned in Implementation Steps should not warn."""
+        researcher = """\
+### Interface & Class Hierarchy
+#### `MyService`
+- Implemented by: `MyServiceImpl` (`src/service.py:10`)
+"""
+        plan = """\
+## Summary
+Summary.
+
+## Technical Approach
+Approach.
+
+## Implementation Steps
+1. Modify MyService to add new method.
+
+## Testing Strategy
+- Unit tests
+
+## Potential Risks
+- None
+
+## Out of Scope
+- Nothing
+"""
+        validator = DiscoveryCoverageValidator(researcher_output=researcher)
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_name_in_code_block_inside_target_section_not_matched(self):
+        """A name inside a code block in a target section should NOT satisfy coverage."""
+        researcher = """\
+### Interface & Class Hierarchy
+#### `MyService`
+- Implemented by: `MyServiceImpl` (`src/service.py:10`)
+"""
+        plan = """\
+## Summary
+Summary.
+
+## Technical Approach
+Approach.
+
+## Implementation Steps
+1. Do something else.
+
+```python
+# MyService is here but inside a code block
+class MyService:
+    pass
+```
+
+## Testing Strategy
+- Unit tests
+
+## Potential Risks
+- None
+
+## Out of Scope
+- Nothing
+"""
+        validator = DiscoveryCoverageValidator(researcher_output=researcher)
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert "MyService" in findings[0].message
+
+    def test_fallback_to_full_content_when_no_target_sections(self):
+        """When no target sections exist, fallback to searching full content."""
+        researcher = """\
+### Interface & Class Hierarchy
+#### `MyService`
+- Implemented by: `MyServiceImpl` (`src/service.py:10`)
+"""
+        # Malformed plan with no matching target sections
+        plan = "# Plan\n\nMyService is mentioned here."
+        validator = DiscoveryCoverageValidator(researcher_output=researcher)
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        # Fallback: full content is searched, so MyService is found
+        assert findings == []
+
+
+# =============================================================================
+# A8: TestValidatorRegistryCrashLogging
+# =============================================================================
+
+
+class TestValidatorRegistryCrashLogging:
+    def test_crash_logs_stack_trace(self):
+        """Verify log_message is called with traceback content on crash."""
+
+        class CrashingValidator(Validator):
+            @property
+            def name(self) -> str:
+                return "Crasher"
+
+            def validate(self, content, context):
+                raise RuntimeError("test crash boom")
+
+        registry = ValidatorRegistry()
+        registry.register(CrashingValidator())
+        ctx = ValidationContext()
+
+        with patch("ingot.validation.base.log_message") as mock_log:
+            report = registry.validate_all("# Plan", ctx)
+
+            # log_message should have been called with traceback content
+            mock_log.assert_called_once()
+            log_call_arg = mock_log.call_args[0][0]
+            assert "Crasher" in log_call_arg
+            assert "test crash boom" in log_call_arg
+            assert "Traceback" in log_call_arg
+
+        # Finding should still be present
+        assert len(report.findings) == 1
+        assert report.findings[0].severity == ValidationSeverity.ERROR
+        assert "Validator crashed" in report.findings[0].message

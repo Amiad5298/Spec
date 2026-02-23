@@ -122,6 +122,7 @@ class WorkflowState:
 
     # Plan validation
     enable_plan_validation: bool = True
+    validation_strict: bool = True  # Block workflow on validation errors (vs. warn-and-proceed)
 
     # Re-planning state
     replan_count: int = 0  # Number of execution replans (Step 3 post-review)

@@ -26,7 +26,7 @@ from ingot.utils.console import (
 )
 from ingot.utils.logging import log_message
 from ingot.validation.base import ValidationContext, ValidationReport, ValidationSeverity
-from ingot.validation.plan_validators import create_plan_validator_registry
+from ingot.validation.plan_validators import FileExistsValidator, create_plan_validator_registry
 from ingot.workflow.constants import (
     MAX_GENERATION_RETRIES,
     MAX_REVIEW_ITERATIONS,
@@ -396,6 +396,49 @@ def _truncate_researcher_context(context: str, budget: int = _RESEARCHER_CONTEXT
 
 
 # =============================================================================
+# Researcher Output Validation
+# =============================================================================
+
+
+def _validate_researcher_paths(researcher_output: str, repo_root: Path | None) -> list[str]:
+    """Validate file paths in researcher output against the filesystem.
+
+    Runs the FileExistsValidator on the researcher output to catch
+    hallucinated file paths before they propagate to the planner.
+
+    Returns a list of invalid path strings (empty if all paths are valid).
+    """
+    if not researcher_output.strip() or repo_root is None:
+        return []
+
+    validator = FileExistsValidator()
+    context = ValidationContext(repo_root=repo_root)
+    findings = validator.validate(researcher_output, context)
+
+    return [f.message for f in findings if f.severity == ValidationSeverity.ERROR]
+
+
+def _annotate_researcher_warnings(researcher_output: str, invalid_paths: list[str]) -> str:
+    """Prepend warnings about invalid paths to researcher output.
+
+    Injects a warning block at the top of the researcher context so the
+    planner knows which paths from the researcher are unreliable.
+    """
+    if not invalid_paths:
+        return researcher_output
+
+    warning_lines = [
+        "[WARNING: The following paths from the researcher could not be verified",
+        "on the filesystem. Do NOT use them without independently verifying:]",
+    ]
+    for msg in invalid_paths:
+        warning_lines.append(f"  - {msg}")
+    warning_lines.append("")
+
+    return "\n".join(warning_lines) + "\n" + researcher_output
+
+
+# =============================================================================
 # Plan Validation Functions
 # =============================================================================
 
@@ -528,6 +571,17 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
             research_path = plan_path.with_suffix(".research.md")
             research_path.write_text(researcher_output)
             log_message(f"Persisted researcher output to {research_path}")
+
+            # Validate researcher paths to catch hallucinations early
+            repo_root = find_repo_root()
+            invalid_paths = _validate_researcher_paths(researcher_output, repo_root)
+            if invalid_paths:
+                print_warning(
+                    f"Researcher output has {len(invalid_paths)} unverified path(s) "
+                    f"— planner will be warned"
+                )
+                log_message(f"Researcher invalid paths: {invalid_paths}")
+                researcher_output = _annotate_researcher_warnings(researcher_output, invalid_paths)
         else:
             print_warning("Researcher failed, planner will search independently")
             researcher_output = ""

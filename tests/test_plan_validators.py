@@ -985,3 +985,326 @@ class TestValidatorRegistryCrashLogging:
         assert len(report.findings) == 1
         assert report.findings[0].severity == ValidationSeverity.ERROR
         assert "Validator crashed" in report.findings[0].message
+
+
+# =============================================================================
+# TestFileExistsValidatorNewFileDetection
+# =============================================================================
+
+
+class TestFileExistsValidatorNewFileDetection:
+    """Tests for new-file context detection in FileExistsValidator."""
+
+    def test_create_keyword_skips_missing_file(self, tmp_path):
+        """'Create' adjacent to a path should not flag missing files."""
+        plan = "**File**: Create `src/new-feature.py` for the new module."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_create_keyword_case_insensitive(self, tmp_path):
+        """'create' (lowercase) should also skip missing files."""
+        plan = "create `src/new-feature.py` as a new module."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_creating_keyword_skips_missing_file(self, tmp_path):
+        """'Creating' adjacent to a path should not flag missing files."""
+        plan = "Creating `src/new-feature.py` for the new module."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_new_file_keyword_skips_missing_file(self, tmp_path):
+        """'New file' adjacent to a path should not flag missing files."""
+        plan = "**New file**: `tests/test_consumer.java` for unit tests."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_new_file_parenthesized_skips_missing_file(self, tmp_path):
+        """'(NEW FILE)' after a path should not flag missing files."""
+        plan = "**File**: `src/MonitoringJob.java` (NEW FILE)"
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_new_file_marker_skips_missing_file(self, tmp_path):
+        """Lines with <!-- NEW_FILE --> should not flag missing files."""
+        plan = "<!-- NEW_FILE --> `src/new-service.py` is the new service."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_new_file_marker_with_description(self, tmp_path):
+        """Lines with <!-- NEW_FILE: desc --> should not flag missing files."""
+        plan = "<!-- NEW_FILE: alert configuration --> `k8s/alerts.yaml`"
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_non_create_line_still_errors(self, tmp_path):
+        """Lines without creation keywords should still flag missing files."""
+        plan = "Modify `src/nonexistent.py` to add the feature."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.ERROR
+
+    def test_mixed_create_and_modify_lines(self, tmp_path):
+        """Create lines are skipped but non-create lines still flag errors."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "existing.py").write_text("# code")
+        plan = (
+            "Create `src/new-feature.py` as a new module.\n"
+            "Modify `src/existing.py` to import it.\n"
+            "Check `src/hallucinated.py` for patterns.\n"
+        )
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # Only hallucinated.py should be flagged
+        assert len(findings) == 1
+        assert "hallucinated.py" in findings[0].message
+
+    def test_existing_file_on_create_line_no_error(self, tmp_path):
+        """A file that exists on a 'Create' line should not error (edge case)."""
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "exists.py").write_text("# exists")
+        plan = "Create `src/exists.py` for the feature."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # File exists, but we skip validation for paths adjacent to Create — no error
+        assert findings == []
+
+    def test_error_suggestion_mentions_new_file(self, tmp_path):
+        """Error suggestion should mention <!-- NEW_FILE --> option."""
+        plan = "Modify `src/missing.py` for the feature."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert "NEW_FILE" in findings[0].suggestion
+
+    def test_create_in_prose_does_not_skip_missing_file(self, tmp_path):
+        """'Create' used in prose (not adjacent to path) should still flag."""
+        plan = "Create a new endpoint in `src/nonexistent.java` to handle requests."
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.ERROR
+        assert "nonexistent.java" in findings[0].message
+
+    def test_create_only_skips_adjacent_path(self, tmp_path):
+        """Create should only skip the path it's adjacent to, not others on the line."""
+        plan = "Create `src/new.py` based on `src/nonexistent.py`"
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # src/new.py is skipped (Create is adjacent), src/nonexistent.py should error
+        assert len(findings) == 1
+        assert "nonexistent.py" in findings[0].message
+
+
+# =============================================================================
+# TestUnresolvedMarkersValidatorNewFile
+# =============================================================================
+
+
+class TestUnresolvedMarkersValidatorNewFile:
+    """Tests for NEW_FILE marker detection in UnresolvedMarkersValidator."""
+
+    def test_new_file_marker_info(self):
+        plan = "<!-- NEW_FILE --> `src/new.py` is the new service."
+        validator = UnresolvedMarkersValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.INFO
+        assert "NEW_FILE" in findings[0].message
+
+    def test_new_file_marker_with_description_info(self):
+        plan = "<!-- NEW_FILE: alert configuration --> `k8s/alerts.yaml`"
+        validator = UnresolvedMarkersValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.INFO
+        assert "alert configuration" in findings[0].message
+
+    def test_new_file_marker_without_description(self):
+        plan = "<!-- NEW_FILE --> `src/new.py`"
+        validator = UnresolvedMarkersValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].message == "NEW_FILE marker"
+
+
+# =============================================================================
+# TestFileExistsValidatorCodeBlocks
+# =============================================================================
+
+
+class TestFileExistsValidatorCodeBlocks:
+    """Tests for code block exclusion in FileExistsValidator."""
+
+    def test_yaml_code_block_not_extracted(self, tmp_path):
+        """YAML content inside a fenced code block should not be treated as paths."""
+        plan = """\
+Update the deployment config:
+
+```yaml
+metadata:
+  annotations:
+    app.kubernetes.io/name: ingot
+  labels:
+    env: production
+```
+
+Done.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_shell_commands_inside_code_block_skipped(self, tmp_path):
+        """Shell commands with file-like args inside code blocks should be skipped."""
+        plan = """\
+Run the following to validate:
+
+```bash
+promtool check rules k8s/base/monitoring/prometheus-rules.yaml
+kubectl apply -f k8s/overlays/prod/deployment.yaml
+```
+
+That's it.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_inline_backtick_paths_inside_code_block_skipped(self, tmp_path):
+        """Backtick-quoted paths inside code blocks should not be extracted."""
+        plan = """\
+Example output:
+
+```
+Processing `aws-marketplace.json` for deployment.
+See `config/settings.yaml` for details.
+```
+
+End of example.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_extensionless_files_inside_code_block_skipped(self, tmp_path):
+        """Known extensionless files (Dockerfile) inside code blocks should be skipped."""
+        plan = """\
+Build instructions:
+
+```
+docker build -f `Dockerfile` .
+cat Makefile
+```
+
+End.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_paths_outside_code_blocks_still_validated(self, tmp_path):
+        """Paths outside code blocks should still be validated (regression guard)."""
+        plan = """\
+Modify `src/missing.py` to add the feature.
+
+```yaml
+key: value
+```
+
+Also update `tests/missing_test.py`.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        paths = {f.message.split("`")[1] for f in findings}
+        assert paths == {"src/missing.py", "tests/missing_test.py"}
+
+    def test_line_numbers_correct_after_code_block_filtering(self, tmp_path):
+        """Line numbers should be correct for paths after a code block."""
+        plan = """\
+Line 1
+
+```yaml
+key: value
+```
+
+Modify `src/after-block.py` here.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].line_number == 7
+
+    def test_multiple_code_blocks_interspersed_with_real_paths(self, tmp_path):
+        """Mix of code blocks and real paths: only real paths should be extracted."""
+        (tmp_path / "real.py").write_text("# real")
+        plan = """\
+Check `real.py` for the pattern.
+
+```bash
+cat fake/path/inside.yaml
+```
+
+Then update `src/missing.py`.
+
+```python
+import os
+path = "another/fake/file.json"
+```
+
+Finally check `real.py` again.
+"""
+        validator = FileExistsValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        # real.py exists, src/missing.py doesn't, code block paths skipped
+        assert len(findings) == 1
+        assert "src/missing.py" in findings[0].message
+
+    def test_extract_paths_directly_skips_code_blocks(self):
+        """Direct _extract_paths test: paths inside code blocks are excluded."""
+        plan = """\
+Modify `src/real.py` here.
+
+```
+See `src/fake.py` inside block.
+```
+
+Also `tests/real_test.py`.
+"""
+        validator = FileExistsValidator()
+        paths = validator._extract_paths(plan)
+        extracted = {p for p, _ in paths}
+        assert "src/real.py" in extracted
+        assert "tests/real_test.py" in extracted
+        assert "src/fake.py" not in extracted

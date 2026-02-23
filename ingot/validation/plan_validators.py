@@ -37,6 +37,30 @@ def _strip_fenced_code_blocks(content: str) -> str:
     return _FENCED_CODE_BLOCK_RE.sub("", content)
 
 
+def _build_code_block_ranges(content: str) -> tuple[list[int], list[int]]:
+    """Return sorted (starts, ends) offset lists for fenced code blocks.
+
+    Each pair ``(starts[i], ends[i])`` delimits one fenced code block.
+    """
+    starts: list[int] = []
+    ends: list[int] = []
+    for m in _FENCED_CODE_BLOCK_RE.finditer(content):
+        starts.append(m.start())
+        ends.append(m.end())
+    return starts, ends
+
+
+def _is_inside_code_block(starts: list[int], ends: list[int], offset: int) -> bool:
+    """Check whether *offset* falls inside any fenced code block range.
+
+    Uses ``bisect.bisect_right`` for O(log N) lookup.
+    """
+    idx = bisect.bisect_right(starts, offset) - 1
+    if idx < 0:
+        return False
+    return offset < ends[idx]
+
+
 def _build_line_index(content: str) -> list[int]:
     """Build a sorted list of newline character offsets for O(log N) lookups.
 
@@ -208,6 +232,24 @@ class FileExistsValidator(Validator):
     # Detect UNVERIFIED markers
     _UNVERIFIED_RE = re.compile(r"<!--\s*UNVERIFIED:.*?-->", re.DOTALL)
 
+    # Detect backtick-quoted paths that are preceded by creation keywords.
+    # Requires the keyword to be directly before the backtick path (with only
+    # optional markdown formatting between) to avoid false positives from
+    # incidental usage of "Create" in prose on lines referencing existing files.
+    # e.g. "Create `src/new.py`" matches, but "Create a new endpoint in `src/existing.py`" does not.
+    _NEW_FILE_PRE_PATH_RE = re.compile(
+        r"(?:^|\b)(?:Create|Creating|New\s+file)\b\s*[:*]*\s*(`[^`]+`)",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    # Detect backtick-quoted paths followed by "(NEW FILE)" marker.
+    _NEW_FILE_POST_PATH_RE = re.compile(
+        r"(`[^`]+`)\s*\(NEW\s+FILE\)",
+        re.IGNORECASE,
+    )
+    # Explicit marker for new files: <!-- NEW_FILE --> or <!-- NEW_FILE: description -->
+    # Applied line-wide since these markers are explicit and unambiguous.
+    _NEW_FILE_MARKER_RE = re.compile(r"<!--\s*NEW_FILE(?::.*?)?\s*-->", re.IGNORECASE)
+
     @property
     def name(self) -> str:
         return "File Exists"
@@ -215,11 +257,27 @@ class FileExistsValidator(Validator):
     def _extract_paths(self, content: str) -> list[tuple[str, int]]:
         """Extract (normalized_path, line_number) pairs from plan content."""
         line_index = _build_line_index(content)
+        cb_starts, cb_ends = _build_code_block_ranges(content)
 
         # Find line numbers that contain UNVERIFIED markers
         unverified_lines: set[int] = set()
         for m in self._UNVERIFIED_RE.finditer(content):
             unverified_lines.add(_line_number_at(line_index, m.start()))
+
+        # Find character offsets of backtick-quoted paths adjacent to creation
+        # keywords.  Only the specific path next to the keyword is skipped,
+        # not every path on the same line.
+        new_file_offsets: set[int] = set()
+        for m in self._NEW_FILE_PRE_PATH_RE.finditer(content):
+            new_file_offsets.add(m.start(1))
+        for m in self._NEW_FILE_POST_PATH_RE.finditer(content):
+            new_file_offsets.add(m.start(1))
+
+        # <!-- NEW_FILE --> markers are explicit enough to apply line-wide.
+        new_file_lines: set[int] = set()
+        for i, line in enumerate(content.splitlines(), 1):
+            if self._NEW_FILE_MARKER_RE.search(line):
+                new_file_lines.add(i)
 
         # Collect all matches from all regexes, deduplicating by offset
         seen_offsets: set[int] = set()
@@ -227,12 +285,16 @@ class FileExistsValidator(Validator):
 
         for match in self._PATH_RE.finditer(content):
             if match.start() not in seen_offsets:
+                if _is_inside_code_block(cb_starts, cb_ends, match.start()):
+                    continue
                 seen_offsets.add(match.start())
                 line_num = _line_number_at(line_index, match.start())
                 raw_matches.append((match.group(1), match.start(), line_num))
 
         for match in self._ROOT_FILE_RE.finditer(content):
             if match.start() not in seen_offsets:
+                if _is_inside_code_block(cb_starts, cb_ends, match.start()):
+                    continue
                 raw = match.group(1)
                 # Only accept if extension is common
                 ext = raw.rsplit(".", 1)[-1].lower() if "." in raw else ""
@@ -243,13 +305,17 @@ class FileExistsValidator(Validator):
 
         for match in self._EXTENSIONLESS_RE.finditer(content):
             if match.start() not in seen_offsets:
+                if _is_inside_code_block(cb_starts, cb_ends, match.start()):
+                    continue
                 seen_offsets.add(match.start())
                 line_num = _line_number_at(line_index, match.start())
                 raw_matches.append((match.group(1), match.start(), line_num))
 
         results: list[tuple[str, int]] = []
-        for raw_text, _offset, line_num in raw_matches:
-            if line_num in unverified_lines:
+        for raw_text, offset, line_num in raw_matches:
+            if line_num in unverified_lines or line_num in new_file_lines:
+                continue
+            if offset in new_file_offsets:
                 continue
 
             raw_path = raw_text.strip(self._STRIP_CHARS)
@@ -302,8 +368,10 @@ class FileExistsValidator(Validator):
                         message=f"File not found: `{path_str}`",
                         line_number=line_number,
                         suggestion=(
-                            "Verify the file path exists in the repository, "
-                            "or flag it with <!-- UNVERIFIED: reason -->."
+                            "Verify the file path exists in the repository. "
+                            "For new files to create, use 'Create `path`' or "
+                            "<!-- NEW_FILE --> on the same line. "
+                            "For unverified paths, use <!-- UNVERIFIED: reason -->."
                         ),
                     )
                 )
@@ -395,7 +463,7 @@ class PatternSourceValidator(Validator):
 
 
 class UnresolvedMarkersValidator(Validator):
-    """Detect and report UNVERIFIED or NO_EXISTING_PATTERN markers."""
+    """Detect and report UNVERIFIED, NO_EXISTING_PATTERN, or NEW_FILE markers."""
 
     _UNVERIFIED_RE = re.compile(
         r"<!--\s*UNVERIFIED:\s*(.*?)\s*-->",
@@ -403,6 +471,10 @@ class UnresolvedMarkersValidator(Validator):
     )
     _NO_PATTERN_RE = re.compile(
         r"<!--\s*NO_EXISTING_PATTERN:\s*(.*?)\s*-->",
+        re.IGNORECASE,
+    )
+    _NEW_FILE_RE = re.compile(
+        r"<!--\s*NEW_FILE(?::\s*(.*?))?\s*-->",
         re.IGNORECASE,
     )
 
@@ -434,6 +506,19 @@ class UnresolvedMarkersValidator(Validator):
                     validator_name=self.name,
                     severity=ValidationSeverity.INFO,
                     message=f"NO_EXISTING_PATTERN marker: {desc}",
+                    line_number=line_number,
+                )
+            )
+
+        for match in self._NEW_FILE_RE.finditer(content):
+            line_number = _line_number_at(line_index, match.start())
+            desc = (match.group(1) or "").strip()
+            msg = f"NEW_FILE marker: {desc}" if desc else "NEW_FILE marker"
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=ValidationSeverity.INFO,
+                    message=msg,
                     line_number=line_number,
                 )
             )

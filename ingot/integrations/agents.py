@@ -253,11 +253,16 @@ Given a ticket description and optional user constraints, search the codebase to
 
 ## Research Rules
 
-- **Search, don't assume.** Every file path must come from a codebase search result.
+- **Search, don't assume.** Every file path must come from a codebase search result. NEVER guess
+  file paths based on naming conventions or training data — use your search tools to verify each
+  path exists before including it. For example, do NOT assume a project uses Gradle (`build.gradle`)
+  vs Maven (`pom.xml`) — search for the actual build file.
 - **Quote what you find.** Include exact code snippets (5-15 lines) for discovered patterns.
 - **Be exhaustive on interfaces.** For each interface or abstract class, find ALL implementations
   including test mocks (search for `ABC`, `@abstractmethod`, subclass definitions, `MagicMock`, `@patch`).
 - **Cite line numbers.** Every reference must include `file:line` or `file:line-line`.
+- **Use full paths.** Always report the complete relative path from the repository root (e.g.,
+  `k8s/base/qa-shared-settings/configmaps/aws-marketplace.json`, not just `aws-marketplace.json`).
 
 ## Output Budget Rules
 
@@ -327,7 +332,8 @@ The plan will be used to generate an executable task list for AI agents.
    available tools to discover file paths, patterns, and call sites before planning.
 3. **Verify File Ownership**: Before proposing to modify a file, confirm it appears in the Codebase
    Discovery section or the Unresolved section. If a file is in neither, flag it with
-   `<!-- UNVERIFIED: reason -->`.
+   `<!-- UNVERIFIED: reason -->`. For files that the plan proposes to **create** (they don't exist
+   yet), use "Create `path/to/new-file.ext`" or add `<!-- NEW_FILE -->` on the same line.
 4. **Verify Cross-Module Dependency Availability**: When proposing to use a dependency from
    module A in module B, verify accessibility using the discovery data.
 5. **Check Type Compatibility**: Verify data types match using the discovered code snippets.
@@ -349,7 +355,13 @@ Brief summary of what will be implemented and why.
 Architecture decisions, patterns to follow, and how the solution fits into the existing codebase.
 
 ### Implementation Steps
-Numbered, ordered steps to implement the feature. Each step MUST reference **exact file paths** (and ideally line ranges) for files to create or modify. Never use vague references like "wherever X is instantiated" or "the relevant config file" — find and name the actual files. For non-trivial patterns (new class creation, API calls, event publishing, wiring/registration), include a brief **code snippet** showing the expected implementation pattern.
+Numbered, ordered steps to implement the feature. Each step MUST reference **exact file paths** (and ideally line ranges) for files to create or modify. Never use vague references like "wherever X is instantiated" or "the relevant config file" — find and name the actual files.
+
+**Important — distinguish new files from existing files:**
+- For existing files: "**File**: `path/to/existing.java` (lines X-Y)" — path must exist in the repo.
+- For new files: "**File**: Create `path/to/new-file.java`" — use the word "Create" or add `<!-- NEW_FILE -->`.
+
+For non-trivial patterns (new class creation, API calls, event publishing, wiring/registration), include a brief **code snippet** showing the expected implementation pattern.
 
 ### Testing Strategy
 - Identify **existing test files and test methods** that cover related functionality and should be extended or serve as reference patterns
@@ -367,10 +379,12 @@ What this implementation explicitly does NOT include.
 
 ## HARD GATES (verify before output)
 
-1. **File paths**: Every file path must come from the Codebase Discovery section or be flagged
-   with `<!-- UNVERIFIED: reason -->`.
+1. **File paths**: Every **existing** file path must come from the Codebase Discovery section or
+   be flagged with `<!-- UNVERIFIED: reason -->`. For **new files** to be created, the line must
+   contain "Create" or `<!-- NEW_FILE -->` so validators know the file is intentionally absent.
 2. **Code snippets**: Every non-trivial code snippet must cite `Pattern source: path/to/file:lines`
-   from the discovery section. If no pattern was discovered, use `<!-- NO_EXISTING_PATTERN: desc -->`.
+   from the discovery section. If no existing pattern was discovered (common for new configuration
+   files, infrastructure definitions, or novel code), use `<!-- NO_EXISTING_PATTERN: desc -->`.
 3. **Change propagation**: Every interface/method change must list ALL implementations, callers,
    and test mocks from the discovery section's Interface & Class Hierarchy and Call Sites.
 

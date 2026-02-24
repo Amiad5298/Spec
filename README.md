@@ -32,7 +32,7 @@ Transform tickets from any supported platform into implemented features with a s
 
 INGOT is a command-line tool that orchestrates AI agents to implement software features from start to finish. Given a ticket from any supported platform (Jira, Linear, GitHub, Azure DevOps, Monday, or Trello), INGOT runs a multi-step workflow:
 
-1. **Plans** - Creates a detailed implementation plan by analyzing requirements and your codebase
+1. **Plans** - Discovers codebase context, synthesizes an implementation plan, and validates it with automated inspectors
 2. **Clarifies** - Optional interactive Q&A to resolve ambiguities before coding begins
 3. **Tasks** - Generates an optimized task list, identifying which tasks can run in parallel
 4. **Executes** - Runs specialized AI agents to complete each task, with checkpoint commits and progress tracking
@@ -71,7 +71,7 @@ When running up to 5 agents concurrently, each worker gets three layers of isola
 
 ### Multi-Step Workflow
 A structured approach that breaks complex features into manageable pieces:
-- **Step 1 - Plan**: AI-generated implementation plan based on ticket and codebase analysis
+- **Step 1 - Plan**: 3-phase pipeline — codebase discovery (researcher), plan synthesis (planner), and automated validation (inspectors)
 - **Step 1.5 - Clarify** (optional): Interactive Q&A loop with conflict detection to resolve ambiguities before coding
 - **Step 2 - Task List**: Task list with dependency analysis and user approval loop (approve/edit/regenerate)
 - **Step 3 - Execute**: Dual-phase task execution with self-correction loop, code review, and replan capability
@@ -102,7 +102,7 @@ Cross-task learning system that improves execution across tasks:
 - **6 Ticket Platforms**: Jira, Linear, GitHub, Azure DevOps, Monday, and Trello
 - **Automatic Platform Detection**: URLs and ticket IDs are automatically routed to the correct platform
 - **6 AI Backends**: Auggie, Claude Code, Cursor, Aider, Gemini, and Codex
-- **Git**: Feature branch creation, checkpoint commits after each task, optional commit squashing
+- **Git**: Semantic branch naming (`feat/`, `fix/`, `docs/`, `ci/`, etc.) with editable branch names, checkpoint commits, optional squashing
 - **Fetch Strategy System**: Configurable AGENT/DIRECT/AUTO strategies with ticket caching
 
 ### Git Integration
@@ -130,6 +130,19 @@ Automatic error recovery during task execution:
 - Each correction attempt starts a clean LLM session — only the error is embedded in the new prompt
 - Configurable max attempts via `--max-self-corrections` (default: 3, 0 to disable)
 - Distinct from rate-limit retry (which retries the same prompt after a delay)
+
+### Plan Validation (Step 1)
+Automated quality checks on generated implementation plans:
+- 8 built-in validators check required sections, file existence, pattern sourcing, test coverage, implementation detail, and more
+- Deterministic auto-fixer corrects common false positives without AI retry
+- AI-powered retry loop for real validation errors (up to 3 attempts)
+- Configurable via `--plan-validation/--no-plan-validation` and `--plan-validation-strict/--no-plan-validation-strict`
+
+### Spec Verification Gate
+Safety check when ticket content is empty:
+- When the platform returns no title or description, INGOT warns and blocks by default
+- Prevents the planner from hallucinating requirements from thin air
+- Provenance labels in AI prompts distinguish verified platform data from user-provided context
 
 ### Replan Loop
 Automatic re-planning when the implementation approach is fundamentally wrong:
@@ -169,10 +182,11 @@ Reduce AI hallucinations and prevent file conflicts during parallel execution:
 - Works in both TUI mode and simple fallback for CI environments
 
 ### Specialized AI Agents
-Seven purpose-built agents work together:
+Eight purpose-built agents work together:
 
 | Agent | Purpose |
 |-------|---------|
+| `ingot-researcher` | Discovers codebase context: relevant files, patterns, interfaces, and call sites |
 | `ingot-planner` | Analyzes requirements and creates implementation plans |
 | `ingot-tasklist` | Converts plans into optimized, executable task lists |
 | `ingot-tasklist-refiner` | Post-processes task lists to extract test tasks into the independent category |
@@ -295,10 +309,11 @@ That's it! INGOT will guide you through the entire workflow with interactive pro
 │      │                                                               │
 │      ▼                                                               │
 │  ┌─────────────────────────────────────────────────────────────┐    │
-│  │  STEP 1: PLAN                                                │    │
-│  │  • Fetch ticket details from platform                        │    │
-│  │  • Analyze codebase with context retrieval                   │    │
-│  │  • Generate implementation plan                              │    │
+│  │  STEP 1: PLAN (3-phase pipeline)                             │    │
+│  │  • Phase 1 — Discovery: researcher agent maps codebase       │    │
+│  │  • Phase 2 — Synthesis: planner creates plan from research   │    │
+│  │  • Phase 3 — Inspection: validators check plan quality       │    │
+│  │  • Auto-fix + AI retry on validation errors                  │    │
 │  │  • Output: specs/{ticket}-plan.md                            │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │      │                                                               │
@@ -510,6 +525,10 @@ Workflow Options:
     --no-auto-update-docs     Enable/disable automatic documentation updates (Step 4)
   --auto-commit /
     --no-auto-commit          Enable/disable automatic commit (Step 5)
+  --plan-validation /
+    --no-plan-validation      Enable/disable plan validation after generation (default: on)
+  --plan-validation-strict /
+    --no-plan-validation-strict  Block on validation errors vs. warn-and-proceed (default: strict)
 
 Parallel Execution:
   --parallel/--no-parallel    Enable/disable parallel task execution
@@ -542,11 +561,11 @@ Other:
 ingot PROJ-456
 
 # INGOT will:
-# 1. Fetch ticket from platform
-# 2. Ask if you want to add context
-# 3. Detect conflicts (if context provided)
-# 4. Create feature branch
-# 5. Generate implementation plan (Step 1)
+# 1. Fetch ticket from platform (blocks if content is empty)
+# 2. Ask for constraints or preferences
+# 3. Detect conflicts (if constraints provided)
+# 4. Create feature branch (feat/, fix/, docs/, etc. — editable)
+# 5. Discover codebase → generate plan → validate (Step 1)
 # 6. Run interactive clarification (Step 1.5, if not skipped)
 # 7. Generate task list with approval loop (Step 2)
 # 8. Execute tasks in two phases (Step 3)
@@ -649,6 +668,11 @@ SUBAGENT_IMPLEMENTER="ingot-implementer"
 SUBAGENT_REVIEWER="ingot-reviewer"
 SUBAGENT_FIXER="ingot-implementer"
 SUBAGENT_DOC_UPDATER="ingot-doc-updater"
+SUBAGENT_RESEARCHER="ingot-researcher"
+
+# Plan Validation
+ENABLE_PLAN_VALIDATION="true"
+PLAN_VALIDATION_STRICT="true"
 ```
 
 ### Configuration Options
@@ -681,6 +705,9 @@ SUBAGENT_DOC_UPDATER="ingot-doc-updater"
 | `SUBAGENT_REVIEWER` | string | `"ingot-reviewer"` | Custom reviewer agent name |
 | `SUBAGENT_FIXER` | string | `"ingot-implementer"` | Custom fixer agent name |
 | `SUBAGENT_DOC_UPDATER` | string | `"ingot-doc-updater"` | Custom doc updater agent name |
+| `SUBAGENT_RESEARCHER` | string | `"ingot-researcher"` | Custom researcher agent name |
+| `ENABLE_PLAN_VALIDATION` | bool | `true` | Enable automated plan validation after generation |
+| `PLAN_VALIDATION_STRICT` | bool | `true` | Block workflow on validation errors (vs. warn-and-proceed) |
 
 ### Configuration Hierarchy
 
@@ -725,6 +752,7 @@ INGOT uses specialized AI agents defined in `.augment/agents/`. These are create
 
 | File | Purpose |
 |------|------------|
+| `.augment/agents/ingot-researcher.md` | Discovers codebase context before plan generation |
 | `.augment/agents/ingot-planner.md` | Creates implementation plans from tickets |
 | `.augment/agents/ingot-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
 | `.augment/agents/ingot-tasklist-refiner.md` | Extracts test tasks into the INDEPENDENT category |
@@ -781,7 +809,7 @@ ingot/
 │   │   ├── base.py        # AIBackend protocol and BaseBackend
 │   │   ├── factory.py     # BackendFactory for instantiation
 │   │   ├── errors.py      # Backend-specific error re-exports
-│   │   ├── model_discovery.py # Model detection and validation
+│   │   ├── model_discovery.py # Dynamic model discovery (Anthropic, OpenAI, Gemini APIs)
 │   │   ├── auggie.py      # Auggie backend
 │   │   ├── claude.py      # Claude Code backend
 │   │   ├── cursor.py      # Cursor backend
@@ -850,6 +878,11 @@ ingot/
 │   ├── retry.py           # Rate limit retry with backoff
 │   ├── env_utils.py       # Environment variable handling
 │   └── error_analysis.py  # Error classification
+├── validation/             # Plan quality assurance
+│   ├── __init__.py        # Public exports
+│   ├── base.py            # Validator protocol and registry
+│   ├── plan_validators.py # Concrete plan validators
+│   └── plan_fixer.py      # Deterministic auto-correction
 └── workflow/               # Workflow execution engine
     ├── runner.py           # Main workflow orchestrator
     ├── state.py            # Workflow state management (WorkflowState)

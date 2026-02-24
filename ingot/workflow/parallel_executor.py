@@ -64,7 +64,7 @@ def _execute_parallel_fallback(
     """Execute independent tasks in parallel (non-TUI mode) with rate limit handling.
 
     Uses ThreadPoolExecutor for concurrent AI agent execution.
-    Each task runs in complete isolation with dont_save_session=True.
+    Each task runs in complete isolation (no session sharing).
     Each worker creates a fresh backend instance via BackendFactory.
     Rate limit errors trigger exponential backoff retry.
     Implements fail_fast semantics with stop_flag for early termination.

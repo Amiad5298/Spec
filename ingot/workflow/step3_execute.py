@@ -9,8 +9,9 @@ Phase 2: Parallel execution of independent tasks (can run concurrently)
 Philosophy: Trust the AI. If it returns success, it succeeded.
 Don't nanny it with file checks and retry loops.
 
-Each task runs in its own clean context (using dont_save_session=True)
-to maintain focus and avoid context pollution.
+Sequential tasks share sessions within a tiered window (resetting every
+SESSION_RESET_INTERVAL tasks) to reduce cold-start overhead while
+preventing context overflow.
 
 Supports two display modes:
 - TUI mode: Textual interactive display with task list and log panels
@@ -49,7 +50,7 @@ from ingot.utils.retry import (
     RateLimitExceededError,
     with_rate_limit_retry,
 )
-from ingot.workflow.constants import noop_output_callback
+from ingot.workflow.constants import SESSION_RESET_INTERVAL, noop_output_callback
 from ingot.workflow.events import (
     create_task_finished_event,
     create_task_output_event,
@@ -69,6 +70,7 @@ from ingot.workflow.log_management import (
 )
 from ingot.workflow.prompts import (
     POST_IMPLEMENTATION_TEST_PROMPT,
+    build_continuation_prompt,
     build_self_correction_prompt,
     build_task_prompt,
 )
@@ -108,6 +110,30 @@ class SelfCorrectionResult:
     final_output: str = ""
     attempt_count: int = 1
     total_attempts: int = 1
+
+
+@dataclass
+class SessionTierState:
+    """Tracks session tiering for sequential task execution."""
+
+    tasks_since_reset: int = 0
+    interval: int = SESSION_RESET_INTERVAL
+
+    @property
+    def is_cold_start(self) -> bool:
+        return self.tasks_since_reset == 0
+
+    @property
+    def is_last_before_reset(self) -> bool:
+        return self.tasks_since_reset + 1 >= self.interval
+
+    def advance(self) -> None:
+        self.tasks_since_reset += 1
+        if self.tasks_since_reset >= self.interval:
+            self.tasks_since_reset = 0
+
+    def reset(self) -> None:
+        self.tasks_since_reset = 0
 
 
 @functools.lru_cache(maxsize=8)
@@ -373,6 +399,7 @@ def _execute_with_tui(
         """Run task loop in background thread. Returns (failed_tasks, user_quit)."""
         _failed: list[str] = []
         _quit = False
+        tier = SessionTierState(interval=state.session_reset_interval)
 
         for i, task in enumerate(pending):
             # Check for quit request before starting next task
@@ -403,6 +430,8 @@ def _execute_with_tui(
                 backend=backend,
                 callback=make_callback(i, task.name),
                 is_parallel=False,
+                save_session=not tier.is_last_before_reset,
+                use_continuation_prompt=not tier.is_cold_start,
             )
 
             # Check for quit request during task execution
@@ -442,8 +471,10 @@ def _execute_with_tui(
             if success:
                 mark_task_complete(tasklist_path, task.name)
                 state.mark_task_complete(task.name)
+                tier.advance()
             else:
                 _failed.append(task.name)
+                tier.reset()  # Force cold start after failure
                 if state.fail_fast:
                     tui.mark_remaining_skipped(i + 1)
                     break
@@ -472,6 +503,7 @@ def _execute_fallback(
 ) -> list[str]:
     """Execute tasks with fallback (non-TUI) display."""
     failed_tasks: list[str] = []
+    tier = SessionTierState(interval=state.session_reset_interval)
 
     for i, task in enumerate(pending):
         print_step(f"[{i + 1}/{len(pending)}] {task.name}")
@@ -494,14 +526,18 @@ def _execute_fallback(
                 backend=backend,
                 callback=output_callback,
                 is_parallel=False,
+                save_session=not tier.is_last_before_reset,
+                use_continuation_prompt=not tier.is_cold_start,
             )
 
         if success:
             mark_task_complete(tasklist_path, task.name)
             state.mark_task_complete(task.name)
             print_success(f"Task completed: {task.name}")
+            tier.advance()
         else:
             failed_tasks.append(task.name)
+            tier.reset()  # Force cold start after failure
             print_warning(f"Task returned failure: {task.name}")
             if state.fail_fast:
                 print_error("Stopping: fail_fast enabled")
@@ -562,99 +598,6 @@ def _execute_parallel_with_tui(
     )
 
 
-def _execute_task(
-    state: WorkflowState,
-    task: Task,
-    plan_path: Path,
-    backend: AIBackend,
-) -> bool:
-    """Execute a single task using the ingot-implementer agent.
-
-    Optimistic execution model:
-    - Trust AI exit codes
-    - No file verification
-    - No retry loops
-    - Minimal prompt - agent has full instructions
-    """
-    # Build minimal prompt - pass plan path reference, not full content
-    # The agent uses codebase-retrieval to read relevant sections
-    prompt = build_task_prompt(
-        task,
-        plan_path,
-        is_parallel=False,
-        user_constraints=state.user_constraints,
-        repo_root=_get_repo_root(os.getcwd()),
-    )
-
-    try:
-        success, output = backend.run_with_callback(
-            prompt,
-            subagent=state.subagent_names["implementer"],
-            output_callback=noop_output_callback,
-            dont_save_session=True,
-        )
-        if not success and backend.detect_rate_limit(output):
-            raise BackendRateLimitError(
-                "Rate limit detected", output=output, backend_name=backend.name
-            )
-        if success:
-            print_success(f"Task completed: {task.name}")
-        else:
-            print_warning(f"Task returned failure: {task.name}")
-        return success
-    except BackendRateLimitError:
-        raise  # Let retry decorator handle
-    except Exception as e:
-        print_error(f"Task execution crashed: {e}")
-        return False
-
-
-def _execute_task_with_callback(
-    state: WorkflowState,
-    task: Task,
-    plan_path: Path,
-    *,
-    backend: AIBackend,
-    callback: Callable[[str], None],
-    is_parallel: bool = False,
-) -> bool:
-    """Execute a single task with streaming output callback using ingot-implementer agent.
-
-    Uses backend.run_with_callback() for streaming output.
-    Each output line is passed to the callback function.
-
-    Raises:
-        BackendRateLimitError: If the output indicates a rate limit error.
-    """
-    # Build minimal prompt - pass plan path reference, not full content
-    # The agent uses codebase-retrieval to read relevant sections
-    prompt = build_task_prompt(
-        task,
-        plan_path,
-        is_parallel=is_parallel,
-        user_constraints=state.user_constraints,
-        repo_root=_get_repo_root(os.getcwd()),
-    )
-
-    try:
-        success, output = backend.run_with_callback(
-            prompt,
-            subagent=state.subagent_names["implementer"],
-            output_callback=callback,
-            dont_save_session=True,
-        )
-        if not success and backend.detect_rate_limit(output):
-            raise BackendRateLimitError(
-                "Rate limit detected", output=output, backend_name=backend.name
-            )
-        return success
-    except BackendRateLimitError:
-        raise  # Let retry decorator handle
-    except Exception as e:
-        callback(f"[ERROR] Task execution crashed: {e}")
-        return False
-
-
 def _run_backend_capturing_output(
     state: WorkflowState,
     prompt: str,
@@ -662,13 +605,15 @@ def _run_backend_capturing_output(
     backend: AIBackend,
     callback: Callable[[str], None] | None = None,
     error_label: str = "Task execution",
+    save_session: bool = False,
 ) -> tuple[bool, str]:
     """Run a prompt via the backend and capture its output.
 
     Shared helper for initial task execution and correction attempts.
-    Each invocation uses dont_save_session=True, so the agent starts a
-    fresh session — correction attempts rely solely on the prompt text
-    for context about previous failures.
+
+    Args:
+        save_session: If True, preserve the session for subsequent warm tasks.
+            Defaults to False (fresh session per call).
 
     Returns:
         Tuple of (success, output).
@@ -681,7 +626,7 @@ def _run_backend_capturing_output(
             prompt,
             subagent=state.subagent_names["implementer"],
             output_callback=callback or noop_output_callback,
-            dont_save_session=True,
+            dont_save_session=not save_session,
         )
         if not success and backend.detect_rate_limit(output):
             raise BackendRateLimitError(
@@ -705,6 +650,8 @@ def _execute_task_with_self_correction(
     backend: AIBackend,
     callback: Callable[[str], None] | None = None,
     is_parallel: bool = False,
+    save_session: bool = False,
+    use_continuation_prompt: bool = False,
 ) -> SelfCorrectionResult:
     """Execute a task with self-correction loop.
 
@@ -712,28 +659,43 @@ def _execute_task_with_self_correction(
     giving it another chance to fix its mistakes. This is distinct from
     rate-limit retry (which retries the same prompt after a delay).
 
-    Note: Each attempt (initial + corrections) runs in a fresh session
-    (dont_save_session=True), so the agent has no conversation memory
-    across attempts — only the error output embedded in the prompt.
+    Args:
+        save_session: If True, preserve the session for subsequent warm tasks.
+            Self-correction retries always discard the session.
+        use_continuation_prompt: If True, use the lean continuation prompt
+            (agent already has session context from a previous cold-start).
 
     BackendRateLimitError propagates through to the outer retry handler.
     """
     max_corrections = state.max_self_corrections
+    repo_root = _get_repo_root(os.getcwd())
 
-    # If self-correction disabled, delegate directly
+    # Build the initial prompt once — cold-start or continuation
+    if use_continuation_prompt:
+        prompt = build_continuation_prompt(
+            task,
+            user_constraints=state.user_constraints,
+            repo_root=repo_root,
+        )
+    else:
+        prompt = build_task_prompt(
+            task,
+            plan_path,
+            is_parallel=is_parallel,
+            user_constraints=state.user_constraints,
+            repo_root=repo_root,
+        )
+
+    # If self-correction disabled, run directly with session params
     if max_corrections <= 0:
-        if callback:
-            success = _execute_task_with_callback(
-                state,
-                task,
-                plan_path,
-                backend=backend,
-                callback=callback,
-                is_parallel=is_parallel,
-            )
-        else:
-            success = _execute_task(state, task, plan_path, backend)
-        return SelfCorrectionResult(success=success)
+        success, output = _run_backend_capturing_output(
+            state,
+            prompt,
+            backend=backend,
+            callback=callback,
+            save_session=save_session,
+        )
+        return SelfCorrectionResult(success=success, final_output=output)
 
     total_attempts = 1 + max_corrections
 
@@ -749,18 +711,12 @@ def _execute_task_with_self_correction(
                 print_warning(msg)
 
     # First attempt — capture output for potential correction
-    prompt = build_task_prompt(
-        task,
-        plan_path,
-        is_parallel=is_parallel,
-        user_constraints=state.user_constraints,
-        repo_root=_get_repo_root(os.getcwd()),
-    )
     success, output = _run_backend_capturing_output(
         state,
         prompt,
         backend=backend,
         callback=callback,
+        save_session=save_session,
     )
 
     if success:
@@ -787,7 +743,7 @@ def _execute_task_with_self_correction(
             max_attempts=max_corrections,
             is_parallel=is_parallel,
             user_constraints=state.user_constraints,
-            repo_root=_get_repo_root(os.getcwd()),
+            repo_root=repo_root,
             ticket_title=state.ticket.title,
             ticket_description=state.ticket.description,
         )
@@ -797,6 +753,7 @@ def _execute_task_with_self_correction(
             correction_prompt,
             backend=backend,
             callback=callback,
+            save_session=False,
             error_label="Correction attempt",
         )
 
@@ -835,6 +792,8 @@ def _execute_task_with_retry(
     backend: AIBackend,
     callback: Callable[[str], None] | None = None,
     is_parallel: bool = False,
+    save_session: bool = False,
+    use_continuation_prompt: bool = False,
 ) -> bool:
     """Execute a task with rate limit retry handling.
 
@@ -864,6 +823,8 @@ def _execute_task_with_retry(
                 backend=backend,
                 callback=callback,
                 is_parallel=is_parallel,
+                save_session=save_session,
+                use_continuation_prompt=use_continuation_prompt,
             )
             return result.success
         except BackendRateLimitError:
@@ -887,6 +848,8 @@ def _execute_task_with_retry(
             backend=backend,
             callback=callback,
             is_parallel=is_parallel,
+            save_session=save_session,
+            use_continuation_prompt=use_continuation_prompt,
         )
         return result.success
 
@@ -994,6 +957,7 @@ def _run_post_implementation_tests(state: WorkflowState, backend: AIBackend) -> 
 
 __all__ = [
     "SelfCorrectionResult",
+    "SessionTierState",
     "Step3Result",
     "step_3_execute",
     "LOG_DIR_TEST_EXECUTION",

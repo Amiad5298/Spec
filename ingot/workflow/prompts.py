@@ -18,6 +18,36 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _format_safe_target_files(
+    task: Task,
+    repo_root: Path | None = None,
+    *,
+    header: str = "Target files for this task:",
+    footer: str = "Focus your changes on these files.",
+) -> str:
+    """Validate and format task target files into a prompt section.
+
+    Returns an empty string if the task has no target files or all paths
+    are rejected by path-traversal validation.
+    """
+    if not task.target_files:
+        return ""
+    effective_root = repo_root if repo_root is not None else Path.cwd()
+    safe_files: list[str] = []
+    for f in task.target_files:
+        try:
+            safe_files.append(normalize_path(f, effective_root))
+        except PathSecurityError:
+            logger.warning("Skipping target file with unsafe path: %s", f)
+    if not safe_files:
+        return ""
+    files_list = "\n".join(f"- {f}" for f in safe_files)
+    section = f"\n\n{header}\n{files_list}"
+    if footer:
+        section += f"\n{footer}"
+    return section
+
+
 def build_task_prompt(
     task: Task,
     plan_path: Path,
@@ -64,22 +94,47 @@ Use codebase-retrieval to read relevant sections of the plan as needed."""
 
 Use codebase-retrieval to understand existing patterns before making changes."""
 
-    # Add target files if task has them (validate paths to prevent traversal)
-    if task.target_files:
-        effective_root = repo_root if repo_root is not None else Path.cwd()
-        safe_files = []
-        for f in task.target_files:
-            try:
-                safe_files.append(normalize_path(f, effective_root))
-            except PathSecurityError:
-                logger.warning("Skipping target file with unsafe path: %s", f)
-        if safe_files:
-            files_list = "\n".join(f"- {f}" for f in safe_files)
-            prompt += f"""
+    prompt += _format_safe_target_files(task, repo_root)
 
-Target files for this task:
-{files_list}
-Focus your changes on these files."""
+    # Add user-provided constraints if available
+    if user_constraints and user_constraints.strip():
+        prompt += f"""
+
+User Constraints & Preferences:
+{user_constraints.strip()}"""
+
+    # Add critical constraints reminder
+    prompt += """
+
+Do NOT commit, git add, or push any changes."""
+
+    return prompt
+
+
+def build_continuation_prompt(
+    task: Task,
+    *,
+    user_constraints: str = "",
+    repo_root: Path | None = None,
+) -> str:
+    """Build a lean prompt for warm session continuation.
+
+    Used when the agent already has session context from a previous cold-start
+    prompt (plan path, codebase-retrieval instruction, parallel mode). This
+    prompt includes only the task-specific details the agent needs for the next
+    task in the sequence.
+
+    Args:
+        task: Task to execute
+        user_constraints: Optional constraints & preferences provided by the user
+        repo_root: Repository root for path validation
+
+    Returns:
+        Lean continuation prompt string
+    """
+    prompt = f"Execute task: {task.name}"
+
+    prompt += _format_safe_target_files(task, repo_root)
 
     # Add user-provided constraints if available
     if user_constraints and user_constraints.strip():
@@ -201,21 +256,7 @@ Use it solely for diagnosing what went wrong.
 
 Implementation plan: {plan_path}"""
 
-    # Add target files if task has them (validate paths to prevent traversal)
-    if task.target_files:
-        effective_root = repo_root if repo_root is not None else Path.cwd()
-        safe_files = []
-        for f in task.target_files:
-            try:
-                safe_files.append(normalize_path(f, effective_root))
-            except PathSecurityError:
-                logger.warning("Skipping target file with unsafe path: %s", f)
-        if safe_files:
-            files_list = "\n".join(f"- {f}" for f in safe_files)
-            prompt += f"""
-
-Target files:
-{files_list}"""
+    prompt += _format_safe_target_files(task, repo_root, header="Target files:", footer="")
 
     # Add user-provided constraints if available
     if user_constraints and user_constraints.strip():
@@ -252,6 +293,7 @@ Do NOT commit, git add, or push any changes."""
 
 
 __all__ = [
+    "build_continuation_prompt",
     "build_self_correction_prompt",
     "build_task_prompt",
     "POST_IMPLEMENTATION_TEST_PROMPT",

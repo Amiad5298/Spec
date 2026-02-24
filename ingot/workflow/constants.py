@@ -41,6 +41,9 @@ ONBOARDING_SMOKE_TEST_TIMEOUT = 60
 # Safety cap on plan/tasklist review iterations to prevent runaway loops.
 MAX_REVIEW_ITERATIONS = 10
 
+# Sequential tasks share a session, resetting every N tasks to prevent context overflow.
+SESSION_RESET_INTERVAL = 4
+
 
 def noop_output_callback(_line: str) -> None:
     """No-op output callback for silent backend calls."""
@@ -66,6 +69,8 @@ __all__ = [
     "ONBOARDING_SMOKE_TEST_TIMEOUT",
     # Review iteration limit
     "MAX_REVIEW_ITERATIONS",
+    # Session reset interval
+    "SESSION_RESET_INTERVAL",
     # Shared callbacks
     "noop_output_callback",
 ]

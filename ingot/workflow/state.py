@@ -22,6 +22,7 @@ from ingot.workflow.constants import (
     INGOT_AGENT_REVIEWER,
     INGOT_AGENT_TASKLIST,
     INGOT_AGENT_TASKLIST_REFINER,
+    SESSION_RESET_INTERVAL,
 )
 from ingot.workflow.git_utils import DirtyTreePolicy
 
@@ -85,6 +86,7 @@ class WorkflowState:
     fail_fast: bool = False  # Stop execution on first task failure
     max_self_corrections: int = 3  # Max self-correction attempts per task (0 = disable)
     max_review_fix_attempts: int = 3  # Max auto-fix attempts during review (0 = disable)
+    session_reset_interval: int = SESSION_RESET_INTERVAL  # Reset session every N sequential tasks
 
     # User-provided constraints & preferences
     user_constraints: str = ""
@@ -172,6 +174,10 @@ class WorkflowState:
             raise ValueError(f"max_self_corrections must be 0-10, got {self.max_self_corrections}")
         if self.max_replans < 0 or self.max_replans > 5:
             raise ValueError(f"max_replans must be 0-5, got {self.max_replans}")
+        if self.session_reset_interval < 1 or self.session_reset_interval > 100:
+            raise ValueError(
+                f"session_reset_interval must be 1-100, got {self.session_reset_interval}"
+            )
 
     @property
     def spec_verified(self) -> bool:

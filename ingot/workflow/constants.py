@@ -25,6 +25,7 @@ RESEARCHER_SECTION_HEADINGS = [
     "### Existing Code Patterns",
     "### Interface & Class Hierarchy",
     "### Call Sites",
+    "### Module Boundaries & Runtime Context",
     "### Test Files",
     "### Unresolved",
 ]

@@ -27,6 +27,10 @@ _FENCED_CODE_BLOCK_RE = re.compile(
 
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
 
+# Module-level marker patterns shared between validators and PlanFixer.
+UNVERIFIED_RE = re.compile(r"<!--\s*UNVERIFIED:.*?-->", re.DOTALL)
+NEW_FILE_MARKER_RE = re.compile(r"<!--\s*NEW_FILE(?::.*?)?\s*-->", re.IGNORECASE)
+
 
 def _strip_fenced_code_blocks(content: str) -> str:
     """Remove fenced code blocks from content.
@@ -229,8 +233,8 @@ class FileExistsValidator(Validator):
         re.compile(r"^(?:data|mailto):"),  # Schemes without //
     ]
 
-    # Detect UNVERIFIED markers
-    _UNVERIFIED_RE = re.compile(r"<!--\s*UNVERIFIED:.*?-->", re.DOTALL)
+    # Detect UNVERIFIED markers (references module-level pattern)
+    _UNVERIFIED_RE = UNVERIFIED_RE
 
     # Detect backtick-quoted paths that are preceded by creation keywords.
     # Requires the keyword to be directly before the backtick path (with only
@@ -246,9 +250,9 @@ class FileExistsValidator(Validator):
         r"(`[^`]+`)\s*\(NEW\s+FILE\)",
         re.IGNORECASE,
     )
-    # Explicit marker for new files: <!-- NEW_FILE --> or <!-- NEW_FILE: description -->
+    # Explicit marker for new files (references module-level pattern).
     # Applied line-wide since these markers are explicit and unambiguous.
-    _NEW_FILE_MARKER_RE = re.compile(r"<!--\s*NEW_FILE(?::.*?)?\s*-->", re.IGNORECASE)
+    _NEW_FILE_MARKER_RE = NEW_FILE_MARKER_RE
 
     @property
     def name(self) -> str:
@@ -463,7 +467,7 @@ class PatternSourceValidator(Validator):
 
 
 class UnresolvedMarkersValidator(Validator):
-    """Detect and report UNVERIFIED, NO_EXISTING_PATTERN, or NEW_FILE markers."""
+    """Detect and report UNVERIFIED, NO_EXISTING_PATTERN, NEW_FILE, NO_TEST_NEEDED, or TRIVIAL_STEP markers."""
 
     _UNVERIFIED_RE = re.compile(
         r"<!--\s*UNVERIFIED:\s*(.*?)\s*-->",
@@ -475,6 +479,14 @@ class UnresolvedMarkersValidator(Validator):
     )
     _NEW_FILE_RE = re.compile(
         r"<!--\s*NEW_FILE(?::\s*(.*?))?\s*-->",
+        re.IGNORECASE,
+    )
+    _NO_TEST_NEEDED_RE = re.compile(
+        r"<!--\s*NO_TEST_NEEDED:\s*(.*?)\s*-->",
+        re.IGNORECASE,
+    )
+    _TRIVIAL_STEP_RE = re.compile(
+        r"<!--\s*TRIVIAL_STEP:\s*(.*?)\s*-->",
         re.IGNORECASE,
     )
 
@@ -519,6 +531,30 @@ class UnresolvedMarkersValidator(Validator):
                     validator_name=self.name,
                     severity=ValidationSeverity.INFO,
                     message=msg,
+                    line_number=line_number,
+                )
+            )
+
+        for match in self._NO_TEST_NEEDED_RE.finditer(content):
+            line_number = _line_number_at(line_index, match.start())
+            desc = match.group(1).strip()
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=ValidationSeverity.INFO,
+                    message=f"NO_TEST_NEEDED marker: {desc}",
+                    line_number=line_number,
+                )
+            )
+
+        for match in self._TRIVIAL_STEP_RE.finditer(content):
+            line_number = _line_number_at(line_index, match.start())
+            desc = match.group(1).strip()
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=ValidationSeverity.INFO,
+                    message=f"TRIVIAL_STEP marker: {desc}",
                     line_number=line_number,
                 )
             )
@@ -633,6 +669,224 @@ class DiscoveryCoverageValidator(Validator):
         return findings
 
 
+class TestCoverageValidator(Validator):
+    """Check that every implementation file has a corresponding test entry."""
+
+    # Match file paths in Implementation Steps (backtick-quoted, with extension)
+    _PATH_RE = re.compile(r"`([^`]*?(?:/[^`]*?\.\w{1,8})[^`]*?)`")
+
+    # Match NO_TEST_NEEDED opt-out markers
+    _NO_TEST_NEEDED_RE = re.compile(r"<!--\s*NO_TEST_NEEDED:\s*.*?-->", re.IGNORECASE)
+
+    # Paths to skip (not real file references) — reuses FileExistsValidator patterns
+    _SKIP_PATTERNS = [
+        re.compile(r"[{}<>*]"),  # Templated or glob
+        re.compile(r"^path/to/"),  # Placeholder
+        re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://"),  # URLs
+        re.compile(r"^(?:data|mailto):"),  # Schemes without //
+    ]
+
+    # Pattern source citations are references, not implementation files.
+    # Matches "Pattern source: `path/to/file.py:10-20`" (whole line remainder).
+    _PATTERN_SOURCE_PREFIX_RE = re.compile(
+        r"Pattern\s+source:\s*[^\n]*$", re.IGNORECASE | re.MULTILINE
+    )
+
+    @property
+    def name(self) -> str:
+        return "Test Coverage"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+
+        impl_text = _extract_plan_sections(content, ["Implementation Steps"])
+        test_text = _extract_plan_sections(content, ["Testing Strategy"])
+
+        if not impl_text or not test_text:
+            return findings
+
+        # Extract file paths from Implementation Steps (strip code blocks first)
+        impl_stripped = _strip_fenced_code_blocks(impl_text)
+
+        # Remove Pattern source citations so their paths aren't treated as impl files
+        impl_cleaned = self._PATTERN_SOURCE_PREFIX_RE.sub("", impl_stripped)
+
+        impl_paths: list[str] = []
+        for m in self._PATH_RE.finditer(impl_cleaned):
+            raw = m.group(1).strip(".,;:()\"' ")
+            # Split off :line_number suffix
+            if ":" in raw:
+                parts = raw.rsplit(":", 1)
+                if parts[1].replace("-", "").isdigit():
+                    raw = parts[0]
+            # Skip non-file references (URLs, placeholders, globs)
+            if any(p.search(raw) for p in self._SKIP_PATTERNS):
+                continue
+            impl_paths.append(raw)
+
+        # Check each impl file (skip test files themselves)
+        test_section_lower = test_text.lower()
+        for path in impl_paths:
+            stem = (
+                path.rsplit("/", 1)[-1].rsplit(".", 1)[0] if "/" in path else path.rsplit(".", 1)[0]
+            )
+
+            # Skip test files
+            if stem.startswith("test_") or stem.endswith("_test") or stem.endswith("Test"):
+                continue
+
+            # Check if stem appears in Testing Strategy
+            if stem.lower() in test_section_lower:
+                continue
+
+            # Check for NO_TEST_NEEDED opt-out mentioning this component
+            opted_out = False
+            for m in self._NO_TEST_NEEDED_RE.finditer(test_text):
+                if stem.lower() in m.group(0).lower():
+                    opted_out = True
+                    break
+            # Also check implementation section for opt-out
+            if not opted_out:
+                for m in self._NO_TEST_NEEDED_RE.finditer(impl_text):
+                    if stem.lower() in m.group(0).lower():
+                        opted_out = True
+                        break
+            if opted_out:
+                continue
+
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=ValidationSeverity.WARNING,
+                    message=(
+                        f"Implementation file `{path}` has no corresponding entry "
+                        f"in Testing Strategy."
+                    ),
+                    suggestion=(
+                        f"Add a test entry for `{path}` in the Testing Strategy section, "
+                        f"or add `<!-- NO_TEST_NEEDED: {stem} - reason -->` to opt out."
+                    ),
+                )
+            )
+
+        return findings
+
+
+class ImplementationDetailValidator(Validator):
+    """Check that implementation steps include concrete detail."""
+
+    # Detect code blocks (```)
+    _CODE_BLOCK_RE = re.compile(r"```")
+    # Detect inline method call chains (Class.method( or module.func()
+    _METHOD_CALL_RE = re.compile(r"\w+\.\w+\(")
+    # Detect TRIVIAL_STEP markers
+    _TRIVIAL_STEP_RE = re.compile(r"<!--\s*TRIVIAL_STEP:", re.IGNORECASE)
+    # Detect Pattern source citations
+    _PATTERN_SOURCE_RE = re.compile(r"Pattern\s+source:", re.IGNORECASE)
+
+    @property
+    def name(self) -> str:
+        return "Implementation Detail"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+
+        impl_text = _extract_plan_sections(content, ["Implementation Steps"])
+        if not impl_text:
+            return findings
+
+        # Split into numbered steps.
+        # Pattern: newline followed by digits, dot, space. Sub-items like "1.1."
+        # don't match because after the first "." comes a digit, not whitespace.
+        steps = re.split(r"\n(?=\d+\.\s)", impl_text)
+
+        for step in steps:
+            step = step.strip()
+            if not step:
+                continue
+            # Must start with a number (to be a real step)
+            if not re.match(r"\d+\.\s", step):
+                continue
+
+            has_code_block = bool(self._CODE_BLOCK_RE.search(step))
+            has_method_call = bool(self._METHOD_CALL_RE.search(step))
+            has_trivial_marker = bool(self._TRIVIAL_STEP_RE.search(step))
+            has_pattern_source = bool(self._PATTERN_SOURCE_RE.search(step))
+
+            if (
+                not has_code_block
+                and not has_method_call
+                and not has_trivial_marker
+                and not has_pattern_source
+            ):
+                # Extract the step title (first line)
+                first_line = step.split("\n")[0][:120]
+                findings.append(
+                    ValidationFinding(
+                        validator_name=self.name,
+                        severity=ValidationSeverity.WARNING,
+                        message=(f"Implementation step lacks concrete detail: " f"'{first_line}'"),
+                        suggestion=(
+                            "Add a code snippet with `Pattern source:` citation, "
+                            "an explicit method call chain (e.g., `Class.method(args)`), "
+                            "or mark as `<!-- TRIVIAL_STEP: description -->`."
+                        ),
+                    )
+                )
+
+        return findings
+
+
+class RiskCategoriesValidator(Validator):
+    """Check that the Potential Risks section covers required categories."""
+
+    @property
+    def name(self) -> str:
+        return "Risk Categories"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+
+        risks_text = _extract_plan_sections(content, ["Potential Risks"])
+        if not risks_text:
+            return findings
+
+        risks_lower = risks_text.lower()
+        missing: list[str] = []
+
+        # Group related categories — if either variant is present, consider covered
+        category_groups = [
+            (["external dependencies"], "External dependencies"),
+            (["prerequisite work"], "Prerequisite work"),
+            (["data integrity", "state management"], "Data integrity / state management"),
+            (["startup", "cold-start", "cold start"], "Startup / cold-start behavior"),
+            (["environment", "configuration drift"], "Environment / configuration drift"),
+            (["performance", "scalability"], "Performance / scalability"),
+            (["backward compatibility", "breaking change"], "Backward compatibility"),
+        ]
+
+        for keywords, label in category_groups:
+            if not any(kw in risks_lower for kw in keywords):
+                missing.append(label)
+
+        if missing:
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=ValidationSeverity.INFO,
+                    message=(
+                        f"Potential Risks section is missing categories: " f"{', '.join(missing)}"
+                    ),
+                    suggestion=(
+                        "Address each category explicitly, or write "
+                        "'None identified' for categories that don't apply."
+                    ),
+                )
+            )
+
+        return findings
+
+
 def create_plan_validator_registry(
     researcher_output: str = "",
 ) -> ValidatorRegistry:
@@ -647,14 +901,22 @@ def create_plan_validator_registry(
     registry.register(PatternSourceValidator())
     registry.register(UnresolvedMarkersValidator())
     registry.register(DiscoveryCoverageValidator(researcher_output))
+    registry.register(TestCoverageValidator())
+    registry.register(ImplementationDetailValidator())
+    registry.register(RiskCategoriesValidator())
     return registry
 
 
 __all__ = [
+    "NEW_FILE_MARKER_RE",
+    "UNVERIFIED_RE",
     "RequiredSectionsValidator",
     "FileExistsValidator",
     "PatternSourceValidator",
     "UnresolvedMarkersValidator",
     "DiscoveryCoverageValidator",
+    "TestCoverageValidator",
+    "ImplementationDetailValidator",
+    "RiskCategoriesValidator",
     "create_plan_validator_registry",
 ]

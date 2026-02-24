@@ -14,7 +14,7 @@ from pathlib import Path
 from ingot.integrations.backends.base import AIBackend
 from ingot.integrations.git import find_repo_root
 from ingot.ui.menus import ReviewChoice, show_plan_review_menu
-from ingot.ui.prompts import prompt_confirm, prompt_enter, prompt_input
+from ingot.ui.prompts import prompt_enter, prompt_input
 from ingot.utils.console import (
     console,
     print_error,
@@ -26,6 +26,7 @@ from ingot.utils.console import (
 )
 from ingot.utils.logging import log_message
 from ingot.validation.base import ValidationContext, ValidationReport, ValidationSeverity
+from ingot.validation.plan_fixer import PlanFixer
 from ingot.validation.plan_validators import FileExistsValidator, create_plan_validator_registry
 from ingot.workflow.constants import (
     MAX_GENERATION_RETRIES,
@@ -616,24 +617,38 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
 
         state.plan_file = plan_path
 
-        # Phase 3: Inspection
+        # Phase 3: Inspection + Self-Healing
         if state.enable_plan_validation:
             plan_content = plan_path.read_text()
             report = _validate_plan(plan_content, state, researcher_output=researcher_output)
+
+            # Stage A: Deterministic auto-fix
+            if report.has_errors:
+                fixer = PlanFixer()
+                fixed_content, fix_summary = fixer.fix(plan_content, report)
+                if fix_summary:
+                    plan_path.write_text(fixed_content)
+                    plan_content = fixed_content
+                    log_message(f"PlanFixer applied {len(fix_summary)} fix(es): {fix_summary}")
+                    print_info(f"Auto-fixed {len(fix_summary)} validation issue(s)")
+                    # Revalidate after fix
+                    report = _validate_plan(
+                        plan_content, state, researcher_output=researcher_output
+                    )
+
             if report.findings:
                 _display_validation_report(report)
 
+            # Stage B: Auto-retry with AI (no human prompt)
             if report.has_errors:
                 if attempt < MAX_GENERATION_RETRIES:
-                    # Offer retry on errors (not on warnings/info)
-                    retry = prompt_confirm(
-                        "Validation found errors. Retry plan generation?",
-                        default=True,
+                    print_info(
+                        f"Validation has {report.error_count} remaining error(s), "
+                        f"auto-retrying ({attempt}/{MAX_GENERATION_RETRIES})..."
                     )
-                    if retry:
-                        state.plan_revision_count += 1
-                        validation_feedback = _format_validation_feedback(report)
-                        continue  # Re-run planner + inspector
+                    state.plan_revision_count += 1
+                    validation_feedback = _format_validation_feedback(report)
+                    continue  # Re-run planner with feedback
                 else:
                     if state.validation_strict:
                         print_error(
@@ -647,7 +662,7 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                         f"validation error(s)."
                     )
 
-        break  # No errors or user declined retry — proceed to review
+        break  # Success or exhausted retries — proceed to review
 
     # Display and user review loop (unchanged from before)
     print_success(f"Implementation plan saved to: {plan_path}")

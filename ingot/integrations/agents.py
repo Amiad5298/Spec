@@ -250,6 +250,11 @@ Given a ticket description and optional user constraints, search the codebase to
 3. **Interface hierarchies** — all implementations, callers, and test mocks for relevant interfaces
 4. **Call site maps** — where key methods are called from (with file:line references)
 5. **Test coverage** — existing test files that cover the affected components
+6. **Module boundaries** — identify which modules/packages own which capabilities
+   (e.g., dependency registration, service wiring, configuration loading). For each
+   module touched by the ticket, note what runtime services or contexts are available.
+7. **Initialization & lifecycle** — discover existing component registration and
+   initialization patterns and document them.
 
 ## Research Rules
 
@@ -263,6 +268,13 @@ Given a ticket description and optional user constraints, search the codebase to
 - **Cite line numbers.** Every reference must include `file:line` or `file:line-line`.
 - **Use full paths.** Always report the complete relative path from the repository root (e.g.,
   `k8s/base/qa-shared-settings/configmaps/aws-marketplace.json`, not just `aws-marketplace.json`).
+- **Include full signatures.** When documenting methods in Interface & Class Hierarchy
+  or Call Sites, include the complete method signature with parameter types and return
+  type. Do NOT abbreviate to just the method name — the planner needs exact types to
+  ensure compatibility.
+- **Discover environment variants.** Search for environment-specific configuration,
+  profile selectors, feature flags, or conditional logic. Document any environment
+  branching relevant to the ticket's scope.
 
 ## Output Budget Rules
 
@@ -271,6 +283,7 @@ Your output is consumed by another agent with limited context. Follow these caps
 - **Existing Code Patterns**: Include the top 3 most relevant patterns with full snippets (5-15 lines each). For additional patterns, use pointer-only format: "See `path/to/file:line-line`; omitted for brevity."
 - **Snippets**: Keep each snippet to 5-15 lines. If a pattern requires more context, quote the key lines and add: "Full implementation at `file:line-line`."
 - **Priority rule**: If your output is growing long, prefer fewer patterns with complete snippets over many patterns with truncated snippets.
+- **Module Boundaries**: Include for every module the ticket touches.
 
 ## Output Format
 
@@ -303,6 +316,14 @@ For each method that may be modified or is relevant:
 #### `method_name()`
 - Called from: `CallerClass.method()` (`path/to/caller.py:line`)
 - Called from: `other_caller.run()` (`path/to/other.py:line`)
+
+### Module Boundaries & Runtime Context
+For each module/package relevant to the ticket:
+#### `module.path`
+- Owns: [capabilities available in this module]
+- Runtime context: [services/components available at runtime]
+- Initialization pattern: `path/to/file.ext:line` — [how components are registered]
+- Cross-module dependencies: [what's imported from other modules, with evidence]
 
 ### Test Files
 - `tests/test_module.py` — Tests for `ComponentName`, covers [scenarios]
@@ -343,6 +364,12 @@ The plan will be used to generate an executable task list for AI agents.
    ALL callers, implementations, and test mocks that must be updated.
 8. **Plan Testing**: Use the discovered Test Files to identify specific test files and methods
    to extend. Search for additional test files only if the discovery section has gaps.
+9. **Map Component Lifecycle**: For every new component, specify when it is created,
+   how it is registered/initialized, and whether it needs cleanup at shutdown.
+   Reference existing lifecycle patterns from the Codebase Discovery section.
+10. **Enumerate Environment Variants**: If the codebase uses multiple environments,
+    profiles, or feature flags, check whether the changes need environment-specific
+    handling. List any conditional behavior. If none relevant, state so explicitly.
 
 ## Output Format
 
@@ -361,18 +388,38 @@ Numbered, ordered steps to implement the feature. Each step MUST reference **exa
 - For existing files: "**File**: `path/to/existing.java` (lines X-Y)" — path must exist in the repo.
 - For new files: "**File**: Create `path/to/new-file.java`" — use the word "Create" or add `<!-- NEW_FILE -->`.
 
-For non-trivial patterns (new class creation, API calls, event publishing, wiring/registration), include a brief **code snippet** showing the expected implementation pattern.
+Each step MUST include one of:
+- A **code snippet** showing the implementation pattern (with `Pattern source:` citation), OR
+- An **explicit method call chain** showing exactly which methods are called with
+  their parameters and return types, OR
+- `<!-- TRIVIAL_STEP: description -->` marker for genuinely trivial changes
+  (single-line config changes, import additions)
+
+Steps that say "retrieve X" or "call Y" without specifying the exact method,
+parameters, and return handling are NOT acceptable.
 
 ### Testing Strategy
-- Identify **existing test files and test methods** that cover related functionality and should be extended or serve as reference patterns
+
+**Per-component coverage** (one entry for every new/modified file in Implementation Steps):
+| Component | Test file | Key scenarios |
+|---|---|---|
+| `path/to/component.ext` | `path/to/test.ext` | [scenario list] |
+
+- Every file in Implementation Steps must have a test entry or an explicit justification:
+  `<!-- NO_TEST_NEEDED: component - reason -->`
 - Reference the specific test patterns already in use (assertion style, mocking approach, test config/fixture setup)
-- List all test infrastructure files that need updates (test configs, fixtures, mock setups)
-- Types of new tests needed and key scenarios to cover
+- List test infrastructure files that need updates (test configs, fixtures, mock setups)
 
 ### Potential Risks or Considerations
-- **External dependencies**: Flag any changes that require modifications to external libraries, other repositories, or coordination with other teams. If such a dependency is a blocker, propose an alternative approach that stays within the current repository.
-- **Prerequisite work**: Identify any changes that must happen before this work can begin
-- Challenges, edge cases, or things to watch out for during implementation
+
+Address EACH category (write "None identified" if not applicable):
+- **External dependencies**: Other repos, libraries, team coordination needed
+- **Prerequisite work**: Changes that must happen first
+- **Data integrity / state management**: Staleness, overflow, data loss risks
+- **Startup / cold-start behavior**: Fresh start correctness, empty caches, job catch-up
+- **Environment / configuration drift**: Dev vs. prod differences, feature flag states
+- **Performance / scalability**: Hot paths, latency, memory, N+1 queries
+- **Backward compatibility**: Breaking changes to APIs, formats, schemas
 
 ### Out of Scope
 What this implementation explicitly does NOT include.
@@ -387,6 +434,19 @@ What this implementation explicitly does NOT include.
    files, infrastructure definitions, or novel code), use `<!-- NO_EXISTING_PATTERN: desc -->`.
 3. **Change propagation**: Every interface/method change must list ALL implementations, callers,
    and test mocks from the discovery section's Interface & Class Hierarchy and Call Sites.
+4. **Module placement**: When placing new code in a module, cite evidence from
+   Codebase Discovery's "Module Boundaries & Runtime Context" that the module has
+   the necessary runtime context. If the module lacks required services, explicitly
+   document how the dependency will be made available.
+5. **Type consistency**: Every proposed method signature must use types matching
+   the existing signatures in the Codebase Discovery section. When introducing a
+   new parameter or changing a return type, list ALL callers and implementations
+   that must be updated. If type info is missing, flag with
+   `<!-- UNVERIFIED: type signature not discovered -->`.
+6. **Concrete identifiers**: Every configuration key, metric name, tag value,
+   event type, or registration identifier must be spelled out exactly. No
+   placeholders like "appropriate tag" or "relevant metric". If the exact value
+   depends on an unmade decision, list options and recommend one.
 
 ## Guidelines
 

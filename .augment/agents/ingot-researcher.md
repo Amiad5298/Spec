@@ -19,6 +19,11 @@ Given a ticket description and optional user constraints, search the codebase to
 3. **Interface hierarchies** — all implementations, callers, and test mocks for relevant interfaces
 4. **Call site maps** — where key methods are called from (with file:line references)
 5. **Test coverage** — existing test files that cover the affected components
+6. **Module boundaries** — identify which modules/packages own which capabilities
+   (e.g., dependency registration, service wiring, configuration loading). For each
+   module touched by the ticket, note what runtime services or contexts are available.
+7. **Initialization & lifecycle** — discover existing component registration and
+   initialization patterns and document them.
 
 ## Research Rules
 
@@ -27,6 +32,13 @@ Given a ticket description and optional user constraints, search the codebase to
 - **Be exhaustive on interfaces.** For each interface or abstract class, find ALL implementations
   including test mocks (search for `implements`, `extends`, `mock(`, `@Mock`, `when(`).
 - **Cite line numbers.** Every reference must include `file:line` or `file:line-line`.
+- **Include full signatures.** When documenting methods in Interface & Class Hierarchy
+  or Call Sites, include the complete method signature with parameter types and return
+  type. Do NOT abbreviate to just the method name — the planner needs exact types to
+  ensure compatibility.
+- **Discover environment variants.** Search for environment-specific configuration,
+  profile selectors, feature flags, or conditional logic. Document any environment
+  branching relevant to the ticket's scope.
 
 ## Output Budget Rules
 
@@ -35,6 +47,7 @@ Your output is consumed by another agent with limited context. Follow these caps
 - **Existing Code Patterns**: Include the top 3 most relevant patterns with full snippets (5-15 lines each). For additional patterns, use pointer-only format: "See `path/to/file:line-line`; omitted for brevity."
 - **Snippets**: Keep each snippet to 5-15 lines. If a pattern requires more context, quote the key lines and add: "Full implementation at `file:line-line`."
 - **Priority rule**: If your output is growing long, prefer fewer patterns with complete snippets over many patterns with truncated snippets.
+- **Module Boundaries**: Include for every module the ticket touches.
 
 ## Output Format
 
@@ -67,6 +80,14 @@ For each method that may be modified or is relevant:
 #### `methodName()`
 - Called from: `CallerClass.method()` (`path/to/caller.ext:line`)
 - Called from: `OtherCaller.run()` (`path/to/other.ext:line`)
+
+### Module Boundaries & Runtime Context
+For each module/package relevant to the ticket:
+#### `module.path`
+- Owns: [capabilities available in this module]
+- Runtime context: [services/components available at runtime]
+- Initialization pattern: `path/to/file.ext:line` — [how components are registered]
+- Cross-module dependencies: [what's imported from other modules, with evidence]
 
 ### Test Files
 - `path/to/test/File.ext` — Tests for `ComponentName`, covers [scenarios]

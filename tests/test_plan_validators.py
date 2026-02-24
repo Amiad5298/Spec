@@ -13,8 +13,11 @@ from ingot.validation.base import (
 from ingot.validation.plan_validators import (
     DiscoveryCoverageValidator,
     FileExistsValidator,
+    ImplementationDetailValidator,
     PatternSourceValidator,
     RequiredSectionsValidator,
+    RiskCategoriesValidator,
+    TestCoverageValidator,
     UnresolvedMarkersValidator,
     create_plan_validator_registry,
 )
@@ -437,7 +440,7 @@ class TestValidatorRegistry:
 
     def test_factory_returns_all_validators(self):
         registry = create_plan_validator_registry()
-        assert len(registry.validators) == 5
+        assert len(registry.validators) == 8
 
     def test_factory_passes_researcher_output(self):
         researcher = "### Interface & Class Hierarchy\n#### `Foo`\n"
@@ -1308,3 +1311,348 @@ Also `tests/real_test.py`.
         assert "src/real.py" in extracted
         assert "tests/real_test.py" in extracted
         assert "src/fake.py" not in extracted
+
+
+# =============================================================================
+# TestTestCoverageValidator
+# =============================================================================
+
+
+class TestTestCoverageValidator:
+    def test_all_files_covered_no_findings(self):
+        plan = """\
+## Implementation Steps
+1. Modify `src/service.py` to add feature.
+2. Modify `src/handler.py` to wire it up.
+
+## Testing Strategy
+| Component | Test file | Key scenarios |
+|---|---|---|
+| `src/service.py` | `tests/test_service.py` | success, error |
+| `src/handler.py` | `tests/test_handler.py` | routing |
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_missing_test_entry_warning(self):
+        plan = """\
+## Implementation Steps
+1. Modify `src/service.py` to add feature.
+2. Modify `src/handler.py` to wire it up.
+
+## Testing Strategy
+Coverage for service only:
+- service tests
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.WARNING
+        assert "handler.py" in findings[0].message
+
+    def test_no_test_needed_marker_accepted(self):
+        plan = """\
+## Implementation Steps
+1. Modify `src/config.py` to add new key.
+
+## Testing Strategy
+<!-- NO_TEST_NEEDED: config - trivial constant addition -->
+No new tests needed for config changes.
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_test_files_skipped(self):
+        """Test files in impl steps should not be required to have their own test entry."""
+        plan = """\
+## Implementation Steps
+1. Update `tests/test_service.py` to add new test cases.
+
+## Testing Strategy
+Update existing test cases.
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_no_impl_or_test_section_no_findings(self):
+        plan = "## Summary\nJust a summary.\n"
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_stem_matching(self):
+        """Stem of the file should be enough for matching in test strategy."""
+        plan = """\
+## Implementation Steps
+1. Modify `src/utils/formatter.py` to add feature.
+
+## Testing Strategy
+Tests for formatter component.
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_pattern_source_paths_excluded(self):
+        """Pattern source citations should not be treated as impl files."""
+        plan = """\
+## Implementation Steps
+1. Modify `src/handler.py` to add the new route.
+   Pattern source: `src/existing/routes.py:10-20`
+
+## Testing Strategy
+Tests for handler component.
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        # routes.py is a pattern citation, not an impl file — no warning expected
+        assert findings == []
+
+    def test_urls_excluded(self):
+        """URLs should not be treated as impl files."""
+        plan = """\
+## Implementation Steps
+1. Modify `src/handler.py` following `https://example.com/docs/api.html`.
+
+## Testing Strategy
+Tests for handler component.
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_placeholder_paths_excluded(self):
+        """Placeholder paths like path/to/file.py should be excluded."""
+        plan = """\
+## Implementation Steps
+1. Modify `src/handler.py` similar to `path/to/example.py`.
+
+## Testing Strategy
+Tests for handler component.
+"""
+        validator = TestCoverageValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+
+# =============================================================================
+# TestImplementationDetailValidator
+# =============================================================================
+
+
+class TestImplementationDetailValidator:
+    def test_step_with_code_block_no_finding(self):
+        plan = """\
+## Implementation Steps
+1. Add the new handler:
+
+```python
+class NewHandler:
+    pass
+```
+"""
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_step_with_method_call_no_finding(self):
+        plan = """\
+## Implementation Steps
+1. Call `ServiceClient.fetch_data(user_id: str)` to retrieve the data, then pass the result to `Transformer.apply(data)`.
+"""
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_step_with_trivial_marker_no_finding(self):
+        plan = """\
+## Implementation Steps
+1. Add import for the new module. <!-- TRIVIAL_STEP: add import statement -->
+"""
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_vague_step_warning(self):
+        plan = """\
+## Implementation Steps
+1. Retrieve the configuration and apply the necessary changes.
+"""
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.WARNING
+        assert "lacks concrete detail" in findings[0].message
+
+    def test_multiple_steps_mixed(self):
+        plan = """\
+## Implementation Steps
+1. Add the handler using `Router.add_route(path, handler)` to register it.
+
+2. Update the configuration file with the new values.
+
+3. Wire up the service:
+
+```python
+service = Service(config)
+```
+"""
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        # Step 2 is vague
+        assert len(findings) == 1
+        assert "configuration" in findings[0].message
+
+    def test_step_with_pattern_source_no_finding(self):
+        plan = """\
+## Implementation Steps
+1. Register the handler following the existing pattern.
+   Pattern source: `src/handlers/base.py:10-20`
+"""
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_no_impl_section_no_findings(self):
+        plan = "## Summary\nJust a summary.\n"
+        validator = ImplementationDetailValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+
+# =============================================================================
+# TestRiskCategoriesValidator
+# =============================================================================
+
+
+class TestRiskCategoriesValidator:
+    def test_all_categories_present_no_findings(self):
+        plan = """\
+## Potential Risks or Considerations
+- **External dependencies**: None identified
+- **Prerequisite work**: None identified
+- **Data integrity / state management**: None identified
+- **Startup / cold-start behavior**: None identified
+- **Environment / configuration drift**: None identified
+- **Performance / scalability**: None identified
+- **Backward compatibility**: None identified
+"""
+        validator = RiskCategoriesValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_missing_categories_info(self):
+        plan = """\
+## Potential Risks or Considerations
+- **External dependencies**: Need to coordinate with team B
+- **Prerequisite work**: Database migration must be done first
+"""
+        validator = RiskCategoriesValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert len(findings) == 1
+        assert findings[0].severity == ValidationSeverity.INFO
+        assert "Data integrity" in findings[0].message
+
+    def test_no_risks_section_no_findings(self):
+        plan = "## Summary\nJust a summary.\n"
+        validator = RiskCategoriesValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_alternative_keywords_accepted(self):
+        """Variant keywords like 'breaking change' should satisfy backward compatibility."""
+        plan = """\
+## Potential Risks or Considerations
+- External dependencies: none
+- Prerequisite work: none
+- Data integrity concerns: none
+- Cold start issues: none
+- Environment differences: none
+- Performance impact: none
+- Breaking change risk: none
+"""
+        validator = RiskCategoriesValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+    def test_case_insensitive_matching(self):
+        plan = """\
+## Potential Risks or Considerations
+- EXTERNAL DEPENDENCIES: none
+- PREREQUISITE WORK: none
+- DATA INTEGRITY: none
+- STARTUP behavior: none
+- ENVIRONMENT drift: none
+- PERFORMANCE: none
+- BACKWARD COMPATIBILITY: none
+"""
+        validator = RiskCategoriesValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        assert findings == []
+
+
+# =============================================================================
+# TestUnresolvedMarkersValidatorNewMarkers
+# =============================================================================
+
+
+class TestUnresolvedMarkersValidatorNewMarkers:
+    """Tests for NO_TEST_NEEDED and TRIVIAL_STEP marker detection."""
+
+    def test_no_test_needed_marker_info(self):
+        plan = "<!-- NO_TEST_NEEDED: config.py - trivial constant -->"
+        validator = UnresolvedMarkersValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        marker_findings = [f for f in findings if "NO_TEST_NEEDED" in f.message]
+        assert len(marker_findings) == 1
+        assert marker_findings[0].severity == ValidationSeverity.INFO
+        assert "config.py" in marker_findings[0].message
+
+    def test_trivial_step_marker_info(self):
+        plan = "<!-- TRIVIAL_STEP: add import statement -->"
+        validator = UnresolvedMarkersValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        marker_findings = [f for f in findings if "TRIVIAL_STEP" in f.message]
+        assert len(marker_findings) == 1
+        assert marker_findings[0].severity == ValidationSeverity.INFO
+        assert "add import statement" in marker_findings[0].message
+
+    def test_multiple_new_markers(self):
+        plan = (
+            "<!-- NO_TEST_NEEDED: config - reason -->\n"
+            "<!-- TRIVIAL_STEP: add import -->\n"
+            "<!-- NO_TEST_NEEDED: constants - reason -->"
+        )
+        validator = UnresolvedMarkersValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        no_test = [f for f in findings if "NO_TEST_NEEDED" in f.message]
+        trivial = [f for f in findings if "TRIVIAL_STEP" in f.message]
+        assert len(no_test) == 2
+        assert len(trivial) == 1

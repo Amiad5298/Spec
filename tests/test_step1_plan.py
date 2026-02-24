@@ -1450,19 +1450,19 @@ class TestStep1WithValidation:
 
 
 class TestStep1RetryOnValidationError:
+    """Tests for the auto-retry loop (no prompt_confirm — fully automatic)."""
+
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._display_validation_report")
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_retry_on_errors_reruns_pipeline(
+    def test_auto_retry_on_errors_reruns_pipeline(
         self,
         mock_generate,
         mock_researcher,
         mock_validate,
-        mock_confirm,
         mock_display_report,
         mock_display_summary,
         mock_review_menu,
@@ -1473,7 +1473,6 @@ class TestStep1RetryOnValidationError:
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
         mock_researcher.return_value = (True, "### Verified Files\n")
-        mock_confirm.return_value = True
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -1485,7 +1484,7 @@ class TestStep1RetryOnValidationError:
 
         mock_generate.side_effect = create_plan
 
-        # First call: errors -> retry, second call: clean
+        # First call: errors -> auto-retry, second call: clean
         error_report = ValidationReport(
             findings=[
                 ValidationFinding(
@@ -1509,63 +1508,10 @@ class TestStep1RetryOnValidationError:
 
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
-    @patch("ingot.workflow.step1_plan._display_validation_report")
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_decline_retry_proceeds_to_review(
-        self,
-        mock_generate,
-        mock_researcher,
-        mock_validate,
-        mock_confirm,
-        mock_display_report,
-        mock_display_summary,
-        mock_review_menu,
-        workflow_state,
-        tmp_path,
-        monkeypatch,
-    ):
-        monkeypatch.chdir(tmp_path)
-        mock_review_menu.return_value = ReviewChoice.APPROVE
-        mock_researcher.return_value = (True, "")
-        mock_confirm.return_value = False  # Decline retry
-
-        specs_dir = tmp_path / "specs"
-        plan_path = specs_dir / "TEST-123-plan.md"
-
-        def create_plan(*args, **kwargs):
-            specs_dir.mkdir(parents=True, exist_ok=True)
-            plan_path.write_text("# Plan")
-            return True, "# Plan"
-
-        mock_generate.side_effect = create_plan
-
-        error_report = ValidationReport(
-            findings=[
-                ValidationFinding(
-                    validator_name="Test",
-                    severity=ValidationSeverity.ERROR,
-                    message="Bad",
-                ),
-            ]
-        )
-        mock_validate.return_value = error_report
-        workflow_state.enable_plan_validation = True
-
-        result = step_1_create_plan(workflow_state, MagicMock())
-
-        assert result is True
-        # Only generated once (no retry)
-        assert mock_generate.call_count == 1
-
-    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
-    @patch("ingot.workflow.step1_plan._display_plan_summary")
-    @patch("ingot.workflow.step1_plan._validate_plan")
-    @patch("ingot.workflow.step1_plan._run_researcher")
-    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
-    def test_warnings_only_no_retry_prompt(
+    def test_warnings_only_no_retry(
         self,
         mock_generate,
         mock_researcher,
@@ -1602,18 +1548,16 @@ class TestStep1RetryOnValidationError:
         mock_validate.return_value = warning_report
         workflow_state.enable_plan_validation = True
 
-        with patch("ingot.workflow.step1_plan.prompt_confirm") as mock_confirm:
-            result = step_1_create_plan(workflow_state, MagicMock())
-            # prompt_confirm should NOT be called (only warnings, no errors)
-            mock_confirm.assert_not_called()
+        result = step_1_create_plan(workflow_state, MagicMock())
 
         assert result is True
+        # Only generated once (warnings don't trigger retry)
+        assert mock_generate.call_count == 1
 
     @patch("ingot.workflow.step1_plan.print_warning")
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._display_validation_report")
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
@@ -1622,7 +1566,6 @@ class TestStep1RetryOnValidationError:
         mock_generate,
         mock_researcher,
         mock_validate,
-        mock_confirm,
         mock_display_report,
         mock_display_summary,
         mock_review_menu,
@@ -1634,7 +1577,6 @@ class TestStep1RetryOnValidationError:
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
         mock_researcher.return_value = (True, "")
-        mock_confirm.return_value = True  # Accept retry on first attempt
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -1646,7 +1588,7 @@ class TestStep1RetryOnValidationError:
 
         mock_generate.side_effect = create_plan
 
-        # Both attempts produce errors — retries will be exhausted
+        # All attempts produce errors — retries will be exhausted
         error_report = ValidationReport(
             findings=[
                 ValidationFinding(
@@ -1713,7 +1655,6 @@ class TestResearcherNotRerunOnRetry:
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan._display_validation_report")
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
@@ -1722,7 +1663,6 @@ class TestResearcherNotRerunOnRetry:
         mock_generate,
         mock_researcher,
         mock_validate,
-        mock_confirm,
         mock_display_report,
         mock_display_summary,
         mock_review_menu,
@@ -1733,7 +1673,6 @@ class TestResearcherNotRerunOnRetry:
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
         mock_researcher.return_value = (True, "### Verified Files\n")
-        mock_confirm.return_value = True
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -1881,7 +1820,6 @@ class TestStrictValidationGate:
 
     @patch("ingot.workflow.step1_plan.print_error")
     @patch("ingot.workflow.step1_plan._display_validation_report")
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
@@ -1890,7 +1828,6 @@ class TestStrictValidationGate:
         mock_generate,
         mock_researcher,
         mock_validate,
-        mock_confirm,
         mock_display_report,
         mock_print_error,
         workflow_state,
@@ -1899,7 +1836,6 @@ class TestStrictValidationGate:
     ):
         monkeypatch.chdir(tmp_path)
         mock_researcher.return_value = (True, "")
-        mock_confirm.return_value = True  # Accept retry
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -1935,7 +1871,6 @@ class TestStrictValidationGate:
     @patch("ingot.workflow.step1_plan._display_plan_summary")
     @patch("ingot.workflow.step1_plan.print_warning")
     @patch("ingot.workflow.step1_plan._display_validation_report")
-    @patch("ingot.workflow.step1_plan.prompt_confirm")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
@@ -1944,7 +1879,6 @@ class TestStrictValidationGate:
         mock_generate,
         mock_researcher,
         mock_validate,
-        mock_confirm,
         mock_display_report,
         mock_print_warning,
         mock_display_summary,
@@ -1956,7 +1890,6 @@ class TestStrictValidationGate:
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
         mock_researcher.return_value = (True, "")
-        mock_confirm.return_value = True  # Accept retry
 
         specs_dir = tmp_path / "specs"
         plan_path = specs_dir / "TEST-123-plan.md"
@@ -1987,3 +1920,213 @@ class TestStrictValidationGate:
         # Should have printed a warning (not error) about proceeding
         warning_calls = [str(c) for c in mock_print_warning.call_args_list]
         assert any("Proceeding to review despite" in w for w in warning_calls)
+
+
+# =============================================================================
+# Self-Healing Auto-Fix Tests
+# =============================================================================
+
+
+class TestStep1AutoFixIntegration:
+    """Tests for PlanFixer integration in the retry loop."""
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan.PlanFixer")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_auto_fix_resolves_errors_without_prompt(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_fixer_class,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        """PlanFixer success -> no prompt, proceeds to review."""
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan\nModify `src/missing.py`")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        # First validation: errors. After fix + revalidation: clean.
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="File Exists",
+                    severity=ValidationSeverity.ERROR,
+                    message="File not found: `src/missing.py`",
+                    line_number=2,
+                ),
+            ]
+        )
+        clean_report = ValidationReport()
+        mock_validate.side_effect = [error_report, clean_report]
+
+        mock_fixer = MagicMock()
+        mock_fixer.fix.return_value = (
+            "# Plan\nModify `src/missing.py` <!-- UNVERIFIED: auto-flagged, file not in repo -->",
+            ["Marked `src/missing.py` as UNVERIFIED (line 2)"],
+        )
+        mock_fixer_class.return_value = mock_fixer
+
+        workflow_state.enable_plan_validation = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        # Only generated once — auto-fix resolved the errors, no AI retry needed
+        assert mock_generate.call_count == 1
+        mock_fixer.fix.assert_called_once()
+
+    @patch("ingot.workflow.step1_plan.show_plan_review_menu")
+    @patch("ingot.workflow.step1_plan._display_plan_summary")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.PlanFixer")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_auto_fix_partial_then_auto_retry(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_fixer_class,
+        mock_display_report,
+        mock_display_summary,
+        mock_review_menu,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        """PlanFixer fixes some but not all errors -> auto-retry with AI."""
+        monkeypatch.chdir(tmp_path)
+        mock_review_menu.return_value = ReviewChoice.APPROVE
+        mock_researcher.return_value = (True, "")
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        # First validation: File Exists + Required Sections errors
+        mixed_error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="File Exists",
+                    severity=ValidationSeverity.ERROR,
+                    message="File not found: `src/missing.py`",
+                    line_number=2,
+                ),
+                ValidationFinding(
+                    validator_name="Required Sections",
+                    severity=ValidationSeverity.ERROR,
+                    message="Missing required section: 'Summary'",
+                ),
+            ]
+        )
+        # After fixer: File Exists resolved but Required Sections remains
+        still_error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Required Sections",
+                    severity=ValidationSeverity.ERROR,
+                    message="Missing required section: 'Summary'",
+                ),
+            ]
+        )
+        # Second attempt: clean
+        clean_report = ValidationReport()
+        mock_validate.side_effect = [mixed_error_report, still_error_report, clean_report]
+
+        mock_fixer = MagicMock()
+        mock_fixer.fix.return_value = (
+            "# Plan (fixed)",
+            ["Marked `src/missing.py` as UNVERIFIED (line 2)"],
+        )
+        mock_fixer_class.return_value = mock_fixer
+
+        workflow_state.enable_plan_validation = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is True
+        # Generated twice: first attempt + auto-retry
+        assert mock_generate.call_count == 2
+        assert workflow_state.plan_revision_count == 1
+
+    @patch("ingot.workflow.step1_plan.print_error")
+    @patch("ingot.workflow.step1_plan._display_validation_report")
+    @patch("ingot.workflow.step1_plan.PlanFixer")
+    @patch("ingot.workflow.step1_plan._validate_plan")
+    @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
+    def test_auto_retry_respects_max_retries_strict(
+        self,
+        mock_generate,
+        mock_researcher,
+        mock_validate,
+        mock_fixer_class,
+        mock_display_report,
+        mock_print_error,
+        workflow_state,
+        tmp_path,
+        monkeypatch,
+    ):
+        """After MAX_GENERATION_RETRIES, strict mode returns False."""
+        monkeypatch.chdir(tmp_path)
+        mock_researcher.return_value = (True, "")
+
+        specs_dir = tmp_path / "specs"
+        plan_path = specs_dir / "TEST-123-plan.md"
+
+        def create_plan(*args, **kwargs):
+            specs_dir.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text("# Plan")
+            return True, "# Plan"
+
+        mock_generate.side_effect = create_plan
+
+        error_report = ValidationReport(
+            findings=[
+                ValidationFinding(
+                    validator_name="Required Sections",
+                    severity=ValidationSeverity.ERROR,
+                    message="Missing required section: 'Summary'",
+                ),
+            ]
+        )
+        mock_validate.return_value = error_report
+
+        # PlanFixer can't fix RequiredSections errors
+        mock_fixer = MagicMock()
+        mock_fixer.fix.return_value = ("# Plan", [])
+        mock_fixer_class.return_value = mock_fixer
+
+        workflow_state.enable_plan_validation = True
+        workflow_state.validation_strict = True
+
+        result = step_1_create_plan(workflow_state, MagicMock())
+
+        assert result is False
+        error_calls = [str(c) for c in mock_print_error.call_args_list]
+        assert any("strict mode" in c.lower() for c in error_calls)

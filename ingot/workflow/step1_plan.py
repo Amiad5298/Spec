@@ -64,6 +64,9 @@ _THINKING_BLOCK_RE = re.compile(
 _REPLAN_PLAN_EXCERPT_LIMIT = 4000
 _REPLAN_FEEDBACK_EXCERPT_LIMIT = 3000
 
+# Character limit for the existing-plan excerpt in AI-fix prompts.
+_FIX_PLAN_EXCERPT_LIMIT = 8000
+
 # Source-label constants used in prompts to tag data provenance.
 _SOURCE_VERIFIED = "[SOURCE: VERIFIED PLATFORM DATA]"
 _SOURCE_UNVERIFIED = "[SOURCE: NO VERIFIED PLATFORM DATA]"
@@ -114,7 +117,6 @@ def _generate_plan_with_tui(
     plan_path: Path,
     backend: AIBackend,
     researcher_context: str = "",
-    validation_feedback: str = "",
 ) -> tuple[bool, str]:
     """Generate plan with TUI progress display using subagent.
 
@@ -123,7 +125,6 @@ def _generate_plan_with_tui(
         plan_path: Path where the plan should be saved.
         backend: AI backend for agent calls.
         researcher_context: Optional researcher output to inject into the prompt.
-        validation_feedback: Optional feedback from previous validation to guide retry.
 
     Returns:
         Tuple of (success, captured_output).
@@ -152,7 +153,6 @@ def _generate_plan_with_tui(
         plan_path,
         plan_mode=use_plan_mode,
         researcher_context=researcher_context,
-        validation_feedback=validation_feedback,
     )
 
     def _work() -> tuple[bool, str]:
@@ -181,7 +181,6 @@ def _build_minimal_prompt(
     *,
     plan_mode: bool = False,
     researcher_context: str = "",
-    validation_feedback: str = "",
 ) -> str:
     """Build minimal prompt for plan generation.
 
@@ -193,7 +192,6 @@ def _build_minimal_prompt(
         plan_mode: If True, instruct the AI to output the plan to stdout
             instead of writing a file (for read-only backends).
         researcher_context: Optional researcher output to inject into the prompt.
-        validation_feedback: Optional feedback from previous validation to guide retry.
     """
     source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
 
@@ -245,14 +243,131 @@ Save the plan to: {plan_path}
 
 Codebase context will be retrieved automatically."""
 
-    if validation_feedback:
+    return prompt
+
+
+def _build_fix_prompt(
+    state: WorkflowState,
+    plan_path: Path,
+    existing_plan: str,
+    validation_feedback: str,
+    *,
+    plan_mode: bool = False,
+) -> str:
+    """Build prompt that asks the AI to fix specific validation errors in an existing plan.
+
+    Unlike full regeneration, this sends the current plan + validation errors
+    and instructs the AI to fix only the flagged issues.
+
+    Args:
+        state: Current workflow state.
+        plan_path: Path where the plan should be saved.
+        existing_plan: Current plan content (will be truncated if too long).
+        validation_feedback: Formatted validation errors/warnings.
+        plan_mode: If True, instruct AI to output to stdout instead of writing a file.
+    """
+    if len(existing_plan) <= _FIX_PLAN_EXCERPT_LIMIT:
+        plan_excerpt = existing_plan
+    else:
+        # Keep both the beginning and end of the plan so the AI sees
+        # the overall structure *and* trailing sections (which are
+        # often the ones flagged as missing by validators).
+        head_budget = _FIX_PLAN_EXCERPT_LIMIT * 2 // 3
+        tail_budget = _FIX_PLAN_EXCERPT_LIMIT - head_budget
+        plan_excerpt = (
+            existing_plan[:head_budget]
+            + "\n\n... [middle truncated] ...\n\n"
+            + existing_plan[-tail_budget:]
+        )
+
+    ticket_source_label = _SOURCE_VERIFIED if state.spec_verified else _SOURCE_UNVERIFIED
+
+    prompt = f"""Fix the validation errors in the existing implementation plan.
+
+## Ticket
+{ticket_source_label}
+ID: {state.ticket.id}
+Title: {state.ticket.title or state.ticket.branch_summary or "Not available"}
+Description: {state.ticket.description or "Not available"}"""
+
+    if not state.spec_verified:
+        prompt += f"\n{_UNVERIFIED_NOTE}"
+
+    prompt += f"""
+
+## Current Plan (needs fixes)
+{plan_excerpt}
+
+## Validation Errors to Fix
+{validation_feedback}
+
+## Instructions
+1. Read the validation errors above carefully
+2. Fix ONLY the issues flagged — do not rewrite unrelated sections
+3. Preserve the overall structure and content of the plan
+4. Output the complete fixed plan (not just the changed parts)"""
+
+    if plan_mode:
+        prompt += """
+
+Output the complete fixed implementation plan in Markdown format to stdout.
+Do not attempt to create or write any files."""
+    else:
         prompt += f"""
 
-[VALIDATION FEEDBACK FROM PREVIOUS ATTEMPT]
-{validation_feedback}
-Please fix these issues in the new plan."""
+Save the fixed plan to: {plan_path}"""
+
+    if state.user_constraints:
+        prompt += f"""
+
+[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
+{state.user_constraints}"""
 
     return prompt
+
+
+def _fix_plan_with_ai(
+    state: WorkflowState,
+    plan_path: Path,
+    backend: AIBackend,
+    existing_plan: str,
+    validation_feedback: str,
+) -> tuple[bool, str]:
+    """Ask the AI to fix specific validation errors in the existing plan.
+
+    This is a lightweight alternative to full regeneration — it sends the
+    current plan + error list and asks for targeted fixes only.
+
+    Returns:
+        Tuple of (success, output).
+    """
+    use_plan_mode = backend.supports_plan_mode
+
+    prompt = _build_fix_prompt(
+        state,
+        plan_path,
+        existing_plan,
+        validation_feedback,
+        plan_mode=use_plan_mode,
+    )
+
+    try:
+        success, output = backend.run_with_callback(
+            prompt,
+            subagent=state.subagent_names["planner"],
+            output_callback=noop_output_callback,
+            dont_save_session=True,
+            plan_mode=use_plan_mode,
+        )
+    except Exception as e:
+        print_error(f"AI fix attempt failed: {e}")
+        return False, ""
+
+    if not success:
+        print_error("AI fix attempt returned failure")
+        return False, ""
+
+    return success, output
 
 
 # =============================================================================
@@ -590,30 +705,64 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
         log_message("No researcher agent configured, skipping discovery phase")
 
     # Planner + inspector retry loop (researcher output is fixed)
+    # Attempt 1: full generation via _generate_plan_with_tui
+    # Attempts 2+: targeted fix via _fix_plan_with_ai (sends existing plan + errors)
+    plan_content = ""
     validation_feedback = ""
     for attempt in range(1, MAX_GENERATION_RETRIES + 1):
-        # Phase 2: Synthesis
-        print_step("Generating implementation plan...")
-        success, output = _generate_plan_with_tui(
-            state,
-            plan_path,
-            backend,
-            researcher_context=researcher_output,
-            validation_feedback=validation_feedback,
-        )
+        if attempt == 1 or not plan_content:
+            # Phase 2: Full synthesis
+            print_step("Generating implementation plan...")
+            success, output = _generate_plan_with_tui(
+                state,
+                plan_path,
+                backend,
+                researcher_context=researcher_output,
+            )
 
-        if not success:
-            print_error("Failed to generate implementation plan")
-            return False
+            if not success:
+                print_error("Failed to generate implementation plan")
+                return False
 
-        # Handle plan file creation
-        if not plan_path.exists():
-            print_info("Saving plan to file...")
-            _save_plan_from_output(plan_path, state, output=output)
+            # Handle plan file creation
+            if not plan_path.exists():
+                print_info("Saving plan to file...")
+                _save_plan_from_output(plan_path, state, output=output)
 
-        if not plan_path.exists():
-            print_error("Plan file was not created")
-            return False
+            if not plan_path.exists():
+                print_error("Plan file was not created")
+                return False
+        else:
+            # Phase 2b: Targeted AI fix of existing plan
+            print_step(
+                f"Asking AI to fix validation error(s) "
+                f"(attempt {attempt}/{MAX_GENERATION_RETRIES})..."
+            )
+            fix_success, fix_output = _fix_plan_with_ai(
+                state,
+                plan_path,
+                backend,
+                existing_plan=plan_content,
+                validation_feedback=validation_feedback,
+            )
+
+            if fix_success:
+                # Handle plan mode output (save from stdout)
+                use_plan_mode = backend.supports_plan_mode
+                if not plan_path.exists() or use_plan_mode:
+                    if fix_output.strip():
+                        fixed_plan = _extract_plan_markdown(fix_output)
+                        plan_path.write_text(fixed_plan)
+                        log_message(f"Saved AI-fixed plan from output at {plan_path}")
+                    else:
+                        log_message("AI fix returned empty output; keeping previous plan on disk")
+                else:
+                    log_message(
+                        "Backend wrote fixed plan directly (non-plan-mode); "
+                        f"file exists at {plan_path}"
+                    )
+            else:
+                log_message("AI fix attempt failed, will use previous plan for validation")
 
         state.plan_file = plan_path
 
@@ -639,22 +788,25 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
             if report.findings:
                 _display_validation_report(report)
 
-            # Stage B: Auto-retry with AI (no human prompt)
+            # Stage B: Auto-retry with AI fix (no human prompt)
             if report.has_errors:
                 if attempt < MAX_GENERATION_RETRIES:
                     print_info(
                         f"Validation has {report.error_count} remaining error(s), "
-                        f"auto-retrying ({attempt}/{MAX_GENERATION_RETRIES})..."
+                        f"requesting AI fix ({attempt}/{MAX_GENERATION_RETRIES - 1})..."
                     )
                     state.plan_revision_count += 1
                     validation_feedback = _format_validation_feedback(report)
-                    continue  # Re-run planner with feedback
+                    continue  # Re-run with targeted AI fix
                 else:
+                    fix_attempts_made = MAX_GENERATION_RETRIES - 1
                     if state.validation_strict:
                         print_error(
                             f"Plan has {report.error_count} validation error(s) "
-                            f"after {MAX_GENERATION_RETRIES} attempt(s). "
-                            f"Cannot proceed in strict mode."
+                            f"after {fix_attempts_made} AI fix attempt(s). "
+                            f"The AI could not auto-resolve these issues. "
+                            f"Please review the plan manually or provide "
+                            f"additional constraints."
                         )
                         return False
                     print_warning(
@@ -935,4 +1087,6 @@ Do not attempt to create or write any files."""
 __all__ = [
     "replan_with_feedback",
     "step_1_create_plan",
+    "_build_fix_prompt",
+    "_fix_plan_with_ai",
 ]

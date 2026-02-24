@@ -10,6 +10,7 @@ from ingot.ui.menus import ReviewChoice
 from ingot.validation.base import ValidationFinding, ValidationReport, ValidationSeverity
 from ingot.workflow.state import WorkflowState
 from ingot.workflow.step1_plan import (
+    _build_fix_prompt,
     _build_minimal_prompt,
     _build_replan_prompt,
     _create_plan_log_dir,
@@ -17,6 +18,7 @@ from ingot.workflow.step1_plan import (
     _display_validation_report,
     _edit_plan,
     _extract_plan_markdown,
+    _fix_plan_with_ai,
     _format_validation_feedback,
     _generate_plan_with_tui,
     _get_log_base_dir,
@@ -1457,10 +1459,12 @@ class TestStep1RetryOnValidationError:
     @patch("ingot.workflow.step1_plan._display_validation_report")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._fix_plan_with_ai")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_auto_retry_on_errors_reruns_pipeline(
         self,
         mock_generate,
+        mock_fix_ai,
         mock_researcher,
         mock_validate,
         mock_display_report,
@@ -1483,8 +1487,9 @@ class TestStep1RetryOnValidationError:
             return True, "# Plan"
 
         mock_generate.side_effect = create_plan
+        mock_fix_ai.return_value = (True, "# Fixed Plan")
 
-        # First call: errors -> auto-retry, second call: clean
+        # First call: errors -> auto-retry via AI fix, second call: clean
         error_report = ValidationReport(
             findings=[
                 ValidationFinding(
@@ -1501,7 +1506,9 @@ class TestStep1RetryOnValidationError:
         result = step_1_create_plan(workflow_state, MagicMock())
 
         assert result is True
-        assert mock_generate.call_count == 2
+        # Generate called once (initial), fix called once (retry)
+        assert mock_generate.call_count == 1
+        assert mock_fix_ai.call_count == 1
         # Researcher runs once (before the retry loop), not on each retry
         assert mock_researcher.call_count == 1
         assert workflow_state.plan_revision_count == 1
@@ -1657,10 +1664,12 @@ class TestResearcherNotRerunOnRetry:
     @patch("ingot.workflow.step1_plan._display_validation_report")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._fix_plan_with_ai")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_researcher_called_once_on_retry(
         self,
         mock_generate,
+        mock_fix_ai,
         mock_researcher,
         mock_validate,
         mock_display_report,
@@ -1683,6 +1692,7 @@ class TestResearcherNotRerunOnRetry:
             return True, "# Plan"
 
         mock_generate.side_effect = create_plan
+        mock_fix_ai.return_value = (True, "# Fixed Plan")
 
         error_report = ValidationReport(
             findings=[
@@ -1702,8 +1712,9 @@ class TestResearcherNotRerunOnRetry:
         assert result is True
         # Researcher should be called only once (before the loop)
         assert mock_researcher.call_count == 1
-        # Planner should be called twice (initial + retry)
-        assert mock_generate.call_count == 2
+        # Generate called once (initial), fix called once (retry)
+        assert mock_generate.call_count == 1
+        assert mock_fix_ai.call_count == 1
 
 
 class TestSectionsNotInPriority:
@@ -1750,23 +1761,6 @@ class TestTruncationAtLineBoundary:
                 prev_line = result_lines[idx - 1]
                 # Should not be cut mid-word — either a complete list item or heading
                 assert prev_line.startswith("- ") or prev_line.startswith("###")
-
-
-class TestBuildMinimalPromptWithValidationFeedback:
-    """A2: Verify validation feedback is injected into retry prompts."""
-
-    def test_feedback_included_when_provided(self, workflow_state, tmp_path):
-        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
-        feedback = "- [ERROR] Missing section: Summary"
-        result = _build_minimal_prompt(workflow_state, plan_path, validation_feedback=feedback)
-        assert "[VALIDATION FEEDBACK FROM PREVIOUS ATTEMPT]" in result
-        assert "Missing section: Summary" in result
-        assert "Please fix these issues" in result
-
-    def test_no_feedback_section_when_empty(self, workflow_state, tmp_path):
-        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
-        result = _build_minimal_prompt(workflow_state, plan_path, validation_feedback="")
-        assert "[VALIDATION FEEDBACK FROM PREVIOUS ATTEMPT]" not in result
 
 
 class TestFormatValidationFeedback:
@@ -1822,10 +1816,12 @@ class TestStrictValidationGate:
     @patch("ingot.workflow.step1_plan._display_validation_report")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._fix_plan_with_ai")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_strict_mode_blocks_on_exhausted_retries(
         self,
         mock_generate,
+        mock_fix_ai,
         mock_researcher,
         mock_validate,
         mock_display_report,
@@ -1846,6 +1842,7 @@ class TestStrictValidationGate:
             return True, "# Plan"
 
         mock_generate.side_effect = create_plan
+        mock_fix_ai.return_value = (True, "# Still Bad Plan")
 
         error_report = ValidationReport(
             findings=[
@@ -1863,9 +1860,9 @@ class TestStrictValidationGate:
         result = step_1_create_plan(workflow_state, MagicMock())
 
         assert result is False
-        # Should have printed an error about strict mode
+        # Should have printed an error about AI not resolving
         error_calls = [str(c) for c in mock_print_error.call_args_list]
-        assert any("strict mode" in c.lower() for c in error_calls)
+        assert any("could not auto-resolve" in c.lower() for c in error_calls)
 
     @patch("ingot.workflow.step1_plan.show_plan_review_menu")
     @patch("ingot.workflow.step1_plan._display_plan_summary")
@@ -1873,10 +1870,12 @@ class TestStrictValidationGate:
     @patch("ingot.workflow.step1_plan._display_validation_report")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._fix_plan_with_ai")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_non_strict_mode_proceeds_on_exhausted_retries(
         self,
         mock_generate,
+        mock_fix_ai,
         mock_researcher,
         mock_validate,
         mock_display_report,
@@ -1900,6 +1899,7 @@ class TestStrictValidationGate:
             return True, "# Plan"
 
         mock_generate.side_effect = create_plan
+        mock_fix_ai.return_value = (True, "# Still Bad Plan")
 
         error_report = ValidationReport(
             findings=[
@@ -1999,10 +1999,12 @@ class TestStep1AutoFixIntegration:
     @patch("ingot.workflow.step1_plan.PlanFixer")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._fix_plan_with_ai")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_auto_fix_partial_then_auto_retry(
         self,
         mock_generate,
+        mock_fix_ai,
         mock_researcher,
         mock_validate,
         mock_fixer_class,
@@ -2013,7 +2015,7 @@ class TestStep1AutoFixIntegration:
         tmp_path,
         monkeypatch,
     ):
-        """PlanFixer fixes some but not all errors -> auto-retry with AI."""
+        """PlanFixer fixes some but not all errors -> targeted AI fix."""
         monkeypatch.chdir(tmp_path)
         mock_review_menu.return_value = ReviewChoice.APPROVE
         mock_researcher.return_value = (True, "")
@@ -2027,6 +2029,7 @@ class TestStep1AutoFixIntegration:
             return True, "# Plan"
 
         mock_generate.side_effect = create_plan
+        mock_fix_ai.return_value = (True, "# Fixed Plan")
 
         # First validation: File Exists + Required Sections errors
         mixed_error_report = ValidationReport(
@@ -2070,8 +2073,9 @@ class TestStep1AutoFixIntegration:
         result = step_1_create_plan(workflow_state, MagicMock())
 
         assert result is True
-        # Generated twice: first attempt + auto-retry
-        assert mock_generate.call_count == 2
+        # Generate called once, AI fix called once (retry uses fix, not regenerate)
+        assert mock_generate.call_count == 1
+        assert mock_fix_ai.call_count == 1
         assert workflow_state.plan_revision_count == 1
 
     @patch("ingot.workflow.step1_plan.print_error")
@@ -2079,10 +2083,12 @@ class TestStep1AutoFixIntegration:
     @patch("ingot.workflow.step1_plan.PlanFixer")
     @patch("ingot.workflow.step1_plan._validate_plan")
     @patch("ingot.workflow.step1_plan._run_researcher")
+    @patch("ingot.workflow.step1_plan._fix_plan_with_ai")
     @patch("ingot.workflow.step1_plan._generate_plan_with_tui")
     def test_auto_retry_respects_max_retries_strict(
         self,
         mock_generate,
+        mock_fix_ai,
         mock_researcher,
         mock_validate,
         mock_fixer_class,
@@ -2092,7 +2098,7 @@ class TestStep1AutoFixIntegration:
         tmp_path,
         monkeypatch,
     ):
-        """After MAX_GENERATION_RETRIES, strict mode returns False."""
+        """After MAX_GENERATION_RETRIES, strict mode returns False with clear error."""
         monkeypatch.chdir(tmp_path)
         mock_researcher.return_value = (True, "")
 
@@ -2105,6 +2111,7 @@ class TestStep1AutoFixIntegration:
             return True, "# Plan"
 
         mock_generate.side_effect = create_plan
+        mock_fix_ai.return_value = (True, "# Still Bad Plan")
 
         error_report = ValidationReport(
             findings=[
@@ -2128,5 +2135,156 @@ class TestStep1AutoFixIntegration:
         result = step_1_create_plan(workflow_state, MagicMock())
 
         assert result is False
+        # Generate called once, AI fix called twice (MAX_GENERATION_RETRIES - 1 = 2)
+        assert mock_generate.call_count == 1
+        assert mock_fix_ai.call_count == 2
         error_calls = [str(c) for c in mock_print_error.call_args_list]
-        assert any("strict mode" in c.lower() for c in error_calls)
+        assert any("could not auto-resolve" in c.lower() for c in error_calls)
+
+
+# =============================================================================
+# TestBuildFixPrompt
+# =============================================================================
+
+
+class TestBuildFixPrompt:
+    """Tests for _build_fix_prompt."""
+
+    def test_includes_plan_content_and_errors(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        existing_plan = "# My Plan\n## Summary\nSome content."
+        feedback = "- [ERROR] Missing required section: 'Testing Strategy'"
+
+        result = _build_fix_prompt(workflow_state, plan_path, existing_plan, feedback)
+
+        assert "# My Plan" in result
+        assert "Missing required section" in result
+        assert "Fix ONLY the issues flagged" in result
+        assert "TEST-123" in result
+
+    def test_truncates_long_plan_with_head_and_tail(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        head = "HEAD_MARKER " + "a" * 5000
+        tail = "b" * 4000 + " TAIL_MARKER"
+        long_plan = head + tail
+        feedback = "- [ERROR] Some error"
+
+        result = _build_fix_prompt(workflow_state, plan_path, long_plan, feedback)
+
+        assert "... [middle truncated] ..." in result
+        assert "HEAD_MARKER" in result
+        assert "TAIL_MARKER" in result
+
+    def test_includes_ticket_info(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_fix_prompt(workflow_state, plan_path, "# Plan", "- [ERROR] Bad")
+
+        assert "TEST-123" in result
+        assert "Title:" in result
+
+    def test_plan_mode_stdout_instruction(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_fix_prompt(
+            workflow_state,
+            plan_path,
+            "# Plan",
+            "- [ERROR] Bad",
+            plan_mode=True,
+        )
+
+        assert "stdout" in result
+        assert "Do not attempt to create or write any files" in result
+
+    def test_file_mode_save_instruction(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_fix_prompt(
+            workflow_state,
+            plan_path,
+            "# Plan",
+            "- [ERROR] Bad",
+            plan_mode=False,
+        )
+
+        assert str(plan_path) in result
+
+    def test_includes_user_constraints(self, workflow_state, tmp_path):
+        workflow_state.user_constraints = "Use Python 3.12 features"
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_fix_prompt(workflow_state, plan_path, "# Plan", "- [ERROR] Bad")
+
+        assert "Python 3.12" in result
+        assert "USER-PROVIDED CONSTRAINTS" in result
+
+    def test_unverified_ticket_note(self, workflow_state, tmp_path):
+        # Clear title and description so has_verified_content returns False
+        workflow_state.ticket.title = ""
+        workflow_state.ticket.description = ""
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        result = _build_fix_prompt(workflow_state, plan_path, "# Plan", "- [ERROR] Bad")
+
+        assert "NO VERIFIED PLATFORM DATA" in result
+
+
+# =============================================================================
+# TestFixPlanWithAi
+# =============================================================================
+
+
+class TestFixPlanWithAi:
+    """Tests for _fix_plan_with_ai."""
+
+    def test_calls_backend_with_fix_prompt(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        workflow_state.plan_file = plan_path
+
+        backend = MagicMock()
+        backend.supports_plan_mode = False
+        backend.run_with_callback.return_value = (True, "# Fixed Plan")
+
+        success, output = _fix_plan_with_ai(
+            workflow_state,
+            plan_path,
+            backend,
+            existing_plan="# Old Plan",
+            validation_feedback="- [ERROR] Bad",
+        )
+
+        assert success is True
+        assert output == "# Fixed Plan"
+        backend.run_with_callback.assert_called_once()
+        call_kwargs = backend.run_with_callback.call_args
+        assert "ingot-planner" in str(call_kwargs)
+
+    def test_returns_false_on_exception(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        backend = MagicMock()
+        backend.supports_plan_mode = False
+        backend.run_with_callback.side_effect = RuntimeError("API error")
+
+        success, output = _fix_plan_with_ai(
+            workflow_state,
+            plan_path,
+            backend,
+            existing_plan="# Plan",
+            validation_feedback="- [ERROR] Bad",
+        )
+
+        assert success is False
+        assert output == ""
+
+    def test_returns_false_on_backend_failure(self, workflow_state, tmp_path):
+        plan_path = tmp_path / "specs" / "TEST-123-plan.md"
+        backend = MagicMock()
+        backend.supports_plan_mode = False
+        backend.run_with_callback.return_value = (False, "")
+
+        success, output = _fix_plan_with_ai(
+            workflow_state,
+            plan_path,
+            backend,
+            existing_plan="# Plan",
+            validation_feedback="- [ERROR] Bad",
+        )
+
+        assert success is False
+        assert output == ""

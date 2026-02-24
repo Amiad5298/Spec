@@ -150,10 +150,13 @@ class FileExistsValidator(Validator):
     """Check that file paths referenced in the plan exist on the filesystem."""
 
     # Match backtick-quoted strings containing at least one / and a file extension
-    _PATH_RE = re.compile(r"`([^`]*?(?:/[^`]*?\.\w{1,8})[^`]*?)`")
+    _PATH_RE = re.compile(r"`([^`\n]*?(?:/[^`\n]*?\.\w{1,8})[^`\n]*?)`")
 
     # Match backtick-quoted root files (no slash) with common extensions
     _ROOT_FILE_RE = re.compile(r"`([A-Za-z0-9_][A-Za-z0-9_.-]*\.\w{1,8})`")
+
+    # Maximum length for extracted paths (reject absurdly long false positives)
+    _MAX_PATH_LENGTH = 300
 
     # Common file extensions to filter root-file matches (avoid false positives)
     _COMMON_FILE_EXTENSIONS: frozenset[str] = frozenset(
@@ -242,12 +245,12 @@ class FileExistsValidator(Validator):
     # incidental usage of "Create" in prose on lines referencing existing files.
     # e.g. "Create `src/new.py`" matches, but "Create a new endpoint in `src/existing.py`" does not.
     _NEW_FILE_PRE_PATH_RE = re.compile(
-        r"(?:^|\b)(?:Create|Creating|New\s+file)\b\s*[:*]*\s*(`[^`]+`)",
+        r"(?:^|\b)(?:Create|Creating|New\s+file)\b\s*[:*]*\s*(`[^`\n]+`)",
         re.IGNORECASE | re.MULTILINE,
     )
     # Detect backtick-quoted paths followed by "(NEW FILE)" marker.
     _NEW_FILE_POST_PATH_RE = re.compile(
-        r"(`[^`]+`)\s*\(NEW\s+FILE\)",
+        r"(`[^`\n]+`)\s*\(NEW\s+FILE\)",
         re.IGNORECASE,
     )
     # Explicit marker for new files (references module-level pattern).
@@ -323,6 +326,10 @@ class FileExistsValidator(Validator):
                 continue
 
             raw_path = raw_text.strip(self._STRIP_CHARS)
+
+            # Skip absurdly long paths (false positives from multi-line spans)
+            if len(raw_path) > self._MAX_PATH_LENGTH:
+                continue
 
             # Split off :line_number suffix
             if ":" in raw_path:
@@ -673,7 +680,7 @@ class TestCoverageValidator(Validator):
     """Check that every implementation file has a corresponding test entry."""
 
     # Match file paths in Implementation Steps (backtick-quoted, with extension)
-    _PATH_RE = re.compile(r"`([^`]*?(?:/[^`]*?\.\w{1,8})[^`]*?)`")
+    _PATH_RE = re.compile(r"`([^`\n]*?(?:/[^`\n]*?\.\w{1,8})[^`\n]*?)`")
 
     # Match NO_TEST_NEEDED opt-out markers
     _NO_TEST_NEEDED_RE = re.compile(r"<!--\s*NO_TEST_NEEDED:\s*.*?-->", re.IGNORECASE)

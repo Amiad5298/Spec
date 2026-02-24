@@ -1656,3 +1656,87 @@ class TestUnresolvedMarkersValidatorNewMarkers:
         trivial = [f for f in findings if "TRIVIAL_STEP" in f.message]
         assert len(no_test) == 2
         assert len(trivial) == 1
+
+
+# =============================================================================
+# TestFileExistsValidatorMultilineReject
+# =============================================================================
+
+
+class TestFileExistsValidatorMultilineReject:
+    """Regression tests: _PATH_RE must not match across newlines."""
+
+    def test_multiline_backtick_span_not_matched_as_path(self, tmp_path):
+        """A stray backtick followed by prose on the next line containing
+        '/something.yaml' should NOT be picked up as a file path."""
+        plan = (
+            "Here is a `code snippet that\n"
+            "spans multiple lines and mentions /config/app.yaml in passing`.\n"
+            "Some more text."
+        )
+        validator = FileExistsValidator()
+        paths = validator._extract_paths(plan)
+        # The multi-line span should not produce a path
+        path_strings = [p for p, _ln in paths]
+        assert (
+            "code snippet that\nspans multiple lines and mentions /config/app.yaml in passing"
+            not in path_strings
+        )
+
+    def test_single_line_backtick_path_still_matched(self, tmp_path):
+        """Single-line backtick paths should still be detected."""
+        plan = "Update `src/config/app.yaml` with new settings."
+        validator = FileExistsValidator()
+        paths = validator._extract_paths(plan)
+        path_strings = [p for p, _ln in paths]
+        assert "src/config/app.yaml" in path_strings
+
+    def test_multiline_backtick_with_extension_not_matched(self, tmp_path):
+        """Multi-line backtick spans that happen to contain path-like text
+        should not trigger false positives."""
+        plan = (
+            "The `configuration should follow\n"
+            "the pattern described in docs/setup.yml\n"
+            "for all environments`."
+        )
+        validator = FileExistsValidator()
+        paths = validator._extract_paths(plan)
+        # No paths should be extracted from the multi-line span
+        assert len(paths) == 0
+
+
+class TestFileExistsValidatorMaxPathLength:
+    """Test that paths exceeding _MAX_PATH_LENGTH are rejected."""
+
+    def test_very_long_path_rejected(self, tmp_path):
+        """A path longer than 300 chars should be skipped."""
+        long_segment = "a" * 300
+        plan = f"Check `src/{long_segment}/config.yaml` for details."
+        validator = FileExistsValidator()
+        paths = validator._extract_paths(plan)
+        assert len(paths) == 0
+
+    def test_normal_length_path_accepted(self, tmp_path):
+        """A path under 300 chars should still be extracted."""
+        plan = "Check `src/config/settings.yaml` for details."
+        validator = FileExistsValidator()
+        paths = validator._extract_paths(plan)
+        path_strings = [p for p, _ln in paths]
+        assert "src/config/settings.yaml" in path_strings
+
+
+class TestTestCoverageValidatorMultilineReject:
+    """Verify TestCoverageValidator._PATH_RE also rejects multi-line spans."""
+
+    def test_multiline_backtick_not_matched(self):
+        """TestCoverageValidator should not match paths across newlines."""
+        pattern = TestCoverageValidator._PATH_RE
+        text = "`some text\nthat spans lines/file.py`"
+        assert pattern.search(text) is None
+
+    def test_single_line_still_matches(self):
+        pattern = TestCoverageValidator._PATH_RE
+        text = "`src/models/user.py`"
+        match = pattern.search(text)
+        assert match is not None
+        assert match.group(1) == "src/models/user.py"

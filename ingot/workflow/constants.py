@@ -31,7 +31,7 @@ RESEARCHER_SECTION_HEADINGS = [
 ]
 
 # Maximum auto-retry attempts when plan validation finds errors
-MAX_GENERATION_RETRIES = 2
+MAX_GENERATION_RETRIES = 3
 
 # Default timeout values (seconds)
 DEFAULT_EXECUTION_TIMEOUT = 60

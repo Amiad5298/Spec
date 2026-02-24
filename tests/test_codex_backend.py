@@ -76,7 +76,7 @@ class TestCodexBackendDelegation:
         assert output == "output"
 
     def test_run_with_callback_composes_subagent_prompt(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
@@ -227,7 +227,7 @@ class TestCodexBackendModelResolution:
         assert call_kwargs.get("model") == "default-model"
 
     def test_model_precedence_explicit_beats_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(
@@ -255,7 +255,7 @@ You are a test agent.
         assert call_kwargs.get("model") == "explicit-model"
 
     def test_model_precedence_frontmatter_beats_default(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(

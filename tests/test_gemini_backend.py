@@ -175,7 +175,7 @@ class TestGeminiBackendSystemPromptEnvVar:
         assert temp_path is None
 
     def test_run_with_callback_passes_env_with_subagent(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
@@ -214,7 +214,7 @@ class TestGeminiBackendSystemPromptEnvVar:
         assert call_kwargs.get("env") is None
 
     def test_run_print_with_output_passes_env_with_subagent(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text("You are an executor.")
@@ -261,7 +261,7 @@ class TestGeminiBackendModelResolution:
         assert call_kwargs.get("model") == "default-model"
 
     def test_model_precedence_explicit_beats_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(

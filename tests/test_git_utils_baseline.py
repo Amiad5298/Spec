@@ -155,24 +155,24 @@ class TestCheckDirtyWorkingTree:
 class TestWorkflowArtifactFiltering:
     """Tests for workflow artifact exclusion from dirty tree checks.
 
-    Workflow artifacts (.ingot/, .augment/, specs/, .DS_Store) are
+    Workflow artifacts (.ingot/runs/, .ingot/agents/, specs/, .DS_Store) are
     excluded from dirty tree checks because they are created by Steps 1-2
     and should not block Step 3 execution.
     """
 
-    def test_is_workflow_artifact_spec_dir(self):
+    def test_is_workflow_artifact_ingot_runs(self):
         from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert is_workflow_artifact(".ingot/") is True
+        assert is_workflow_artifact(".ingot/runs/") is True
         assert is_workflow_artifact(".ingot/runs/log.txt") is True
-        assert is_workflow_artifact(".ingot") is True
+        assert is_workflow_artifact(".ingot/runs") is True
 
-    def test_is_workflow_artifact_augment_dir(self):
+    def test_is_workflow_artifact_ingot_agents(self):
         from ingot.workflow.git_utils import is_workflow_artifact
 
-        assert is_workflow_artifact(".augment/") is True
-        assert is_workflow_artifact(".augment/agents/ingot-planner.md") is True
-        assert is_workflow_artifact(".augment") is True
+        assert is_workflow_artifact(".ingot/agents/") is True
+        assert is_workflow_artifact(".ingot/agents/ingot-planner.md") is True
+        assert is_workflow_artifact(".ingot/agents") is True
 
     def test_is_workflow_artifact_specs_dir(self):
         from ingot.workflow.git_utils import is_workflow_artifact
@@ -199,16 +199,7 @@ class TestWorkflowArtifactFiltering:
         spec_dir.mkdir(parents=True)
         (spec_dir / "log.txt").write_text("log content")
 
-        # Should not raise - .ingot/ is excluded
-        result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
-        assert result is True
-
-    def test_untracked_augment_dir_ignored(self, temp_git_repo):
-        augment_dir = temp_git_repo.path / ".augment" / "agents"
-        augment_dir.mkdir(parents=True)
-        (augment_dir / "ingot-planner.md").write_text("agent content")
-
-        # Should not raise - .augment/ is excluded
+        # Should not raise - .ingot/runs/ is excluded
         result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
         assert result is True
 
@@ -235,9 +226,9 @@ class TestWorkflowArtifactFiltering:
         specs_dir.mkdir(parents=True)
         (specs_dir / "plan.md").write_text("plan")
 
-        augment_dir = temp_git_repo.path / ".augment"
-        augment_dir.mkdir(parents=True)
-        (augment_dir / "agent.md").write_text("agent")
+        ingot_dir = temp_git_repo.path / ".ingot" / "agents"
+        ingot_dir.mkdir(parents=True)
+        (ingot_dir / "ingot-planner.md").write_text("agent")
 
         # Create a real change (should be detected)
         temp_git_repo.create_file("real_change.py", "code")
@@ -249,7 +240,7 @@ class TestWorkflowArtifactFiltering:
         error_msg = str(exc_info.value)
         assert "real_change.py" in error_msg
         assert "specs/" not in error_msg
-        assert ".augment/" not in error_msg
+        assert ".ingot/" not in error_msg
 
     def test_only_artifacts_present_is_clean(self, temp_git_repo):
         # Create multiple workflow artifacts
@@ -263,9 +254,9 @@ class TestWorkflowArtifactFiltering:
         spec_dir.mkdir(parents=True)
         (spec_dir / "log.txt").write_text("log")
 
-        augment_dir = temp_git_repo.path / ".augment" / "agents"
-        augment_dir.mkdir(parents=True)
-        (augment_dir / "ingot-planner.md").write_text("agent")
+        agents_dir = temp_git_repo.path / ".ingot" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "ingot-planner.md").write_text("agent")
 
         # Should be clean - only artifacts present
         result = check_dirty_working_tree(policy=DirtyTreePolicy.FAIL_FAST)
@@ -291,8 +282,8 @@ class TestWorkflowArtifactFiltering:
     def test_workflow_artifact_paths_constant_exported(self):
         from ingot.workflow.git_utils import WORKFLOW_ARTIFACT_PATHS
 
-        assert ".ingot/" in WORKFLOW_ARTIFACT_PATHS
-        assert ".augment/" in WORKFLOW_ARTIFACT_PATHS
+        assert ".ingot/runs/" in WORKFLOW_ARTIFACT_PATHS
+        assert ".ingot/agents/" in WORKFLOW_ARTIFACT_PATHS
         assert "specs/" in WORKFLOW_ARTIFACT_PATHS
         assert ".DS_Store" in WORKFLOW_ARTIFACT_PATHS
         assert ".gitignore" in WORKFLOW_ARTIFACT_PATHS

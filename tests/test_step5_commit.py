@@ -76,16 +76,16 @@ class TestGetStageableFiles:
         assert ".ingot/runs/log.txt" in excluded
 
     @patch("ingot.workflow.step5_commit.subprocess.run")
-    def test_filters_augment_artifacts(self, mock_run):
+    def test_filters_ingot_agents_artifacts(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout="?? .augment/agents/planner.md\0 M src/app.py\0",
+            stdout="?? .ingot/agents/planner.md\0 M src/app.py\0",
         )
 
         stageable, excluded = _get_stageable_files()
 
         assert "src/app.py" in stageable
-        assert ".augment/agents/planner.md" in excluded
+        assert ".ingot/agents/planner.md" in excluded
 
     @patch("ingot.workflow.step5_commit.subprocess.run")
     def test_filters_specs_artifacts(self, mock_run):

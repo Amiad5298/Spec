@@ -113,13 +113,13 @@ class TestBackendFactoryStringNormalization:
         backend = BackendFactory.create("  AuGgIe  ")
         assert backend.platform == AgentPlatform.AUGGIE
 
-    def test_create_empty_string_returns_default(self):
-        backend = BackendFactory.create("")
-        assert backend.platform == AgentPlatform.AUGGIE
+    def test_create_empty_string_raises_error(self):
+        with pytest.raises(ConfigValidationError, match="AI_BACKEND is not configured"):
+            BackendFactory.create("")
 
-    def test_create_whitespace_only_string_returns_default(self):
-        backend = BackendFactory.create("   ")
-        assert backend.platform == AgentPlatform.AUGGIE
+    def test_create_whitespace_only_string_raises_error(self):
+        with pytest.raises(ConfigValidationError, match="AI_BACKEND is not configured"):
+            BackendFactory.create("   ")
 
 
 class TestBackendFactoryThreadSafety:

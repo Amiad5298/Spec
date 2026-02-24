@@ -15,6 +15,7 @@ env/
 
 # AI Tool Metadata (Specific to your setup)
 .augment/
+.ingot/runs/
 .ai_workflow/
 .claude/
 .spec/

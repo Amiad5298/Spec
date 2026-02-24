@@ -104,24 +104,33 @@ def parse_fetch_strategy(
 
 def parse_ai_backend(
     value: str | None,
-    default: AgentPlatform = AgentPlatform.AUGGIE,
+    default: AgentPlatform | None = None,
     context: str = "",
 ) -> AgentPlatform:
     """Safely parse an AgentPlatform from a string value.
 
     Args:
         value: The string value to parse (e.g., "auggie", "cursor", "manual")
-        default: Default backend to return if value is None or empty
+        default: Default backend to return if value is None or empty.
+            If None, raises ConfigValidationError when value is empty.
         context: Context string for error messages (e.g., "AI_BACKEND")
 
     Returns:
         Parsed AgentPlatform enum member
 
     Raises:
-        ConfigValidationError: If value is not a valid AI backend
+        ConfigValidationError: If value is not a valid AI backend,
+            or if value is empty and no default is provided
     """
     if value is None or value.strip() == "":
-        return default
+        if default is not None:
+            return default
+        valid_values = [e.value for e in AgentPlatform]
+        context_msg = f" in {context}" if context else ""
+        raise ConfigValidationError(
+            f"AI_BACKEND is not configured{context_msg}. "
+            f"Please set AI_BACKEND to one of: {', '.join(valid_values)}"
+        )
 
     value_lower = value.strip().lower()
     valid_values = [e.value for e in AgentPlatform]

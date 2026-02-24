@@ -76,7 +76,7 @@ class TestClaudeBackendDelegation:
         assert output == "output"
 
     def test_run_with_callback_passes_resolved_system_prompt(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
@@ -142,7 +142,7 @@ class TestClaudeBackendDelegation:
         assert mock_run.call_args.kwargs.get("timeout_seconds") == 45.0
 
     def test_run_print_quiet_passes_system_prompt(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "ingot-planner.md"
         agent_file.write_text("You are a planner.")
@@ -160,7 +160,7 @@ class TestClaudeBackendDelegation:
         assert call_kwargs.get("system_prompt") == "You are a planner."
 
     def test_run_print_with_output_passes_system_prompt(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text("You are an executor.")
@@ -283,7 +283,7 @@ class TestClaudeBackendModelResolution:
         assert call_kwargs.get("model") == "default-model"
 
     def test_model_precedence_explicit_beats_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(
@@ -312,7 +312,7 @@ You are a test agent.
         assert call_kwargs.get("model") == "explicit-model"
 
     def test_model_precedence_frontmatter_beats_default(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(
@@ -340,7 +340,7 @@ You are a test agent.
         assert call_kwargs.get("model") == "frontmatter-model"
 
     def test_model_precedence_default_when_no_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text("You are a test agent with no frontmatter.")
@@ -362,7 +362,7 @@ You are a test agent.
         assert call_kwargs.get("model") == "default-model"
 
     def test_no_double_model_resolution(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(

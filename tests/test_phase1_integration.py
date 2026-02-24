@@ -135,11 +135,11 @@ class TestFactoryResolverIntegration:
 
 
 class TestNoDefaultBackendPolicy:
-    """Verify 'no default backend' policy is enforced at the resolver level.
+    """Verify 'no default backend' policy is enforced at all levels.
 
-    Note: The policy is enforced by resolve_backend_platform(), NOT by BackendFactory.
-    BackendFactory.create("") defaults to AUGGIE via parse_ai_backend().
-    The resolver prevents reaching the factory without explicit configuration.
+    The policy is enforced by both resolve_backend_platform() (at the resolver
+    level) and parse_ai_backend() (at the factory level). Neither will silently
+    default to any backend when the value is empty.
     """
 
     def test_resolver_raises_when_no_backend(self):
@@ -152,9 +152,11 @@ class TestNoDefaultBackendPolicy:
         # Error message guides user to spec init
         assert "ingot init" in str(exc_info.value)
 
-    def test_factory_defaults_to_auggie_for_empty_string(self):
-        backend = BackendFactory.create("")
-        assert backend.platform == AgentPlatform.AUGGIE
+    def test_factory_raises_for_empty_string(self):
+        from ingot.config.fetch_config import ConfigValidationError
+
+        with pytest.raises(ConfigValidationError):
+            BackendFactory.create("")
 
     def test_error_message_is_actionable(self):
         config = MagicMock()

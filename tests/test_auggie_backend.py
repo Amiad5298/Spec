@@ -250,7 +250,7 @@ class TestAuggieBackendModelResolution:
 
     def test_model_precedence_explicit_beats_frontmatter(self, tmp_path, monkeypatch):
         # Create a mock subagent file with frontmatter model
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(
@@ -281,7 +281,7 @@ You are a test agent.
 
     def test_model_precedence_frontmatter_beats_default(self, tmp_path, monkeypatch):
         # Create a mock subagent file with frontmatter model
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text(
@@ -312,7 +312,7 @@ You are a test agent.
 
     def test_model_precedence_default_when_no_frontmatter(self, tmp_path, monkeypatch):
         # Create a mock subagent file WITHOUT frontmatter model
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         agent_file = agents_dir / "test-agent.md"
         agent_file.write_text("You are a test agent with no frontmatter.")

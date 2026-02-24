@@ -111,7 +111,7 @@ INGOT integrates with Git while giving you full control over your commits:
 - **Automatic `.gitignore` Configuration**: On first run, INGOT adds patterns to exclude run logs (`.ingot/`), keeping your repository clean.
 - **Baseline-Anchored Diffs**: Captures a baseline commit at Step 3 start. All subsequent diffs are scoped to changes since that baseline, preventing pollution from pre-existing uncommitted changes.
 - **Dirty Tree Policy**: Configurable handling of uncommitted changes before execution (`fail-fast` to abort, `warn` to continue).
-- **Workflow Artifact Exclusion**: Files in `specs/`, `.ingot/`, and `.augment/` are excluded from commits and dirty tree checks.
+- **Workflow Artifact Exclusion**: Files in `specs/` and `.ingot/` are excluded from commits and dirty tree checks.
 
 ### Automated Code Review
 Optional reviews that validate work quality:
@@ -746,18 +746,18 @@ ingot --config
 
 ## Agent Customization
 
-INGOT uses specialized AI agents defined in `.augment/agents/`. These are created automatically on first run and updated when INGOT detects newer internal templates. All backends load subagent prompts from this directory.
+INGOT uses specialized AI agents defined in `.ingot/agents/`. These are created automatically on first run and updated when INGOT detects newer internal templates. All backends load subagent prompts from this directory.
 
 ### Agent Files
 
 | File | Purpose |
 |------|------------|
-| `.augment/agents/ingot-researcher.md` | Discovers codebase context before plan generation |
-| `.augment/agents/ingot-planner.md` | Creates implementation plans from tickets |
-| `.augment/agents/ingot-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
-| `.augment/agents/ingot-tasklist-refiner.md` | Extracts test tasks into the INDEPENDENT category |
-| `.augment/agents/ingot-implementer.md` | Executes individual tasks with codebase awareness |
-| `.augment/agents/ingot-reviewer.md` | Validates completed tasks with PASS/NEEDS_ATTENTION output |
+| `.ingot/agents/ingot-researcher.md` | Discovers codebase context before plan generation |
+| `.ingot/agents/ingot-planner.md` | Creates implementation plans from tickets |
+| `.ingot/agents/ingot-tasklist.md` | Generates task lists with FUNDAMENTAL/INDEPENDENT categories |
+| `.ingot/agents/ingot-tasklist-refiner.md` | Extracts test tasks into the INDEPENDENT category |
+| `.ingot/agents/ingot-implementer.md` | Executes individual tasks with codebase awareness |
+| `.ingot/agents/ingot-reviewer.md` | Validates completed tasks with PASS/NEEDS_ATTENTION output |
 
 ### Agent File Format
 

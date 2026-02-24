@@ -82,6 +82,6 @@ dmypy.json
 Thumbs.db
 
 # INGOT - Run logs and temporary files
-# These are created during workflow execution and should not be committed
-.ingot/
+# Only .ingot/runs/ is ignored; .ingot/agents/ is committable for team sharing
+.ingot/runs/
 *.log

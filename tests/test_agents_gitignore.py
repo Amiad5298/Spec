@@ -51,12 +51,12 @@ class TestGitignorePatternsConfiguration:
     """Tests for INGOT_GITIGNORE_PATTERNS configuration.
 
     These tests verify the patterns list is correctly configured to:
-    - Ignore runtime artifacts (.ingot/, *.log)
+    - Ignore runtime artifacts (.ingot/runs/, *.log)
     - NOT ignore user-visible files (specs/ directory with plan/tasklist .md files)
     """
 
-    def test_patterns_include_spec_directory(self):
-        assert ".ingot/" in INGOT_GITIGNORE_PATTERNS
+    def test_patterns_include_ingot_runs_directory(self):
+        assert ".ingot/runs/" in INGOT_GITIGNORE_PATTERNS
 
     def test_patterns_include_log_files(self):
         assert "*.log" in INGOT_GITIGNORE_PATTERNS
@@ -66,7 +66,7 @@ class TestGitignorePatternsConfiguration:
         assert "specs" not in INGOT_GITIGNORE_PATTERNS
 
     def test_patterns_only_contain_expected_entries(self):
-        expected_patterns = [".ingot/", "*.log"]
+        expected_patterns = [".ingot/runs/", "*.log"]
         assert INGOT_GITIGNORE_PATTERNS == expected_patterns
 
 
@@ -155,7 +155,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create .gitignore with INGOT patterns already present
-        existing_content = "*.pyc\n.ingot/\n*.log\n"
+        existing_content = "*.pyc\n.ingot/runs/\n*.log\n"
         gitignore_path.write_text(existing_content)
 
         result = ensure_gitignore_configured(quiet=True)
@@ -171,7 +171,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create .gitignore with only one INGOT pattern
-        existing_content = "*.pyc\n.ingot/\n"
+        existing_content = "*.pyc\n.ingot/runs/\n"
         gitignore_path.write_text(existing_content)
 
         result = ensure_gitignore_configured(quiet=True)
@@ -179,8 +179,8 @@ __pycache__/
         assert result is True
         content = gitignore_path.read_text()
 
-        # .ingot/ should appear only once (not duplicated)
-        assert content.count(".ingot/") == 1
+        # .ingot/runs/ should appear only once (not duplicated)
+        assert content.count(".ingot/runs/") == 1
         # *.log should be added
         assert "*.log" in content
 
@@ -210,7 +210,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create .gitignore with marker but only one pattern
-        existing_content = f"*.pyc\n{INGOT_GITIGNORE_MARKER}\n.ingot/\n"
+        existing_content = f"*.pyc\n{INGOT_GITIGNORE_MARKER}\n.ingot/runs/\n"
         gitignore_path.write_text(existing_content)
 
         result = ensure_gitignore_configured(quiet=True)
@@ -228,7 +228,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create fully configured .gitignore
-        gitignore_path.write_text(".ingot/\n*.log\n")
+        gitignore_path.write_text(".ingot/runs/\n*.log\n")
 
         result = ensure_gitignore_configured(quiet=True)
         assert result is True
@@ -249,7 +249,7 @@ __pycache__/
         gitignore_path = tmp_path / ".gitignore"
 
         # Create .gitignore with patterns only in comments
-        existing_content = "# Ignore .ingot/ for logs\n# *.log files\n"
+        existing_content = "# Ignore .ingot/runs/ for logs\n# *.log files\n"
         gitignore_path.write_text(existing_content)
 
         result = ensure_gitignore_configured(quiet=True)
@@ -259,7 +259,7 @@ __pycache__/
 
         # All patterns should be added as actual rules (not just comments)
         lines = [line.strip() for line in content.split("\n") if not line.strip().startswith("#")]
-        assert ".ingot/" in lines
+        assert ".ingot/runs/" in lines
         assert "*.log" in lines
 
 
@@ -285,7 +285,7 @@ class TestRepoRootDetection:
 
         # .gitignore at repo root should be updated
         content = (repo_root / ".gitignore").read_text()
-        assert ".ingot/" in content
+        assert ".ingot/runs/" in content
         assert "*.log" in content
 
         # No .gitignore should be created in the subdirectory
@@ -306,4 +306,4 @@ class TestRepoRootDetection:
         gitignore_path = no_git_dir / ".gitignore"
         assert gitignore_path.exists()
         content = gitignore_path.read_text()
-        assert ".ingot/" in content
+        assert ".ingot/runs/" in content

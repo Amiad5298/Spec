@@ -1,7 +1,7 @@
 """Subagent file management for INGOT.
 
 This module provides utilities for managing INGOT subagent definition files
-in the `.augment/agents/` directory.
+in the `.ingot/agents/` directory.
 
 Supports versioned agent files with automatic update detection:
 - Adds ingot_version and ingot_content_hash to frontmatter
@@ -885,12 +885,12 @@ AGENT_DEFINITIONS = _AgentDefinitionsProxy()
 
 
 def get_agents_dir() -> Path:
-    """Get the path to the .augment/agents directory.
+    """Get the path to the .ingot/agents directory.
 
     Returns:
         Path to the agents directory
     """
-    return Path(".augment/agents")
+    return Path(".ingot/agents")
 
 
 def _check_agent_needs_update(agent_path: Path, agent_name: str) -> tuple[bool, bool]:
@@ -978,9 +978,10 @@ def _update_agent_file(agent_path: Path, agent_name: str, quiet: bool = False) -
 
 # Patterns that INGOT requires in the target project's .gitignore
 # Note: We do NOT ignore specs/ because plan and tasklist .md files should be visible to users
-# Only runtime artifacts (.ingot/ for logs/state, *.log files) are ignored
+# Only runtime artifacts (.ingot/runs/ for logs/state, *.log files) are ignored
+# Note: .ingot/agents/ contains project-level config that should be committable
 INGOT_GITIGNORE_PATTERNS = [
-    ".ingot/",
+    ".ingot/runs/",
     "*.log",
 ]
 
@@ -1101,7 +1102,7 @@ def ensure_gitignore_configured(quiet: bool = False) -> bool:
 def ensure_agents_installed(quiet: bool = False) -> bool:
     """Ensure INGOT subagent files exist and are up-to-date.
 
-    Creates .augment/agents/ directory and manages agent files:
+    Creates .ingot/agents/ directory and manages agent files:
     - Creates missing agent files with versioned frontmatter
     - Updates outdated files if they haven't been customized by the user
     - Preserves user customizations (creates .md.new file for review)
@@ -1134,7 +1135,7 @@ def ensure_agents_installed(quiet: bool = False) -> bool:
     # Ensure directory exists
     if not agents_dir.exists():
         if not quiet:
-            print_step("Creating .augment/agents/ directory...")
+            print_step("Creating .ingot/agents/ directory...")
         agents_dir.mkdir(parents=True, exist_ok=True)
 
     # Process each agent

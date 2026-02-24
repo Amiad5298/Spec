@@ -11,7 +11,7 @@ The official configuration format is flat KEY=VALUE (environment variable style)
 See ingot/config/templates/fetch_config.template for the complete format reference.
 
 Examples:
-    AI_BACKEND=auggie
+    AI_BACKEND=claude
     FETCH_STRATEGY_DEFAULT=auto
     FALLBACK_JIRA_TOKEN=${JIRA_API_TOKEN}
 

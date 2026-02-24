@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 class SubagentMetadata:
     """Parsed frontmatter from subagent prompt files.
 
-    Subagent prompts in `.augment/agents/*.md` may contain YAML frontmatter
+    Subagent prompts in `.ingot/agents/*.md` may contain YAML frontmatter
     with metadata fields. This dataclass holds the parsed values.
 
     Per Decision 6 (Subagent Frontmatter Handling), YAML frontmatter is stripped
@@ -204,7 +204,7 @@ class AIBackend(Protocol):
         Args:
             prompt: The prompt to send to the AI.
             output_callback: Called for each line of output (stripped of newline).
-            subagent: Subagent name (loads prompt from .augment/agents/{name}.md).
+            subagent: Subagent name (loads prompt from .ingot/agents/{name}.md).
             model: Model override (best-effort, safely ignored if unsupported).
             dont_save_session: If True, isolate this execution (no session persistence).
             timeout_seconds: Maximum execution time (None = no timeout).
@@ -439,7 +439,7 @@ class BaseBackend(ABC):
         Per Decision 6 (Subagent Frontmatter Handling), YAML frontmatter is
         stripped from prompts.
 
-        The function looks for files in `.augment/agents/{subagent}.md`.
+        The function looks for files in `.ingot/agents/{subagent}.md`.
         If the file starts with `---`, it parses the YAML frontmatter.
 
         Example:
@@ -447,7 +447,7 @@ class BaseBackend(ABC):
             >>> if metadata.model:
             ...     print(f"Using model: {metadata.model}")
         """
-        agent_path = Path(".augment/agents") / f"{subagent}.md"
+        agent_path = Path(".ingot/agents") / f"{subagent}.md"
         if not agent_path.exists():
             logger.debug(
                 "Subagent file not found",

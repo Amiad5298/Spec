@@ -37,8 +37,8 @@ class DirtyWorkingTreeError(Exception):
 # that the tool itself creates during Steps 1-2 and should not block Step 3.
 WORKFLOW_ARTIFACT_PATHS = frozenset(
     {
-        ".ingot/",  # Run logs and workflow state
-        ".augment/",  # Agent definition files
+        ".ingot/runs/",  # Run logs and workflow state (gitignored)
+        ".ingot/agents/",  # Auto-generated agent definitions (committable, but not auto-staged)
         "specs/",  # Generated specs and task lists
         ".DS_Store",  # macOS system file
         ".gitignore",  # Modified by ensure_gitignore_configured() to add INGOT patterns
@@ -194,9 +194,9 @@ def check_dirty_working_tree(
     - Staged changes (index vs HEAD, excluding workflow artifacts)
     - Untracked files (excluding workflow artifacts)
 
-    Workflow artifacts (specs/, .ingot/, .augment/, .DS_Store) are
-    excluded from this check since they are created by Steps 1-2 and
-    should not block Step 3 execution.
+    Workflow artifacts (specs/, .ingot/runs/, .ingot/agents/, .DS_Store)
+    are excluded from this check since they are created by Steps 1-2
+    and should not block Step 3 execution.
 
     Args:
         policy: How to handle a dirty working tree.

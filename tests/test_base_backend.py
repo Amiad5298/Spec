@@ -139,7 +139,7 @@ class TestBaseBackendDefaults:
 
 class TestParseSubagentPrompt:
     def test_parse_subagent_prompt_with_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         subagent_file = agents_dir / "test-agent.md"
         subagent_file.write_text(
@@ -155,7 +155,7 @@ class TestParseSubagentPrompt:
         assert body == "You are a test agent."
 
     def test_parse_subagent_prompt_without_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         subagent_file = agents_dir / "plain-agent.md"
         subagent_file.write_text("You are a plain agent without frontmatter.")
@@ -177,7 +177,7 @@ class TestParseSubagentPrompt:
         assert body == ""
 
     def test_parse_subagent_prompt_invalid_yaml(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         subagent_file = agents_dir / "invalid-agent.md"
         subagent_file.write_text("---\ninvalid: yaml: content:\n---\nBody text.")
@@ -190,7 +190,7 @@ class TestParseSubagentPrompt:
         assert metadata.model is None
 
     def test_parse_subagent_prompt_model_only(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         subagent_file = agents_dir / "model-only.md"
         subagent_file.write_text("---\nmodel: gpt-4\n---\nPrompt body here.")
@@ -204,7 +204,7 @@ class TestParseSubagentPrompt:
         assert body == "Prompt body here."
 
     def test_parse_subagent_prompt_empty_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         subagent_file = agents_dir / "empty-frontmatter.md"
         subagent_file.write_text("---\n---\nBody after empty frontmatter.")
@@ -218,7 +218,7 @@ class TestParseSubagentPrompt:
         assert body == "Body after empty frontmatter."
 
     def test_parse_subagent_prompt_extra_fields_ignored(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         subagent_file = agents_dir / "extra-fields.md"
         subagent_file.write_text(
@@ -241,7 +241,7 @@ class TestResolveModel:
         assert result == "override-model"
 
     def test_resolve_model_from_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         (agents_dir / "model-agent.md").write_text("---\nmodel: frontmatter-model\n---\n")
         monkeypatch.chdir(tmp_path)
@@ -261,7 +261,7 @@ class TestResolveModel:
         assert result is None
 
     def test_resolve_model_explicit_overrides_frontmatter(self, tmp_path, monkeypatch):
-        agents_dir = tmp_path / ".augment" / "agents"
+        agents_dir = tmp_path / ".ingot" / "agents"
         agents_dir.mkdir(parents=True)
         (agents_dir / "model-agent.md").write_text("---\nmodel: frontmatter-model\n---\n")
         monkeypatch.chdir(tmp_path)

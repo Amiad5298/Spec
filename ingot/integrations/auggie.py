@@ -39,7 +39,7 @@ class AgentDefinition:
 def _find_agent_file(agent_name: str) -> Path | None:
     """Find the agent definition file for a given agent name.
 
-    Searches in workspace (.augment/agents/) and user (~/.augment/agents/) locations.
+    Searches in workspace (.ingot/agents/) and user (~/.ingot/agents/) locations.
 
     Args:
         agent_name: Name of the agent to find
@@ -48,12 +48,12 @@ def _find_agent_file(agent_name: str) -> Path | None:
         Path to the agent file if found, None otherwise
     """
     # Check workspace first
-    workspace_path = Path(".augment/agents") / f"{agent_name}.md"
+    workspace_path = Path(".ingot/agents") / f"{agent_name}.md"
     if workspace_path.exists():
         return workspace_path
 
     # Check user directory
-    user_path = Path.home() / ".augment/agents" / f"{agent_name}.md"
+    user_path = Path.home() / ".ingot/agents" / f"{agent_name}.md"
     if user_path.exists():
         return user_path
 

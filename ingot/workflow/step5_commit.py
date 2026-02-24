@@ -6,7 +6,7 @@ and executing the commit.
 
 Philosophy: Automate the mundane. The user should review the diff summary,
 tweak the commit message if needed, and confirm. Workflow artifacts
-(specs/, .ingot/, .augment/) are excluded from staging.
+(specs/, .ingot/runs/, .ingot/agents/) are excluded from staging.
 """
 
 import subprocess

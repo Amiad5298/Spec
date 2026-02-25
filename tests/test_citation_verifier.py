@@ -233,6 +233,46 @@ Source: `src/main/GaugeMonitor.java:9-12`
         assert checks == []
 
 
+class TestCitationVerifierPathTraversal:
+    """Test path traversal protection."""
+
+    def test_traversal_blocked(self, sample_repo):
+        """Citation with ../../ path traversal should be blocked."""
+        researcher_output = """\
+#### Pattern: Traversal
+Source: `../../etc/config.txt:1-5`
+```java
+public class SecretConfig {
+    DistributionSummary.builder("test").register(registry);
+}
+```"""
+
+        verifier = CitationVerifier(sample_repo)
+        annotated, checks = verifier.verify_citations(researcher_output)
+
+        assert len(checks) == 1
+        assert not checks[0].is_verified
+        assert "path traversal blocked" in checks[0].reason
+
+    def test_absolute_path_blocked(self, sample_repo):
+        """Citation with absolute path should be blocked."""
+        researcher_output = """\
+#### Pattern: Absolute
+Source: `/etc/config.txt:1-3`
+```java
+public class SecretConfig {
+    SomeClass obj = new SomeClass();
+}
+```"""
+
+        verifier = CitationVerifier(sample_repo)
+        annotated, checks = verifier.verify_citations(researcher_output)
+
+        assert len(checks) == 1
+        assert not checks[0].is_verified
+        assert "path traversal blocked" in checks[0].reason
+
+
 class TestCitationThresholds:
     """Test threshold variation affects verification outcome."""
 

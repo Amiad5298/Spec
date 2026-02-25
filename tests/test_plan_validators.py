@@ -1863,6 +1863,78 @@ class FarAway:
         findings = validator.validate(plan, ctx)
         assert findings == []
 
+    def test_long_code_block_verifies_correctly(self, tmp_path):
+        """A citation next to a code block longer than 5 lines should still verify."""
+        # Create a source file with >20 lines of matching content
+        source_lines = ["class MetricsHelper:"] + [
+            f"    line_{i} = DistributionSummary()" for i in range(20)
+        ]
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "helper.py").write_text("\n".join(source_lines) + "\n")
+
+        # Build plan with a 20-line code block (opening fence far from closing)
+        code_lines = "\n".join(source_lines)
+        plan = f"""\
+## Implementation Steps
+1. Add metrics
+Pattern source: `src/helper.py:1-21`
+```python
+{code_lines}
+```
+"""
+        validator = CitationContentValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        mismatch_warnings = [
+            f
+            for f in findings
+            if f.severity == ValidationSeverity.WARNING and "mismatch" in f.message.lower()
+        ]
+        assert mismatch_warnings == []
+
+    def test_long_code_block_mismatch_detected(self, tmp_path):
+        """A citation next to a long code block with non-matching file should warn."""
+        # File has completely different content
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "other.py").write_text("class CompletelyDifferent:\n    pass\n")
+
+        # 20-line code block references identifiers not in the file
+        code_lines = "\n".join(
+            [f"    DistributionSummary.builder('{i}').register(registry)" for i in range(20)]
+        )
+        plan = f"""\
+## Implementation Steps
+Pattern source: `src/other.py:1-2`
+```java
+{code_lines}
+```
+"""
+        validator = CitationContentValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        mismatch_warnings = [
+            f
+            for f in findings
+            if f.severity == ValidationSeverity.WARNING and "mismatch" in f.message.lower()
+        ]
+        assert len(mismatch_warnings) >= 1
+
+    def test_path_traversal_blocked(self, tmp_path):
+        """Citation with ../../ path traversal should produce a WARNING."""
+        plan = """\
+## Implementation Steps
+Pattern source: `../../etc/config.txt:1-5`
+```python
+class Something:
+    pass
+```
+"""
+        validator = CitationContentValidator()
+        ctx = ValidationContext(repo_root=tmp_path)
+        findings = validator.validate(plan, ctx)
+        warnings = [f for f in findings if f.severity == ValidationSeverity.WARNING]
+        assert any("traversal" in f.message.lower() for f in warnings)
+
 
 # =============================================================================
 # TestRegistrationIdempotencyValidator
@@ -1995,7 +2067,61 @@ public class Config {
         validator = RegistrationIdempotencyValidator()
         ctx = ValidationContext()
         findings = validator.validate(plan, ctx)
-        assert len(findings) == 1
+        assert len(findings) >= 1
+
+    def test_cross_block_dual_registration_warns(self):
+        """@Component class MyService in block 1, @Bean MyService in block 2 → WARNING."""
+        plan = """\
+## Step 1
+```java
+@Component
+public class MyService {
+    private final SomeDep dep;
+    public MyService(SomeDep dep) { this.dep = dep; }
+}
+```
+
+## Step 2
+```java
+@Configuration
+public class Config {
+    @Bean
+    public MyService myService() { return new MyService(); }
+}
+```
+"""
+        validator = RegistrationIdempotencyValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        cross_block = [f for f in findings if "cross-block" in f.message.lower()]
+        assert len(cross_block) == 1
+        assert "MyService" in cross_block[0].message
+
+    def test_cross_block_different_classes_no_warning(self):
+        """@Component class Foo in block 1, @Bean Bar in block 2 → no cross-block warning."""
+        plan = """\
+## Step 1
+```java
+@Component
+public class Foo {
+    // ...
+}
+```
+
+## Step 2
+```java
+@Configuration
+public class Config {
+    @Bean
+    public Bar bar() { return new Bar(); }
+}
+```
+"""
+        validator = RegistrationIdempotencyValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        cross_block = [f for f in findings if "cross-block" in f.message.lower()]
+        assert cross_block == []
 
 
 # =============================================================================

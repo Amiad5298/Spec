@@ -189,7 +189,7 @@ class ManifestParser:
         # Match include ':module-name' or include(':module-name')
         # Handles comma-separated lists: include ':a', ':b', ':c'
         include_re = re.compile(r"""include\s*\(?([^)\n]+)\)?""")
-        module_name_re = re.compile(r"""['"]:([\w.-]+)['"]""")
+        module_name_re = re.compile(r"""['"]:([\w.:-]+)['"]""")
         for include_match in include_re.finditer(content):
             args_text = include_match.group(1)
             for m in module_name_re.finditer(args_text):
@@ -230,7 +230,7 @@ class ManifestParser:
         """Extract inter-project dependency references from a Gradle build file."""
         content = build_path.read_text(errors="replace")
         # Match project(':module-name') dependencies
-        project_dep_re = re.compile(r"""project\s*\(\s*['"]:([\w.-]+)['"]\s*\)""")
+        project_dep_re = re.compile(r"""project\s*\(\s*['"]:([\w.:-]+)['"]\s*\)""")
         for m in project_dep_re.finditer(content):
             dep_name = m.group(1)
             if dep_name in all_names:

@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ingot.discovery.citation_utils import IDENTIFIER_RE, safe_resolve_path
 from ingot.utils.logging import log_message
 
 # Matches citations like: Source: `path/to/file.py:10-20`
@@ -20,17 +21,6 @@ from ingot.utils.logging import log_message
 _CITATION_RE = re.compile(
     r"Source:\s*`?([^`\n]+?\.\w{1,8}):(\d+)(?:-(\d+))?`?",
     re.IGNORECASE,
-)
-
-# Extracts identifiers: PascalCase words, dotted method calls, import names.
-# Matches: ClassName, method_name, package.method(, @Annotation
-_IDENTIFIER_RE = re.compile(
-    r"(?:"
-    r"@[A-Z]\w+"  # Annotations: @Component, @Bean
-    r"|[A-Z][a-zA-Z0-9]{2,}"  # PascalCase: Foo, Bar, URL, DistributionSummary (3+ chars)
-    r"|\w+\.\w+(?=\()"  # Method calls: builder.register( — lookahead excludes '('
-    r"|[a-z_]\w{2,}(?=\()"  # Function calls: register_metric(
-    r")"
 )
 
 # Marker templates
@@ -137,7 +127,17 @@ class CitationVerifier:
         snippet_ids: set[str],
     ) -> CitationCheck:
         """Verify a single citation against disk."""
-        abs_path = self._repo_root / file_path
+        abs_path = safe_resolve_path(self._repo_root, file_path)
+        if abs_path is None:
+            return CitationCheck(
+                file_path=file_path,
+                start_line=start_line,
+                end_line=end_line,
+                is_verified=False,
+                expected_ids=frozenset(snippet_ids),
+                found_ids=frozenset(),
+                reason="path traversal blocked",
+            )
 
         try:
             if not abs_path.is_file():
@@ -168,7 +168,7 @@ class CitationVerifier:
                 )
 
             cited_text = "\n".join(all_lines[range_start:range_end])
-            found_ids = set(_IDENTIFIER_RE.findall(cited_text))
+            found_ids = set(IDENTIFIER_RE.findall(cited_text))
 
         except OSError as exc:
             return CitationCheck(
@@ -231,7 +231,7 @@ class CitationVerifier:
             return set()
 
         snippet_text = "\n".join(lines[block_start:block_end])
-        return set(_IDENTIFIER_RE.findall(snippet_text))
+        return set(IDENTIFIER_RE.findall(snippet_text))
 
 
 __all__ = ["CitationCheck", "CitationVerifier"]

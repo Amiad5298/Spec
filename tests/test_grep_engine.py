@@ -161,6 +161,25 @@ class TestGrepEngineBatch:
         assert results == {}
 
 
+class TestGrepEngineLargeFile:
+    """Test that large files are rejected before being read into memory."""
+
+    def test_large_file_rejected_without_full_read(self, sample_repo, monkeypatch):
+        """File exceeding max_file_size should be skipped via stat(), not read_bytes()."""
+        tmp_path, file_paths = sample_repo
+        engine = GrepEngine(tmp_path, file_paths, max_file_size=100)
+
+        large_file = tmp_path / "src" / "foo.py"
+
+        # Make foo.py large (>100 bytes) so stat() rejects it.
+        large_file.write_text("x" * 200)
+
+        # Verify the file is skipped and no match is returned from it
+        matches = engine.search("x")
+        foo_matches = [m for m in matches if m.file == PurePosixPath("src/foo.py")]
+        assert foo_matches == []
+
+
 class TestGrepMatchDataclass:
     """Test GrepMatch properties."""
 

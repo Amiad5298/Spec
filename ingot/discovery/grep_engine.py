@@ -218,9 +218,11 @@ class GrepEngine:
     def _read_file_lines(self, abs_path: Path) -> list[str] | None:
         """Read a file into lines, or return None if unreadable/binary/too large."""
         try:
-            raw = abs_path.read_bytes()
-            if len(raw) > self._max_file_size:
+            # Check file size via stat() BEFORE reading to avoid loading
+            # multi-GB files into memory just to reject them.
+            if abs_path.stat().st_size > self._max_file_size:
                 return None
+            raw = abs_path.read_bytes()
             if b"\x00" in raw[:8192]:
                 return None
             return raw.decode("utf-8", errors="replace").splitlines()

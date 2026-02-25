@@ -292,6 +292,40 @@ class TestJavaScriptConventions:
 # ------------------------------------------------------------------
 
 
+class TestTestDirectoryPreference:
+    """Test that files in test directories are ranked higher."""
+
+    def test_test_directory_preferred_over_non_test(self):
+        """File in tests/ should be ranked before same-name file in docs/examples/."""
+        mapper = _make_mapper(
+            {
+                "test_foo": [
+                    "docs/examples/test_foo.py",
+                    "tests/test_foo.py",
+                ],
+            }
+        )
+        results = mapper.find_tests("src/foo.py")
+        assert len(results) == 2
+        # The file in tests/ should come first
+        assert results[0] == PurePosixPath("tests/test_foo.py")
+        assert results[1] == PurePosixPath("docs/examples/test_foo.py")
+
+    def test_multiple_test_dirs_all_preferred(self):
+        """Files in __tests__ and spec/ should both rank above non-test dirs."""
+        mapper = _make_mapper(
+            {
+                "foo.spec": [
+                    "src/utils/foo.spec.ts",
+                    "src/__tests__/foo.spec.ts",
+                ],
+            }
+        )
+        results = mapper.find_tests("src/foo.ts")
+        assert len(results) == 2
+        assert results[0] == PurePosixPath("src/__tests__/foo.spec.ts")
+
+
 class TestEdgeCases:
     """No test found, unknown extension, dedup."""
 

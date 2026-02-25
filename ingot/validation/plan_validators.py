@@ -8,6 +8,7 @@ default registry with all standard validators.
 import bisect
 import re
 
+from ingot.discovery.citation_utils import IDENTIFIER_RE, safe_resolve_path
 from ingot.validation.base import (
     ValidationContext,
     ValidationFinding,
@@ -920,11 +921,6 @@ class CitationContentValidator(Validator):
         re.IGNORECASE,
     )
 
-    # Reuses the identifier extraction regex from citation_verifier
-    _IDENTIFIER_RE = re.compile(
-        r"(?:" r"@[A-Z]\w+" r"|[A-Z][a-zA-Z0-9]{2,}" r"|\w+\.\w+\(" r"|[a-z_]\w{2,}(?=\()" r")"
-    )
-
     _OVERLAP_THRESHOLD = 0.5
 
     @property
@@ -939,6 +935,10 @@ class CitationContentValidator(Validator):
         lines = content.splitlines()
         line_index = _build_line_index(content)
 
+        # Pre-parse all code blocks once (used to find the nearest block
+        # for every citation instead of the old window-limited scan).
+        code_blocks, _ = _extract_code_blocks(lines)
+
         for m in self._PATTERN_SOURCE_RE.finditer(content):
             file_path_str = m.group(1).strip()
             start_line = int(m.group(2))
@@ -947,12 +947,30 @@ class CitationContentValidator(Validator):
             citation_line_num = _line_number_at(line_index, m.start())
 
             # Find adjacent code block (within 5 lines before or after)
-            snippet_ids = self._extract_nearby_code_identifiers(lines, citation_line_num - 1)
+            snippet_ids = self._extract_nearby_code_identifiers(
+                lines, citation_line_num - 1, code_blocks
+            )
             if not snippet_ids:
                 continue  # No code block to verify against
 
+            # Guard against path traversal
+            abs_path = safe_resolve_path(context.repo_root, file_path_str)
+            if abs_path is None:
+                findings.append(
+                    ValidationFinding(
+                        validator_name=self.name,
+                        severity=ValidationSeverity.WARNING,
+                        message=(
+                            f"Pattern source path blocked (traversal): `{file_path_str}` "
+                            f"(cited at line {citation_line_num})"
+                        ),
+                        line_number=citation_line_num,
+                        suggestion="Use a relative path within the repository.",
+                    )
+                )
+                continue
+
             # Read the actual file
-            abs_path = context.repo_root / file_path_str
             try:
                 if not abs_path.is_file():
                     findings.append(
@@ -990,7 +1008,7 @@ class CitationContentValidator(Validator):
                     continue
 
                 cited_text = "\n".join(file_lines[range_start:range_end])
-                found_ids = set(self._IDENTIFIER_RE.findall(cited_text))
+                found_ids = set(IDENTIFIER_RE.findall(cited_text))
 
                 overlap = snippet_ids & found_ids
                 ratio = len(overlap) / len(snippet_ids) if snippet_ids else 1.0
@@ -1019,32 +1037,32 @@ class CitationContentValidator(Validator):
 
         return findings
 
-    def _extract_nearby_code_identifiers(self, lines: list[str], citation_idx: int) -> set[str]:
-        """Extract identifiers from the nearest code block (before or after citation)."""
-        # Search forward for code block (up to 5 lines)
-        ids = self._scan_for_code_block(lines, citation_idx + 1, citation_idx + 6)
-        if ids:
-            return ids
-        # Search backward for code block (up to 5 lines)
-        return self._scan_for_code_block(lines, max(0, citation_idx - 5), citation_idx)
+    @staticmethod
+    def _extract_nearby_code_identifiers(
+        lines: list[str],
+        citation_idx: int,
+        code_blocks: list[tuple[int, int]],
+    ) -> set[str]:
+        """Extract identifiers from the nearest code block (within 5 lines).
 
-    def _scan_for_code_block(self, lines: list[str], start: int, end: int) -> set[str]:
-        """Scan a range of lines for a fenced code block and extract identifiers."""
-        block_start = None
-        block_end = None
+        Uses the pre-parsed *code_blocks* list so that long code blocks
+        (whose closing fence is far from the citation) are still found.
+        """
+        best_block: tuple[int, int] | None = None
+        best_distance = float("inf")
 
-        for j in range(start, min(end, len(lines))):
-            if lines[j].strip().startswith("```"):
-                if block_start is None:
-                    block_start = j + 1
-                else:
-                    block_end = j
-                    break
+        for open_line, close_line in code_blocks:
+            # Distance = minimum gap between citation and either boundary
+            dist = min(abs(citation_idx - open_line), abs(citation_idx - close_line))
+            if dist <= 5 and dist < best_distance:
+                best_distance = dist
+                best_block = (open_line, close_line)
 
-        if block_start is not None and block_end is not None:
-            snippet_text = "\n".join(lines[block_start:block_end])
-            return set(self._IDENTIFIER_RE.findall(snippet_text))
-        return set()
+        if best_block is None:
+            return set()
+
+        snippet_text = "\n".join(lines[best_block[0] + 1 : best_block[1]])
+        return set(IDENTIFIER_RE.findall(snippet_text))
 
 
 class RegistrationIdempotencyValidator(Validator):
@@ -1075,7 +1093,24 @@ class RegistrationIdempotencyValidator(Validator):
         ("CDI @Produces", re.compile(r"@Produces\b")),
     ]
 
-    # Extract class/type name being registered
+    # Regex to extract class name following an annotation-based registration marker.
+    # Bridges up to ~200 chars between the annotation and the class keyword so that
+    # intermediate annotations/modifiers (e.g. @Scope, public, abstract) don't break
+    # the match.
+    _ANNOTATION_CLASS_RE = re.compile(
+        r"@(?:Component|Service|Repository|Controller|RestController|Injectable"
+        r"|ApplicationScoped|RequestScoped|SessionScoped|Dependent)\b"
+        r"[\s\S]{0,200}?\bclass\s+(\w+)"
+    )
+
+    # Regex to extract the return type of a @Bean / @Produces method.
+    # Known limitations: does not handle generics (e.g. Optional<Foo> captures
+    # "Optional"), static modifiers, or annotations between @Bean and the method
+    # signature.  Acceptable as a heuristic for plan-level validation.
+    _BEAN_RETURN_TYPE_RE = re.compile(
+        r"@(?:Bean|Produces)\b[^\n]*\n\s*(?:(?:public|protected|private|static)\s+)*(\w+)\s+\w+\s*\("
+    )
+
     @property
     def name(self) -> str:
         return "Registration Idempotency"
@@ -1086,10 +1121,18 @@ class RegistrationIdempotencyValidator(Validator):
 
         code_blocks, _ = _extract_code_blocks(lines)
 
-        # Check each code block for dual registration
+        # Phase 1: per-block dual registration (existing logic)
+        # Also collect per-block class sets for cross-block Phase 2.
+        per_block_annotation: list[set[str]] = []
+        per_block_explicit: list[set[str]] = []
+
         for block_open, block_close in code_blocks:
             block_text = "\n".join(lines[block_open + 1 : block_close])
             if len(block_text.strip()) < 10:
+                # Always append (even empty sets) to keep indices aligned
+                # with code_blocks for Phase 2 cross-block correlation.
+                per_block_annotation.append(set())
+                per_block_explicit.append(set())
                 continue
 
             # Check for annotation-based registration
@@ -1104,7 +1147,7 @@ class RegistrationIdempotencyValidator(Validator):
                 if pattern.search(block_text):
                     explicit_matches.append(label)
 
-            # Flag if both annotation AND explicit registration found
+            # Flag if both annotation AND explicit registration found in same block
             if annotation_matches and explicit_matches:
                 findings.append(
                     ValidationFinding(
@@ -1124,6 +1167,56 @@ class RegistrationIdempotencyValidator(Validator):
                         ),
                     )
                 )
+
+            # Collect class names per block for cross-block Phase 2
+            block_ann: set[str] = set()
+            for m in self._ANNOTATION_CLASS_RE.finditer(block_text):
+                block_ann.add(m.group(1))
+            block_exp: set[str] = set()
+            for m in self._BEAN_RETURN_TYPE_RE.finditer(block_text):
+                block_exp.add(m.group(1))
+
+            per_block_annotation.append(block_ann)
+            per_block_explicit.append(block_exp)
+
+        # Phase 2: cross-block correlation — same class annotated in one
+        # block and explicitly registered in a DIFFERENT block.
+        all_annotation_classes: set[str] = set()
+        all_explicit_classes: set[str] = set()
+        for ann_set in per_block_annotation:
+            all_annotation_classes |= ann_set
+        for exp_set in per_block_explicit:
+            all_explicit_classes |= exp_set
+
+        # Only flag classes that appear in DIFFERENT blocks
+        cross_block_candidates = all_annotation_classes & all_explicit_classes
+        truly_cross_block: set[str] = set()
+        for cls_name in cross_block_candidates:
+            # Check that the class is NOT always in the same block
+            ann_blocks = {i for i, s in enumerate(per_block_annotation) if cls_name in s}
+            exp_blocks = {i for i, s in enumerate(per_block_explicit) if cls_name in s}
+            if ann_blocks != exp_blocks:
+                truly_cross_block.add(cls_name)
+
+        if truly_cross_block:
+            cls_list = ", ".join(sorted(truly_cross_block))
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=ValidationSeverity.WARNING,
+                    message=(
+                        f"Potential cross-block dual registration for: {cls_list}. "
+                        f"Class appears with annotation-based registration in one "
+                        f"code block and explicit @Bean/@Produces in another."
+                    ),
+                    line_number=0,
+                    suggestion=(
+                        "Use either annotation-based registration OR explicit "
+                        "registration, not both. Remove one to avoid duplicate "
+                        "bean/component registration."
+                    ),
+                )
+            )
 
         return findings
 

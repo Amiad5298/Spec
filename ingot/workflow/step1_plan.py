@@ -897,9 +897,11 @@ def _build_file_index(repo_root: Path | None) -> "FileIndex | None":
             log_message(f"Built FileIndex with {idx.file_count} files")
             return idx
         log_message("FileIndex is empty (no git-tracked files)")
+        print_warning("No git-tracked files found — local discovery will be skipped.")
         return None
     except Exception as exc:
         log_message(f"FileIndex build failed: {exc}")
+        print_warning(f"Local discovery unavailable: {exc}")
         return None
 
 
@@ -1119,6 +1121,9 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                 continue
 
             state.plan_revision_count += 1
+            # Intentionally reuse the initial discovery context: re-running
+            # discovery mid-session is expensive, and the codebase is unlikely
+            # to have changed since the initial scan.
             if replan_with_feedback(
                 state,
                 backend,

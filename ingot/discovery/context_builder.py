@@ -285,7 +285,8 @@ class ContextBuilder:
         plus all files in the same directories. Falls back to all paths
         if scoping produces nothing.
         """
-        # Collect paths whose stem contains any keyword
+        # Collect paths whose stem matches any keyword exactly (case-insensitive
+        # exact match is handled by FileIndex.find_by_stem).
         relevant_dirs: set[str] = set()
         all_paths = file_index.all_paths()
 

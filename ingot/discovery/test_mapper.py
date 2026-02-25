@@ -79,7 +79,19 @@ class TestMapper:
                         seen.add(candidate)
                         results.append(candidate)
 
+        # Prefer test files in recognised test directories.
+        results.sort(key=self._score_test_path)
         return results
+
+    _TEST_DIR_NAMES: frozenset[str] = frozenset({"test", "tests", "__tests__", "spec", "specs"})
+
+    @staticmethod
+    def _score_test_path(path: PurePosixPath) -> int:
+        """Score a path so files in test directories sort first (lower = better)."""
+        parts = {p.lower() for p in path.parts}
+        if parts & TestMapper._TEST_DIR_NAMES:
+            return 0
+        return 1
 
     def map_all(self, source_paths: list[str | PurePosixPath]) -> dict[str, list[PurePosixPath]]:
         """Map multiple source files to their tests.

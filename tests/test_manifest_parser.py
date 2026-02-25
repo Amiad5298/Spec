@@ -257,6 +257,55 @@ class TestGradleParsing:
         names = {m.name for m in graph.modules}
         assert "service" in names
 
+    def test_gradle_nested_modules(self, tmp_path):
+        """Include with colon-separated nested modules: ':services:api'."""
+        settings = textwrap.dedent(
+            """\
+            rootProject.name = 'nested-app'
+            include ':services:api', ':services:common'
+        """
+        )
+        (tmp_path / "settings.gradle").write_text(settings)
+        (tmp_path / "services" / "api").mkdir(parents=True)
+        (tmp_path / "services" / "api" / "build.gradle").write_text("")
+        (tmp_path / "services" / "common").mkdir(parents=True)
+        (tmp_path / "services" / "common" / "build.gradle").write_text("")
+
+        parser = ManifestParser(tmp_path)
+        graph = parser.parse()
+        names = {m.name for m in graph.modules}
+        assert "services:api" in names
+        assert "services:common" in names
+        # Paths should use '/' instead of ':'
+        paths = {m.path for m in graph.modules}
+        assert "services/api" in paths
+        assert "services/common" in paths
+
+    def test_gradle_nested_project_dependency(self, tmp_path):
+        """project(':services:common') should create a dependency edge."""
+        settings = textwrap.dedent(
+            """\
+            rootProject.name = 'nested-app'
+            include ':services:api', ':services:common'
+        """
+        )
+        (tmp_path / "settings.gradle").write_text(settings)
+        (tmp_path / "services" / "api").mkdir(parents=True)
+        api_build = textwrap.dedent(
+            """\
+            dependencies {
+                implementation project(':services:common')
+            }
+        """
+        )
+        (tmp_path / "services" / "api" / "build.gradle").write_text(api_build)
+        (tmp_path / "services" / "common").mkdir(parents=True)
+        (tmp_path / "services" / "common" / "build.gradle").write_text("")
+
+        parser = ManifestParser(tmp_path)
+        graph = parser.parse()
+        assert Dependency(source="services:api", target="services:common") in graph.edges
+
     def test_single_module_gradle(self, tmp_path):
         """Single-module Gradle project (build.gradle, no settings.gradle)."""
         (tmp_path / "build.gradle").write_text("apply plugin: 'java'\n")

@@ -38,6 +38,10 @@ class ValidationContext:
 
     repo_root: Path | None = None  # For filesystem checks (must be injected, not auto-discovered)
     ticket_id: str = ""  # Reserved for future validator use
+    ticket_signals: list[str] = field(
+        default_factory=list
+    )  # Category signals (e.g., "metric", "alert")
+    local_discovery_markdown: str = ""  # Pre-verified local discovery output
 
 
 @dataclass

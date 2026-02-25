@@ -32,6 +32,28 @@ UNVERIFIED_RE = re.compile(r"<!--\s*UNVERIFIED:.*?-->", re.DOTALL)
 NEW_FILE_MARKER_RE = re.compile(r"<!--\s*NEW_FILE(?::.*?)?\s*-->", re.IGNORECASE)
 
 
+def _extract_code_blocks(lines: list[str]) -> tuple[list[tuple[int, int]], bool]:
+    """Parse fenced code blocks from markdown lines.
+
+    Returns:
+        Tuple of (blocks, unbalanced) where blocks is a list of
+        (open_line, close_line) pairs and unbalanced is True if there
+        is an unclosed code fence.
+    """
+    blocks: list[tuple[int, int]] = []
+    in_code_block = False
+    open_line = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            if not in_code_block:
+                in_code_block = True
+                open_line = i
+            else:
+                in_code_block = False
+                blocks.append((open_line, i))
+    return blocks, in_code_block
+
+
 def _strip_fenced_code_blocks(content: str) -> str:
     """Remove fenced code blocks from content.
 
@@ -409,31 +431,22 @@ class PatternSourceValidator(Validator):
         findings: list[ValidationFinding] = []
         lines = content.splitlines()
 
-        # Stateful fence parsing: track open/close pairs via state machine
-        code_blocks: list[tuple[int, int]] = []  # (open_line, close_line)
-        in_code_block = False
-        open_line = 0
-
-        for i, line in enumerate(lines):
-            if line.strip().startswith("```"):
-                if not in_code_block:
-                    in_code_block = True
-                    open_line = i
-                else:
-                    in_code_block = False
-                    code_blocks.append((open_line, i))
+        code_blocks, unbalanced = _extract_code_blocks(lines)
 
         # Warn about unbalanced fence
-        if in_code_block:
+        if unbalanced:
+            # Find the last opening fence line
+            fence_lines = [i for i, ln in enumerate(lines) if ln.strip().startswith("```")]
+            last_fence = fence_lines[-1] if fence_lines else 0
             findings.append(
                 ValidationFinding(
                     validator_name=self.name,
                     severity=ValidationSeverity.WARNING,
                     message=(
-                        f"Unbalanced code fence at line {open_line + 1}: "
+                        f"Unbalanced code fence at line {last_fence + 1}: "
                         f"opening ``` without matching close."
                     ),
-                    line_number=open_line + 1,
+                    line_number=last_fence + 1,
                     suggestion="Add a closing ``` to balance the code block.",
                 )
             )
@@ -832,7 +845,7 @@ class ImplementationDetailValidator(Validator):
                     ValidationFinding(
                         validator_name=self.name,
                         severity=ValidationSeverity.WARNING,
-                        message=(f"Implementation step lacks concrete detail: " f"'{first_line}'"),
+                        message=(f"Implementation step lacks concrete detail: '{first_line}'"),
                         suggestion=(
                             "Add a code snippet with `Pattern source:` citation, "
                             "an explicit method call chain (e.g., `Class.method(args)`), "
@@ -882,7 +895,7 @@ class RiskCategoriesValidator(Validator):
                     validator_name=self.name,
                     severity=ValidationSeverity.INFO,
                     message=(
-                        f"Potential Risks section is missing categories: " f"{', '.join(missing)}"
+                        f"Potential Risks section is missing categories: {', '.join(missing)}"
                     ),
                     suggestion=(
                         "Address each category explicitly, or write "
@@ -890,6 +903,448 @@ class RiskCategoriesValidator(Validator):
                     ),
                 )
             )
+
+        return findings
+
+
+class CitationContentValidator(Validator):
+    """Check that Pattern source citations match actual file content.
+
+    For each ``Pattern source: file:line-line`` in the plan, reads the
+    cited lines from disk and checks whether key identifiers from the
+    adjacent code block appear in the cited range (>= 50% overlap).
+    """
+
+    _PATTERN_SOURCE_RE = re.compile(
+        r"Pattern\s+source:\s*`?([^`\n]+?\.\w{1,8}):(\d+)(?:-(\d+))?`?",
+        re.IGNORECASE,
+    )
+
+    # Reuses the identifier extraction regex from citation_verifier
+    _IDENTIFIER_RE = re.compile(
+        r"(?:" r"@[A-Z]\w+" r"|[A-Z][a-zA-Z0-9]{2,}" r"|\w+\.\w+\(" r"|[a-z_]\w{2,}(?=\()" r")"
+    )
+
+    _OVERLAP_THRESHOLD = 0.5
+
+    @property
+    def name(self) -> str:
+        return "Citation Content"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        if context.repo_root is None:
+            return []
+
+        findings: list[ValidationFinding] = []
+        lines = content.splitlines()
+        line_index = _build_line_index(content)
+
+        for m in self._PATTERN_SOURCE_RE.finditer(content):
+            file_path_str = m.group(1).strip()
+            start_line = int(m.group(2))
+            end_line = int(m.group(3)) if m.group(3) else start_line
+
+            citation_line_num = _line_number_at(line_index, m.start())
+
+            # Find adjacent code block (within 5 lines before or after)
+            snippet_ids = self._extract_nearby_code_identifiers(lines, citation_line_num - 1)
+            if not snippet_ids:
+                continue  # No code block to verify against
+
+            # Read the actual file
+            abs_path = context.repo_root / file_path_str
+            try:
+                if not abs_path.is_file():
+                    findings.append(
+                        ValidationFinding(
+                            validator_name=self.name,
+                            severity=ValidationSeverity.WARNING,
+                            message=(
+                                f"Pattern source file not found: `{file_path_str}` "
+                                f"(cited at line {citation_line_num})"
+                            ),
+                            line_number=citation_line_num,
+                            suggestion="Verify the file path exists in the repository.",
+                        )
+                    )
+                    continue
+
+                file_lines = abs_path.read_text(errors="replace").splitlines()
+                range_start = max(0, start_line - 1)
+                range_end = min(len(file_lines), end_line)
+
+                if range_start >= len(file_lines):
+                    findings.append(
+                        ValidationFinding(
+                            validator_name=self.name,
+                            severity=ValidationSeverity.WARNING,
+                            message=(
+                                f"Pattern source line range {start_line}-{end_line} "
+                                f"out of bounds for `{file_path_str}` "
+                                f"({len(file_lines)} lines, cited at line {citation_line_num})"
+                            ),
+                            line_number=citation_line_num,
+                            suggestion="Verify the line range matches the file.",
+                        )
+                    )
+                    continue
+
+                cited_text = "\n".join(file_lines[range_start:range_end])
+                found_ids = set(self._IDENTIFIER_RE.findall(cited_text))
+
+                overlap = snippet_ids & found_ids
+                ratio = len(overlap) / len(snippet_ids) if snippet_ids else 1.0
+
+                if ratio < self._OVERLAP_THRESHOLD:
+                    findings.append(
+                        ValidationFinding(
+                            validator_name=self.name,
+                            severity=ValidationSeverity.WARNING,
+                            message=(
+                                f"Pattern source citation mismatch at line {citation_line_num}: "
+                                f"`{file_path_str}:{start_line}-{end_line}` — "
+                                f"only {len(overlap)}/{len(snippet_ids)} snippet identifiers "
+                                f"found in cited range"
+                            ),
+                            line_number=citation_line_num,
+                            suggestion=(
+                                "Verify the code snippet matches the cited file. "
+                                "The pattern may reference the wrong file or line range."
+                            ),
+                        )
+                    )
+
+            except OSError:
+                continue  # Non-blocking
+
+        return findings
+
+    def _extract_nearby_code_identifiers(self, lines: list[str], citation_idx: int) -> set[str]:
+        """Extract identifiers from the nearest code block (before or after citation)."""
+        # Search forward for code block (up to 5 lines)
+        ids = self._scan_for_code_block(lines, citation_idx + 1, citation_idx + 6)
+        if ids:
+            return ids
+        # Search backward for code block (up to 5 lines)
+        return self._scan_for_code_block(lines, max(0, citation_idx - 5), citation_idx)
+
+    def _scan_for_code_block(self, lines: list[str], start: int, end: int) -> set[str]:
+        """Scan a range of lines for a fenced code block and extract identifiers."""
+        block_start = None
+        block_end = None
+
+        for j in range(start, min(end, len(lines))):
+            if lines[j].strip().startswith("```"):
+                if block_start is None:
+                    block_start = j + 1
+                else:
+                    block_end = j
+                    break
+
+        if block_start is not None and block_end is not None:
+            snippet_text = "\n".join(lines[block_start:block_end])
+            return set(self._IDENTIFIER_RE.findall(snippet_text))
+        return set()
+
+
+class RegistrationIdempotencyValidator(Validator):
+    """Detect duplicate component registration anti-patterns in code snippets.
+
+    Catches cases where the plan proposes both annotation-based and
+    explicit registration for the same class (e.g., ``@Component`` +
+    ``@Bean`` method returning the same type).
+    """
+
+    # Annotation-based registration markers (language-agnostic)
+    _ANNOTATION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+        (
+            "Spring @Component family",
+            re.compile(
+                r"@(?:Component|Service|Repository|Controller|RestController|Configuration)\b"
+            ),
+        ),
+        ("Angular @Injectable", re.compile(r"@Injectable\b")),
+        (
+            "CDI @ApplicationScoped family",
+            re.compile(r"@(?:ApplicationScoped|RequestScoped|SessionScoped|Dependent)\b"),
+        ),
+    ]
+
+    # Explicit registration markers
+    _EXPLICIT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+        ("Spring @Bean", re.compile(r"@Bean\b")),
+        ("Angular provide()", re.compile(r"\bprovide\s*\(")),
+        ("CDI @Produces", re.compile(r"@Produces\b")),
+    ]
+
+    # Extract class/type name being registered
+    @property
+    def name(self) -> str:
+        return "Registration Idempotency"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+        lines = content.splitlines()
+
+        code_blocks, _ = _extract_code_blocks(lines)
+
+        # Check each code block for dual registration
+        for block_open, block_close in code_blocks:
+            block_text = "\n".join(lines[block_open + 1 : block_close])
+            if len(block_text.strip()) < 10:
+                continue
+
+            # Check for annotation-based registration
+            annotation_matches: list[str] = []
+            for label, pattern in self._ANNOTATION_PATTERNS:
+                if pattern.search(block_text):
+                    annotation_matches.append(label)
+
+            # Check for explicit registration
+            explicit_matches: list[str] = []
+            for label, pattern in self._EXPLICIT_PATTERNS:
+                if pattern.search(block_text):
+                    explicit_matches.append(label)
+
+            # Flag if both annotation AND explicit registration found
+            if annotation_matches and explicit_matches:
+                findings.append(
+                    ValidationFinding(
+                        validator_name=self.name,
+                        severity=ValidationSeverity.WARNING,
+                        message=(
+                            f"Potential dual registration at line {block_open + 1}: "
+                            f"code block uses both {annotation_matches[0]} and "
+                            f"{explicit_matches[0]}. This may cause double "
+                            f"registration at runtime."
+                        ),
+                        line_number=block_open + 1,
+                        suggestion=(
+                            "Use either annotation-based registration OR explicit "
+                            "registration, not both. Remove one to avoid duplicate "
+                            "bean/component registration."
+                        ),
+                    )
+                )
+
+        return findings
+
+
+class SnippetCompletenessValidator(Validator):
+    """Detect incomplete code snippets — fields without constructors/init.
+
+    Checks code blocks for field declarations that lack constructor or
+    initialization method. Helps catch snippets that show member
+    variables but omit how they are set up.
+    """
+
+    # Detect field declarations (Java/Kotlin/C#/TypeScript)
+    _FIELD_PATTERNS = [
+        re.compile(r"private\s+(final\s+)?\w+\s+\w+\s*;"),  # Java: private final Foo foo;
+        re.compile(r"private\s+\w+:\s*\w+"),  # TypeScript: private foo: Foo
+        re.compile(r"self\.\w+\s*="),  # Python: self.foo =
+        re.compile(r"val\s+\w+:\s*\w+"),  # Kotlin: val foo: Foo
+    ]
+
+    # Detect constructor/init declarations
+    _INIT_PATTERNS = [
+        re.compile(r"(?:public|protected|private)\s+\w+\s*\("),  # Java/C# constructor
+        re.compile(r"def\s+__init__\s*\("),  # Python __init__
+        re.compile(r"constructor\s*\("),  # TypeScript/Kotlin constructor
+        re.compile(r"init\s*\{"),  # Kotlin init block
+        re.compile(r"@(?:Autowired|Inject)\b"),  # Spring/CDI injection
+    ]
+
+    @property
+    def name(self) -> str:
+        return "Snippet Completeness"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+        lines = content.splitlines()
+
+        code_blocks, _ = _extract_code_blocks(lines)
+
+        for block_open, block_close in code_blocks:
+            block_text = "\n".join(lines[block_open + 1 : block_close])
+            if len(block_text.strip()) < 20:
+                continue
+
+            has_fields = any(p.search(block_text) for p in self._FIELD_PATTERNS)
+            has_init = any(p.search(block_text) for p in self._INIT_PATTERNS)
+
+            if has_fields and not has_init:
+                findings.append(
+                    ValidationFinding(
+                        validator_name=self.name,
+                        severity=ValidationSeverity.WARNING,
+                        message=(
+                            f"Code snippet at line {block_open + 1} declares fields "
+                            f"but has no constructor/initialization method."
+                        ),
+                        line_number=block_open + 1,
+                        suggestion=(
+                            "Add a constructor or initialization method showing "
+                            "how the fields are set up, or note that injection "
+                            "is handled by the framework."
+                        ),
+                    )
+                )
+
+        return findings
+
+
+class OperationalCompletenessValidator(Validator):
+    """Check that metric/alert plans include operational completeness.
+
+    When the plan mentions metrics, alerts, or monitoring, checks for
+    operational elements: query examples, thresholds, escalation paths.
+    """
+
+    # Detect metrics/alert related content
+    _METRIC_KEYWORDS = re.compile(
+        r"\b(?:metric|alert|monitor|gauge|counter|histogram|prometheus|grafana|"
+        r"datadog|threshold|SLO|SLI|SLA|dashboard|runbook|pagerduty|opsgenie)\b",
+        re.IGNORECASE,
+    )
+
+    # Operational elements to check for
+    _OPERATIONAL_ELEMENTS = [
+        (
+            "query example",
+            re.compile(
+                r"(?:query|PromQL|promql|SELECT|select|WHERE|where)\b.*[{(]",
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "threshold value",
+            re.compile(
+                r"(?:threshold|>|<|>=|<=)\s*\d+",
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "escalation reference",
+            re.compile(
+                r"\b(?:escalat|runbook|playbook|on-?call|page|alert\s+(?:route|channel|team))\b",
+                re.IGNORECASE,
+            ),
+        ),
+    ]
+
+    @property
+    def name(self) -> str:
+        return "Operational Completeness"
+
+    # Signal categories that elevate severity from INFO to WARNING
+    _ELEVATED_SIGNALS = {"metric", "alert", "monitor"}
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        # Only activate if plan mentions metrics/alerts
+        if not self._METRIC_KEYWORDS.search(content):
+            return []
+
+        findings: list[ValidationFinding] = []
+        missing_elements: list[str] = []
+
+        for element_name, pattern in self._OPERATIONAL_ELEMENTS:
+            if not pattern.search(content):
+                missing_elements.append(element_name)
+
+        # Elevate severity when ticket signals indicate this is a metrics/alert ticket
+        has_signal = bool(self._ELEVATED_SIGNALS & set(context.ticket_signals))
+        severity = ValidationSeverity.WARNING if has_signal else ValidationSeverity.INFO
+
+        if missing_elements:
+            findings.append(
+                ValidationFinding(
+                    validator_name=self.name,
+                    severity=severity,
+                    message=(
+                        f"Plan includes metrics/alerts but is missing operational elements: "
+                        f"{', '.join(missing_elements)}"
+                    ),
+                    suggestion=(
+                        "Consider adding: example queries for validating metrics, "
+                        "specific threshold values, and escalation/runbook references."
+                    ),
+                )
+            )
+
+        return findings
+
+
+class NamingConsistencyValidator(Validator):
+    """Check cross-format naming consistency for identifiers.
+
+    Groups backtick-quoted identifiers by normalized form (replacing
+    dots, underscores, hyphens) and warns when the same logical
+    identifier uses inconsistent separators.
+    """
+
+    # Extract backtick-quoted identifiers that look like config keys or metric names
+    _IDENTIFIER_RE = re.compile(r"`([a-zA-Z][\w.*-]{3,})`")
+
+    # Separators to normalize
+    _SEPARATOR_RE = re.compile(r"[._-]")
+
+    @property
+    def name(self) -> str:
+        return "Naming Consistency"
+
+    def validate(self, content: str, context: ValidationContext) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+
+        # Strip code blocks to avoid false positives from code
+        stripped = _strip_fenced_code_blocks(content)
+
+        # Group identifiers by normalized form
+        groups: dict[str, set[str]] = {}
+        for m in self._IDENTIFIER_RE.finditer(stripped):
+            identifier = m.group(1)
+            # Skip file paths (contain /)
+            if "/" in identifier:
+                continue
+            # Skip very long identifiers (likely not naming issues)
+            if len(identifier) > 80:
+                continue
+
+            normalized = self._SEPARATOR_RE.sub("", identifier).lower()
+            if normalized not in groups:
+                groups[normalized] = set()
+            groups[normalized].add(identifier)
+
+        # Warn on groups with inconsistent separators
+        for _normalized, variants in groups.items():
+            if len(variants) > 1:
+                # Check if variants use different separators
+                separator_types: set[str] = set()
+                for v in variants:
+                    if "." in v:
+                        separator_types.add("dot")
+                    if "_" in v:
+                        separator_types.add("underscore")
+                    if "-" in v:
+                        separator_types.add("hyphen")
+
+                if len(separator_types) > 1:
+                    variant_list = ", ".join(f"`{v}`" for v in sorted(variants))
+                    findings.append(
+                        ValidationFinding(
+                            validator_name=self.name,
+                            severity=ValidationSeverity.WARNING,
+                            message=(
+                                f"Inconsistent naming separators: {variant_list} "
+                                f"(uses {' and '.join(sorted(separator_types))})"
+                            ),
+                            suggestion=(
+                                "Document the naming convention for each format "
+                                "(e.g., dots for Java properties, underscores for "
+                                "environment variables, hyphens for YAML keys)."
+                            ),
+                        )
+                    )
 
         return findings
 
@@ -911,6 +1366,13 @@ def create_plan_validator_registry(
     registry.register(TestCoverageValidator())
     registry.register(ImplementationDetailValidator())
     registry.register(RiskCategoriesValidator())
+    # New validators (Phase 1)
+    registry.register(CitationContentValidator())
+    registry.register(RegistrationIdempotencyValidator())
+    # New validators (Phase 2)
+    registry.register(SnippetCompletenessValidator())
+    registry.register(OperationalCompletenessValidator())
+    registry.register(NamingConsistencyValidator())
     return registry
 
 
@@ -925,5 +1387,10 @@ __all__ = [
     "TestCoverageValidator",
     "ImplementationDetailValidator",
     "RiskCategoriesValidator",
+    "CitationContentValidator",
+    "RegistrationIdempotencyValidator",
+    "SnippetCompletenessValidator",
+    "OperationalCompletenessValidator",
+    "NamingConsistencyValidator",
     "create_plan_validator_registry",
 ]

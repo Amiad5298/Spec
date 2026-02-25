@@ -187,13 +187,19 @@ class ManifestParser:
         modules.append(Module(name="root", path=".", manifest_file=settings_path.name))
 
         # Match include ':module-name' or include(':module-name')
-        include_re = re.compile(r"""include\s*\(?\s*['"]:([\w.-]+)['"]""")
-        for m in include_re.finditer(content):
-            mod_name = m.group(1)
-            # Gradle convention: colons map to directories
-            mod_path = mod_name.replace(":", "/")
-            manifest = "build.gradle.kts" if settings_path.name.endswith(".kts") else "build.gradle"
-            modules.append(Module(name=mod_name, path=mod_path, manifest_file=manifest))
+        # Handles comma-separated lists: include ':a', ':b', ':c'
+        include_re = re.compile(r"""include\s*\(?([^)\n]+)\)?""")
+        module_name_re = re.compile(r"""['"]:([\w.-]+)['"]""")
+        for include_match in include_re.finditer(content):
+            args_text = include_match.group(1)
+            for m in module_name_re.finditer(args_text):
+                mod_name = m.group(1)
+                # Gradle convention: colons map to directories
+                mod_path = mod_name.replace(":", "/")
+                manifest = (
+                    "build.gradle.kts" if settings_path.name.endswith(".kts") else "build.gradle"
+                )
+                modules.append(Module(name=mod_name, path=mod_path, manifest_file=manifest))
 
         # Parse dependencies from each sub-project's build file
         all_names = {m.name for m in modules}

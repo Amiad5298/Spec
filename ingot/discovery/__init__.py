@@ -13,6 +13,13 @@ Modules:
     context_builder: Orchestrate discovery tools into structured reports
 """
 
+from ingot.discovery.citation_verifier import CitationVerifier
+from ingot.discovery.context_builder import ContextBuilder
+from ingot.discovery.file_index import FileIndex
+from ingot.discovery.grep_engine import GrepEngine
+from ingot.discovery.manifest_parser import ManifestParser
+from ingot.discovery.test_mapper import TestMapper
+
 __all__ = [
     "CitationVerifier",
     "ContextBuilder",

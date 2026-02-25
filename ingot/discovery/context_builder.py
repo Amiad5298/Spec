@@ -32,6 +32,7 @@ _KEYWORD_RE = re.compile(
     r"(?:"
     r"[A-Z][a-zA-Z0-9]{3,}"  # PascalCase: FooService, MetricsHelper
     r"|[a-z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)+"  # camelCase: checkAndAlert
+    r"|[a-z]+(?:_[a-z]+)+"  # snake_case: register_metric, check_status
     r"|[a-z_]{2,}\.[a-z_]{2,}"  # dotted: some.config.key
     r")"
 )
@@ -105,20 +106,8 @@ class LocalDiscoveryReport:
         return report
 
 
-def extract_keywords(text: str, max_keywords: int = _MAX_KEYWORDS) -> list[str]:
-    """Extract likely code identifiers from ticket text.
-
-    Args:
-        text: Ticket title + description.
-        max_keywords: Maximum number of keywords to return.
-
-    Returns:
-        Deduplicated list of keyword strings.
-    """
-    if not text:
-        return []
-
-    _stopwords = {
+_STOPWORDS: frozenset[str] = frozenset(
+    {
         "this",
         "that",
         "when",
@@ -141,6 +130,21 @@ def extract_keywords(text: str, max_keywords: int = _MAX_KEYWORDS) -> list[str]:
         "just",
         "very",
     }
+)
+
+
+def extract_keywords(text: str, max_keywords: int = _MAX_KEYWORDS) -> list[str]:
+    """Extract likely code identifiers from ticket text.
+
+    Args:
+        text: Ticket title + description.
+        max_keywords: Maximum number of keywords to return.
+
+    Returns:
+        Deduplicated list of keyword strings.
+    """
+    if not text:
+        return []
 
     matches = _KEYWORD_RE.findall(text)
 
@@ -148,7 +152,7 @@ def extract_keywords(text: str, max_keywords: int = _MAX_KEYWORDS) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
     for m in matches:
-        if m.lower() in _stopwords:
+        if m.lower() in _STOPWORDS:
             continue
         if m.lower() not in seen:
             seen.add(m.lower())

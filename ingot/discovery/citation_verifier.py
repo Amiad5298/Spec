@@ -27,8 +27,8 @@ _CITATION_RE = re.compile(
 _IDENTIFIER_RE = re.compile(
     r"(?:"
     r"@[A-Z]\w+"  # Annotations: @Component, @Bean
-    r"|[A-Z][a-zA-Z0-9]{3,}"  # PascalCase: DistributionSummary, AtomicInteger (4+ chars)
-    r"|\w+\.\w+\("  # Method calls: builder.register(
+    r"|[A-Z][a-zA-Z0-9]{2,}"  # PascalCase: Foo, Bar, URL, DistributionSummary (3+ chars)
+    r"|\w+\.\w+(?=\()"  # Method calls: builder.register( — lookahead excludes '('
     r"|[a-z_]\w{2,}(?=\()"  # Function calls: register_metric(
     r")"
 )

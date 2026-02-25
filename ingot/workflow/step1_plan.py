@@ -955,11 +955,6 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
             state, backend, local_discovery_context=local_discovery_markdown
         )
         if researcher_success and researcher_output.strip():
-            # Persist researcher output for audit/debug
-            research_path = plan_path.with_suffix(".research.md")
-            research_path.write_text(researcher_output)
-            log_message(f"Persisted researcher output to {research_path}")
-
             # Validate researcher paths to catch hallucinations early
             invalid_paths = _validate_researcher_paths(researcher_output, repo_root)
             if invalid_paths:
@@ -972,6 +967,12 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
 
             # Verify citations (Source: file:line) against actual file content
             researcher_output = _verify_researcher_citations(researcher_output, repo_root)
+
+            # Persist researcher output AFTER annotation so the saved file
+            # includes path warnings and citation verification markers.
+            research_path = plan_path.with_suffix(".research.md")
+            research_path.write_text(researcher_output)
+            log_message(f"Persisted annotated researcher output to {research_path}")
         else:
             print_warning("Researcher failed, planner will search independently")
             researcher_output = ""
@@ -1118,7 +1119,13 @@ def step_1_create_plan(state: WorkflowState, backend: AIBackend) -> bool:
                 continue
 
             state.plan_revision_count += 1
-            if replan_with_feedback(state, backend, feedback):
+            if replan_with_feedback(
+                state,
+                backend,
+                feedback,
+                researcher_context=researcher_output,
+                local_discovery_context=local_discovery_markdown,
+            ):
                 _display_plan_summary(plan_path)
                 continue
             else:
@@ -1233,6 +1240,9 @@ def _build_replan_prompt(
     plan_path: Path,
     existing_plan: str,
     review_feedback: str,
+    *,
+    researcher_context: str = "",
+    local_discovery_context: str = "",
 ) -> str:
     """Build the prompt for re-planning based on reviewer feedback.
 
@@ -1241,6 +1251,8 @@ def _build_replan_prompt(
         plan_path: Path where the plan should be saved.
         existing_plan: Current plan content (truncated for prompt size).
         review_feedback: Reviewer output explaining why replan is needed.
+        researcher_context: Optional researcher output for context during replan.
+        local_discovery_context: Pre-verified local discovery markdown.
     """
     # Truncate to keep prompt reasonable
     plan_excerpt = existing_plan[:_REPLAN_PLAN_EXCERPT_LIMIT]
@@ -1287,6 +1299,21 @@ Codebase context will be retrieved automatically."""
 [SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]
 {state.user_constraints}"""
 
+    # Inject local discovery context (deterministic ground truth)
+    if local_discovery_context:
+        prompt += f"""
+
+[SOURCE: LOCAL DISCOVERY (deterministically verified)]
+{local_discovery_context}"""
+
+    # Inject researcher context if available
+    if researcher_context:
+        trimmed = _truncate_researcher_context(researcher_context)
+        prompt += f"""
+
+[SOURCE: CODEBASE DISCOVERY (from automated research)]
+{trimmed}"""
+
     return prompt
 
 
@@ -1294,6 +1321,9 @@ def replan_with_feedback(
     state: WorkflowState,
     backend: AIBackend,
     review_feedback: str,
+    *,
+    researcher_context: str = "",
+    local_discovery_context: str = "",
 ) -> bool:
     """Re-generate the implementation plan based on reviewer feedback.
 
@@ -1304,6 +1334,8 @@ def replan_with_feedback(
         state: Current workflow state.
         backend: AI backend for agent calls.
         review_feedback: The reviewer's output explaining why replan is needed.
+        researcher_context: Optional researcher output for context during replan.
+        local_discovery_context: Pre-verified local discovery markdown.
 
     Returns:
         True if plan was successfully updated, False otherwise.
@@ -1323,7 +1355,14 @@ def replan_with_feedback(
 
     # Build replan prompt
     use_plan_mode = backend.supports_plan_mode
-    prompt = _build_replan_prompt(state, plan_path, existing_plan, review_feedback)
+    prompt = _build_replan_prompt(
+        state,
+        plan_path,
+        existing_plan,
+        review_feedback,
+        researcher_context=researcher_context,
+        local_discovery_context=local_discovery_context,
+    )
 
     if use_plan_mode:
         prompt += """

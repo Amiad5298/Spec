@@ -8,7 +8,7 @@ Create a Spring-managed service that consumes SQS messages.
 
 ## Implementation Steps
 1. **File**: `src/main/java/com/example/SqsConsumer.java`
-   Create the SQS consumer service.
+   Create the SQS consumer service and register it as a bean.
    Pattern source: `src/main/java/com/example/ExistingConsumer.java:10-30`
 ```java
 @Component
@@ -16,18 +16,11 @@ public class SqsConsumer {
     private final MessageProcessor processor;
     private final MetricsHelper metricsHelper;
 }
-```
 
-2. **File**: `src/main/java/com/example/AppConfig.java`
-   Register the consumer as a bean.
-   Pattern source: `src/main/java/com/example/ExistingConfig.java:15-25`
-```java
-@Configuration
-public class AppConfig {
-    @Bean
-    public SqsConsumer sqsConsumer(MessageProcessor processor, MetricsHelper helper) {
-        return new SqsConsumer(processor, helper);
-    }
+// Also register via explicit @Bean method in the same config
+@Bean
+public SqsConsumer sqsConsumer(MessageProcessor processor, MetricsHelper helper) {
+    return new SqsConsumer(processor, helper);
 }
 ```
 

@@ -1059,9 +1059,7 @@ class RegistrationIdempotencyValidator(Validator):
     _ANNOTATION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         (
             "Spring @Component family",
-            re.compile(
-                r"@(?:Component|Service|Repository|Controller|RestController|Configuration)\b"
-            ),
+            re.compile(r"@(?:Component|Service|Repository|Controller|RestController)\b"),
         ),
         ("Angular @Injectable", re.compile(r"@Injectable\b")),
         (

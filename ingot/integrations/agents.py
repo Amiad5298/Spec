@@ -488,6 +488,8 @@ The prompt you receive tags each data section with a SOURCE label. Follow these 
 - `[SOURCE: VERIFIED PLATFORM DATA]` — This data was fetched from the ticketing platform. You may reference "the ticket" as a source.
 - `[SOURCE: USER-PROVIDED CONSTRAINTS & PREFERENCES]` — This was typed by the user. Attribute to "the user" (e.g., "the user mentioned…"), never to "the ticket."
 - `[SOURCE: NO VERIFIED PLATFORM DATA]` — The platform returned no content. You MUST NOT say "the ticket requires," "the ticket says," "the ticket describes," or similar. Base the plan only on user-provided constraints and codebase exploration.
+- `[SOURCE: LOCAL DISCOVERY]` — Deterministically verified facts from local Python tools (file paths, grep matches, module structure, test mappings). Treat as ground truth. Do NOT contradict these facts.
+- `[SOURCE: CODEBASE DISCOVERY]` — AI-discovered context from the researcher agent (patterns, call sites, hierarchies). Use as primary source for semantics and architecture. If a pattern has `<!-- CITATION_MISMATCH -->`, do NOT use it — search for the correct one instead.
 - When any field says "Not available," never fabricate requirements from it. State what is unknown and plan around what you can verify.
 """,
     INGOT_AGENT_TASKLIST: """

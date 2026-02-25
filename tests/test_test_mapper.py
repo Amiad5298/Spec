@@ -325,6 +325,52 @@ class TestTestDirectoryPreference:
         assert len(results) == 2
         assert results[0] == PurePosixPath("src/__tests__/foo.spec.ts")
 
+    def test_same_directory_ranks_highest(self):
+        """Go-style: test in same dir as source should rank tier 0."""
+        mapper = _make_mapper(
+            {
+                "handler_test": [
+                    "pkg/handler_test.go",
+                    "tests/handler_test.go",
+                ],
+            }
+        )
+        results = mapper.find_tests("pkg/handler.go")
+        assert len(results) == 2
+        # Same-dir file should come first (tier 0 > tier 2)
+        assert results[0] == PurePosixPath("pkg/handler_test.go")
+
+    def test_mirror_directory_over_generic_test_dir(self):
+        """Mirror test dir (same package path) should rank above generic tests/."""
+        mapper = _make_mapper(
+            {
+                "footest": [
+                    "src/test/java/com/example/FooTest.java",
+                    "tests/FooTest.java",
+                ],
+            }
+        )
+        results = mapper.find_tests("src/main/java/com/example/Foo.java")
+        assert len(results) == 2
+        # Mirror dir (tier 1) should come before generic tests/ (tier 2)
+        assert results[0] == PurePosixPath("src/test/java/com/example/FooTest.java")
+
+    def test_shared_components_break_ties(self):
+        """Two candidates both in tests/, one with deeper path match should rank first."""
+        mapper = _make_mapper(
+            {
+                "test_handler": [
+                    "tests/test_handler.py",
+                    "tests/api/test_handler.py",
+                ],
+            }
+        )
+        results = mapper.find_tests("src/api/handler.py")
+        assert len(results) == 2
+        # Both are tier 2 (tests/), but tests/api/ shares more components
+        # The one with more shared components should come first
+        assert results[0] == PurePosixPath("tests/api/test_handler.py")
+
 
 class TestEdgeCases:
     """No test found, unknown extension, dedup."""

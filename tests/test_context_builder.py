@@ -8,7 +8,7 @@ from ingot.discovery.context_builder import (
     LocalDiscoveryReport,
     extract_keywords,
 )
-from ingot.discovery.grep_engine import GrepMatch
+from ingot.discovery.grep_engine import GrepMatch, SearchMeta, SearchResult
 from ingot.discovery.manifest_parser import Module, ModuleGraph
 
 # ------------------------------------------------------------------
@@ -69,6 +69,31 @@ class TestExtractKeywords:
         # "Foo" and "Bar" are only 3 chars - regex requires 4+
         assert "Foo" not in result
         assert "Bar" not in result
+
+    def test_extracts_tech_acronyms(self):
+        """Short all-caps tech acronyms should be extracted."""
+        result = extract_keywords("Fix AWS SQS integration")
+        assert "AWS" in result
+        assert "SQS" in result
+
+    def test_extracts_mixed_alphanumeric_acronyms(self):
+        """Acronyms with digits like EC2, S3 should be extracted."""
+        result = extract_keywords("Deploy to EC2 and S3")
+        assert "EC2" in result
+        assert "S3" in result
+
+    def test_filters_english_acronym_stopwords(self):
+        """Common English all-caps words should be filtered out."""
+        result = extract_keywords("THE FIX FOR BUG")
+        assert "THE" not in result
+        assert "FIX" not in result
+        assert "FOR" not in result
+        assert "BUG" not in result
+
+    def test_acronym_does_not_break_pascal_case(self):
+        """PascalCase starting with acronym should still match as PascalCase."""
+        result = extract_keywords("AWSService handles requests")
+        assert "AWSService" in result
 
 
 # ------------------------------------------------------------------
@@ -244,6 +269,25 @@ def _make_mock_file_index(file_count: int = 5, paths: list[str] | None = None):
     return idx
 
 
+def _make_search_result(
+    matches: list[GrepMatch],
+    *,
+    was_truncated: bool = False,
+    truncation_reason: str | None = None,
+) -> SearchResult:
+    """Create a SearchResult for mocking search_batch_with_meta."""
+    return SearchResult(
+        matches=matches,
+        meta=SearchMeta(
+            total_matches_found=len(matches),
+            files_searched=1,
+            files_total=1,
+            was_truncated=was_truncated,
+            truncation_reason=truncation_reason,
+        ),
+    )
+
+
 class TestContextBuilderBuild:
     """Test ContextBuilder.build() orchestration."""
 
@@ -294,8 +338,8 @@ class TestContextBuilderBuild:
             patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
         ):
             MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
-            MockGrep.return_value.search_batch.return_value = {
-                "Foo": [mock_grep_match],
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result([mock_grep_match]),
             }
             MockMapper.return_value.map_all.return_value = {}
 
@@ -325,8 +369,8 @@ class TestContextBuilderBuild:
             patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
         ):
             MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
-            MockGrep.return_value.search_batch.return_value = {
-                "Foo": [mock_match],
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result([mock_match]),
             }
             MockMapper.return_value.map_all.return_value = mock_test_map
 
@@ -373,7 +417,7 @@ class TestContextBuilderBuild:
             patch("ingot.discovery.context_builder.GrepEngine") as MockGrep,
         ):
             MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
-            MockGrep.return_value.search_batch.side_effect = RuntimeError("grep boom")
+            MockGrep.return_value.search_batch_with_meta.side_effect = RuntimeError("grep boom")
 
             report = builder.build(keywords=["Foo"], file_index=idx)
 
@@ -397,8 +441,8 @@ class TestContextBuilderBuild:
             patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
         ):
             MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
-            MockGrep.return_value.search_batch.return_value = {
-                "Foo": [mock_match],
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result([mock_match]),
             }
             MockMapper.return_value.map_all.side_effect = RuntimeError("mapper boom")
 
@@ -427,3 +471,166 @@ class TestContextBuilderBuild:
 
         assert report.file_index is None
         assert report.is_empty
+
+
+# ------------------------------------------------------------------
+# Truncation reporting (Issue 2)
+# ------------------------------------------------------------------
+
+
+class TestTruncationReporting:
+    """Test truncation metadata propagation from GrepEngine to report."""
+
+    def test_context_builder_reports_truncation(self, tmp_path):
+        """When grep results are truncated, the report should reflect it."""
+        builder = ContextBuilder(tmp_path)
+        idx = _make_mock_file_index(paths=["src/Foo.java"])
+
+        mock_match = GrepMatch(
+            file=PurePosixPath("src/Foo.java"),
+            line_num=1,
+            line_content="class Foo",
+        )
+
+        with (
+            patch("ingot.discovery.context_builder.ManifestParser") as MockParser,
+            patch("ingot.discovery.context_builder.GrepEngine") as MockGrep,
+            patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
+        ):
+            MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result(
+                    [mock_match], was_truncated=True, truncation_reason="max_total"
+                ),
+            }
+            MockMapper.return_value.map_all.return_value = {}
+
+            report = builder.build(keywords=["Foo"], file_index=idx)
+
+        assert report.was_truncated is True
+        assert "max_total" in report.truncation_reasons
+        md = report.to_markdown()
+        assert "truncated" in md.lower()
+        assert "max_total" in md
+
+    def test_no_truncation_when_under_limits(self, tmp_path):
+        """When grep is not truncated, report should show was_truncated=False."""
+        builder = ContextBuilder(tmp_path)
+        idx = _make_mock_file_index(paths=["src/Foo.java"])
+
+        mock_match = GrepMatch(
+            file=PurePosixPath("src/Foo.java"),
+            line_num=1,
+            line_content="class Foo",
+        )
+
+        with (
+            patch("ingot.discovery.context_builder.ManifestParser") as MockParser,
+            patch("ingot.discovery.context_builder.GrepEngine") as MockGrep,
+            patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
+        ):
+            MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result([mock_match]),
+            }
+            MockMapper.return_value.map_all.return_value = {}
+
+            report = builder.build(keywords=["Foo"], file_index=idx)
+
+        assert report.was_truncated is False
+        assert report.truncation_reasons == []
+
+    def test_truncation_markdown_note_only_when_truncated(self):
+        """Markdown should only include truncation note when was_truncated=True."""
+        report = LocalDiscoveryReport(
+            keyword_matches={
+                "Foo": [
+                    GrepMatch(
+                        file=PurePosixPath("src/Foo.java"),
+                        line_num=1,
+                        line_content="class Foo",
+                    )
+                ]
+            },
+            was_truncated=False,
+        )
+        md = report.to_markdown()
+        assert "truncated" not in md.lower() or "... [truncated]" in md  # budget trunc is OK
+
+    def test_truncation_markdown_note_present_when_truncated(self):
+        """Markdown should include truncation note when was_truncated=True."""
+        report = LocalDiscoveryReport(
+            keyword_matches={
+                "Foo": [
+                    GrepMatch(
+                        file=PurePosixPath("src/Foo.java"),
+                        line_num=1,
+                        line_content="class Foo",
+                    )
+                ]
+            },
+            was_truncated=True,
+            truncation_reasons=["max_total"],
+        )
+        md = report.to_markdown()
+        assert "> **Note**: Search results were truncated" in md
+
+
+# ------------------------------------------------------------------
+# Config knobs (Issue 7)
+# ------------------------------------------------------------------
+
+
+class TestContextBuilderConfig:
+    """Test ContextBuilder custom configuration parameters."""
+
+    def test_custom_grep_config(self, tmp_path):
+        """Custom grep config should be passed through to GrepEngine."""
+        builder = ContextBuilder(
+            tmp_path,
+            grep_max_per_file=10,
+            grep_max_total=200,
+            grep_timeout=60.0,
+        )
+        idx = _make_mock_file_index(paths=["src/Foo.java"])
+
+        with (
+            patch("ingot.discovery.context_builder.ManifestParser") as MockParser,
+            patch("ingot.discovery.context_builder.GrepEngine") as MockGrep,
+            patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
+        ):
+            MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result([]),
+            }
+            MockMapper.return_value.map_all.return_value = {}
+
+            builder.build(keywords=["Foo"], file_index=idx)
+
+        # Verify GrepEngine was constructed with custom config
+        call_kwargs = MockGrep.call_args
+        assert call_kwargs.kwargs["max_matches_per_file"] == 10
+        assert call_kwargs.kwargs["max_matches_total"] == 200
+        assert call_kwargs.kwargs["search_timeout"] == 60.0
+
+    def test_custom_large_repo_threshold(self, tmp_path):
+        """Custom large_repo_threshold should control when scoping kicks in."""
+        builder = ContextBuilder(tmp_path, large_repo_threshold=3)
+        # Index with 5 files — exceeds threshold of 3
+        idx = _make_mock_file_index(file_count=5)
+
+        with (
+            patch("ingot.discovery.context_builder.ManifestParser") as MockParser,
+            patch("ingot.discovery.context_builder.GrepEngine") as MockGrep,
+            patch("ingot.discovery.context_builder.TestMapper") as MockMapper,
+        ):
+            MockParser.return_value.parse.return_value = ModuleGraph(project_type="unknown")
+            MockGrep.return_value.search_batch_with_meta.return_value = {
+                "Foo": _make_search_result([]),
+            }
+            MockMapper.return_value.map_all.return_value = {}
+
+            builder.build(keywords=["Foo"], file_index=idx)
+
+        # GrepEngine should have been called (scoping attempted but falls back)
+        MockGrep.assert_called_once()

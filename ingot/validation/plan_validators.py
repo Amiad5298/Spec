@@ -1104,12 +1104,32 @@ class RegistrationIdempotencyValidator(Validator):
     )
 
     # Regex to extract the return type of a @Bean / @Produces method.
-    # Known limitations: does not handle generics (e.g. Optional<Foo> captures
-    # "Optional"), static modifiers, or annotations between @Bean and the method
-    # signature.  Acceptable as a heuristic for plan-level validation.
+    # Allows intermediate annotations (@Scope, @Primary, etc.) between @Bean
+    # and the method signature.  Acceptable as a heuristic for plan-level validation.
     _BEAN_RETURN_TYPE_RE = re.compile(
-        r"@(?:Bean|Produces)\b[^\n]*\n\s*(?:(?:public|protected|private|static)\s+)*(\w+)\s+\w+\s*\("
+        r"@(?:Bean|Produces)\b(?:\s*\([^)]*\))?"
+        r"(?:\s*@\w+(?:\([^)]*\))?)*"
+        r"\s*(?:(?:public|protected|private|static|final|abstract|synchronized)\s+)*"
+        r"(\w+)\s+\w+\s*\("
     )
+
+    # Suffixes commonly used for implementation classes.
+    _IMPL_SUFFIXES = ("Impl", "Adapter", "Decorator", "Proxy")
+
+    @staticmethod
+    def _normalize_class_name(name: str) -> str:
+        """Strip implementation prefixes/suffixes for fuzzy interface-vs-impl matching.
+
+        Prefix stripping is applied first so that e.g. ``DefaultAdapter`` →
+        ``Adapter`` (not ``Default`` via suffix-first ordering).
+        """
+        # Prefix: "Default" (e.g. DefaultMyService → MyService)
+        if name.startswith("Default") and len(name) > len("Default"):
+            name = name[len("Default") :]
+        for suffix in RegistrationIdempotencyValidator._IMPL_SUFFIXES:
+            if name.endswith(suffix) and len(name) > len(suffix):
+                return name[: -len(suffix)]
+        return name
 
     @property
     def name(self) -> str:
@@ -1181,22 +1201,32 @@ class RegistrationIdempotencyValidator(Validator):
 
         # Phase 2: cross-block correlation — same class annotated in one
         # block and explicitly registered in a DIFFERENT block.
-        all_annotation_classes: set[str] = set()
-        all_explicit_classes: set[str] = set()
-        for ann_set in per_block_annotation:
-            all_annotation_classes |= ann_set
-        for exp_set in per_block_explicit:
-            all_explicit_classes |= exp_set
+        # Use normalized names to catch interface-vs-impl mismatches
+        # (e.g. @Component MyServiceImpl + @Bean MyService).
+        norm_ann: dict[str, set[str]] = {}  # norm_key -> original names
+        norm_exp: dict[str, set[str]] = {}
+        ann_block_map: dict[str, set[int]] = {}  # norm_key -> block indices
+        exp_block_map: dict[str, set[int]] = {}
+
+        for idx, ann_set in enumerate(per_block_annotation):
+            for cls_name in ann_set:
+                nk = self._normalize_class_name(cls_name)
+                norm_ann.setdefault(nk, set()).add(cls_name)
+                ann_block_map.setdefault(nk, set()).add(idx)
+
+        for idx, exp_set in enumerate(per_block_explicit):
+            for cls_name in exp_set:
+                nk = self._normalize_class_name(cls_name)
+                norm_exp.setdefault(nk, set()).add(cls_name)
+                exp_block_map.setdefault(nk, set()).add(idx)
 
         # Only flag classes that appear in DIFFERENT blocks
-        cross_block_candidates = all_annotation_classes & all_explicit_classes
+        cross_block_norm_keys = set(norm_ann) & set(norm_exp)
         truly_cross_block: set[str] = set()
-        for cls_name in cross_block_candidates:
-            # Check that the class is NOT always in the same block
-            ann_blocks = {i for i, s in enumerate(per_block_annotation) if cls_name in s}
-            exp_blocks = {i for i, s in enumerate(per_block_explicit) if cls_name in s}
-            if ann_blocks != exp_blocks:
-                truly_cross_block.add(cls_name)
+        for nk in cross_block_norm_keys:
+            if ann_block_map[nk] != exp_block_map[nk]:
+                # Report the original class names for clarity
+                truly_cross_block |= norm_ann[nk] | norm_exp[nk]
 
         if truly_cross_block:
             cls_list = ", ".join(sorted(truly_cross_block))

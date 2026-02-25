@@ -4,7 +4,7 @@ from pathlib import PurePosixPath
 
 import pytest
 
-from ingot.discovery.grep_engine import GrepEngine
+from ingot.discovery.grep_engine import GrepEngine, SearchMeta, SearchResult
 
 
 @pytest.fixture()
@@ -192,3 +192,124 @@ class TestGrepMatchDataclass:
         assert match.file == PurePosixPath("src/foo.py")
         assert match.line_num == 3
         assert "class FooService:" in match.line_content
+
+
+class TestSearchWithMeta:
+    """Test search_with_meta and search_batch_with_meta metadata."""
+
+    def test_search_with_meta_returns_result(self, sample_repo):
+        """Basic metadata should be populated."""
+        tmp_path, file_paths = sample_repo
+        engine = GrepEngine(tmp_path, file_paths)
+        result = engine.search_with_meta("FooService")
+        assert isinstance(result, SearchResult)
+        assert isinstance(result.meta, SearchMeta)
+        assert result.meta.total_matches_found >= 2
+        assert result.meta.files_searched > 0
+        assert result.meta.files_total == len(file_paths)
+        assert result.meta.was_truncated is False
+        assert result.meta.truncation_reason is None
+
+    def test_truncation_on_max_total(self, sample_repo):
+        """Setting cap=2 should report was_truncated=True, reason='max_total'."""
+        tmp_path, file_paths = sample_repo
+        engine = GrepEngine(tmp_path, file_paths, max_matches_total=2)
+        result = engine.search_with_meta(r"\w+")
+        assert result.meta.was_truncated is True
+        assert result.meta.truncation_reason == "max_total"
+        assert len(result.matches) <= 2
+
+    def test_no_truncation_under_limits(self, sample_repo):
+        """Small search should report was_truncated=False."""
+        tmp_path, file_paths = sample_repo
+        engine = GrepEngine(tmp_path, file_paths)
+        result = engine.search_with_meta("class FooService:")
+        assert result.meta.was_truncated is False
+        assert result.meta.truncation_reason is None
+        assert result.meta.total_matches_found == 1
+
+    def test_batch_with_meta_propagates_truncation(self, sample_repo):
+        """Batch search with low cap should report truncation in all results."""
+        tmp_path, file_paths = sample_repo
+        engine = GrepEngine(tmp_path, file_paths, max_matches_total=2)
+        results = engine.search_batch_with_meta([r"\w+", "FooService"])
+        # At least one pattern's result should show truncation
+        any_truncated = any(sr.meta.was_truncated for sr in results.values())
+        assert any_truncated
+
+    def test_batch_with_meta_returns_search_results(self, sample_repo):
+        """Each batch entry should be a SearchResult."""
+        tmp_path, file_paths = sample_repo
+        engine = GrepEngine(tmp_path, file_paths)
+        results = engine.search_batch_with_meta(["FooService", "BarHelper"])
+        assert "FooService" in results
+        assert "BarHelper" in results
+        assert isinstance(results["FooService"], SearchResult)
+        assert isinstance(results["BarHelper"], SearchResult)
+
+
+class TestStreamingRead:
+    """Test the streaming read path for files > 1 MB."""
+
+    def test_streaming_read_matches_normal_read(self, tmp_path):
+        """A file just over 1 MB should yield identical lines to a small file."""
+        # Build content with a line that straddles the 8192-byte boundary
+        short_lines = [f"line {i}: some content here" for i in range(200)]
+        # Pad to just over 1 MB
+        padding_line = "x" * 800
+        body_lines = short_lines + [padding_line] * 1300
+        content = "\n".join(body_lines) + "\n"
+        assert len(content.encode()) > 1_000_000
+
+        (tmp_path / "big.py").write_text(content)
+        file_paths = [PurePosixPath("big.py")]
+        engine = GrepEngine(tmp_path, file_paths)
+
+        # Searching should find lines across the chunk boundary
+        result = engine.search("line 199")
+        assert len(result) == 1
+        assert "line 199" in result[0].line_content
+
+    def test_streaming_no_split_at_chunk_boundary(self, tmp_path):
+        """Lines at the 8192-byte chunk boundary must not be split."""
+        # Create a file where a line straddles byte 8192 exactly
+        prefix = "A" * 8180 + "\n"  # 8181 bytes
+        boundary_line = "BOUNDARY_MARKER_LINE"  # starts at ~8181
+        content = prefix + boundary_line + "\n" + "after\n"
+        # Pad to > 1 MB
+        content += "pad\n" * 250_000
+        assert len(content.encode()) > 1_000_000
+
+        (tmp_path / "boundary.py").write_text(content)
+        file_paths = [PurePosixPath("boundary.py")]
+        engine = GrepEngine(tmp_path, file_paths)
+
+        result = engine.search("BOUNDARY_MARKER_LINE")
+        assert len(result) == 1
+        # The full line must be intact, not split into two partial matches
+        assert result[0].line_content == boundary_line
+
+    def test_streaming_binary_detection(self, tmp_path):
+        """Null bytes in the first 8192 bytes of a large file → skip."""
+        content = b"hello\x00world" + b"\n" + b"x\n" * 600_000
+        assert len(content) > 1_000_000
+        (tmp_path / "binary.bin").write_bytes(content)
+        file_paths = [PurePosixPath("binary.bin")]
+        engine = GrepEngine(tmp_path, file_paths)
+        result = engine.search("hello")
+        assert result == []
+
+
+class TestEncodingLogging:
+    """Test encoding replacement logging."""
+
+    def test_encoding_replacement_logged(self, tmp_path):
+        """File with encoding replacements should trigger a log message."""
+        (tmp_path / "bad.py").write_bytes(b"hello \xff world\n")
+        file_paths = [PurePosixPath("bad.py")]
+        engine = GrepEngine(tmp_path, file_paths)
+        from unittest.mock import patch
+
+        with patch("ingot.discovery.grep_engine.log_message") as mock_log:
+            engine.search("hello")
+        assert any("encoding replacements" in str(c) for c in mock_log.call_args_list)

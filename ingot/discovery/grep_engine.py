@@ -26,6 +26,25 @@ class GrepMatch:
     context_after: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class SearchMeta:
+    """Metadata about a search operation."""
+
+    total_matches_found: int
+    files_searched: int
+    files_total: int
+    was_truncated: bool
+    truncation_reason: str | None = None  # "max_total" | "timeout"
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    """Search results with metadata."""
+
+    matches: list[GrepMatch]
+    meta: SearchMeta
+
+
 # Default limits
 _DEFAULT_MAX_MATCHES_PER_FILE = 50
 _DEFAULT_MAX_MATCHES_TOTAL = 500
@@ -79,20 +98,49 @@ class GrepEngine:
         Returns:
             List of :class:`GrepMatch` results.
         """
+        return self.search_with_meta(pattern, ignore_case=ignore_case).matches
+
+    def search_with_meta(self, pattern: str, *, ignore_case: bool = False) -> SearchResult:
+        """Search all indexed files for a single regex pattern with metadata.
+
+        Args:
+            pattern: Regular expression to search for.
+            ignore_case: If True, perform case-insensitive matching.
+
+        Returns:
+            :class:`SearchResult` with matches and metadata.
+        """
         cache_key = f"{pattern}::{ignore_case}"
         if cache_key in self._cache:
-            return list(self._cache[cache_key])
+            cached = self._cache[cache_key]
+            return SearchResult(
+                matches=list(cached),
+                meta=SearchMeta(
+                    total_matches_found=len(cached),
+                    files_searched=len(self._file_paths),
+                    files_total=len(self._file_paths),
+                    was_truncated=False,
+                ),
+            )
 
         flags = re.IGNORECASE if ignore_case else 0
         try:
             compiled = re.compile(pattern, flags)
         except re.error as exc:
             log_message(f"GrepEngine: invalid regex {pattern!r}: {exc}")
-            return []
+            return SearchResult(
+                matches=[],
+                meta=SearchMeta(
+                    total_matches_found=0,
+                    files_searched=0,
+                    files_total=len(self._file_paths),
+                    was_truncated=False,
+                ),
+            )
 
-        results = self._search_files([compiled])
-        self._cache[cache_key] = results
-        return results
+        result = self._search_files([compiled])
+        self._cache[cache_key] = result.matches
+        return result
 
     def search_batch(
         self,
@@ -111,6 +159,29 @@ class GrepEngine:
         Returns:
             Dict mapping each pattern string to its list of matches.
         """
+        batch_result = self.search_batch_with_meta(patterns, ignore_case=ignore_case)
+        return {pat: sr.matches for pat, sr in batch_result.items()}
+
+    def search_batch_with_meta(
+        self,
+        patterns: list[str],
+        *,
+        ignore_case: bool = False,
+    ) -> dict[str, SearchResult]:
+        """Search all indexed files for multiple patterns with metadata.
+
+        Each file is read once and **all** patterns are tested against each
+        line, so a single line can produce matches for multiple patterns.
+        This differs from :meth:`_search_files` (used by the single-pattern
+        :meth:`search`), which records at most one match per line.
+
+        Args:
+            patterns: List of regex patterns.
+            ignore_case: If True, perform case-insensitive matching.
+
+        Returns:
+            Dict mapping each pattern string to its :class:`SearchResult`.
+        """
         flags = re.IGNORECASE if ignore_case else 0
         compiled: list[re.Pattern[str]] = []
         for p in patterns:
@@ -121,18 +192,25 @@ class GrepEngine:
                 compiled.append(re.compile(r"(?!x)x"))  # Never-matching placeholder
 
         # Initialize result dict
-        results: dict[str, list[GrepMatch]] = {p: [] for p in patterns}
+        matches: dict[str, list[GrepMatch]] = {p: [] for p in patterns}
         total_count = 0
+        files_searched = 0
+        was_truncated = False
+        truncation_reason: str | None = None
         deadline = time.monotonic() + self._search_timeout
 
         for rel_path in self._file_paths:
             if total_count >= self._max_total:
+                was_truncated = True
+                truncation_reason = "max_total"
                 break
             if time.monotonic() > deadline:
                 log_message(
                     f"GrepEngine: batch search timeout ({self._search_timeout}s) reached "
                     f"after {total_count} matches"
                 )
+                was_truncated = True
+                truncation_reason = "timeout"
                 break
 
             abs_path = self._repo_root / str(rel_path)
@@ -140,10 +218,13 @@ class GrepEngine:
             if lines is None:
                 continue
 
+            files_searched += 1
             file_counts: dict[int, int] = {}  # pattern_index -> count
 
             for line_idx, line in enumerate(lines):
                 if total_count >= self._max_total:
+                    was_truncated = True
+                    truncation_reason = "max_total"
                     break
 
                 for pat_idx, regex in enumerate(compiled):
@@ -157,15 +238,26 @@ class GrepEngine:
                             context_before=self._get_context(lines, line_idx, before=True),
                             context_after=self._get_context(lines, line_idx, before=False),
                         )
-                        results[patterns[pat_idx]].append(match)
+                        matches[patterns[pat_idx]].append(match)
                         file_counts[pat_idx] = file_counts.get(pat_idx, 0) + 1
                         total_count += 1
 
         # Populate per-pattern cache so subsequent single-pattern searches hit cache
+        results: dict[str, SearchResult] = {}
         for pat in patterns:
             cache_key = f"{pat}::{ignore_case}"
             if cache_key not in self._cache:
-                self._cache[cache_key] = results[pat]
+                self._cache[cache_key] = matches[pat]
+            results[pat] = SearchResult(
+                matches=matches[pat],
+                meta=SearchMeta(
+                    total_matches_found=len(matches[pat]),
+                    files_searched=files_searched,
+                    files_total=len(self._file_paths),
+                    was_truncated=was_truncated,
+                    truncation_reason=truncation_reason,
+                ),
+            )
 
         return results
 
@@ -173,19 +265,32 @@ class GrepEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _search_files(self, compiled_patterns: list[re.Pattern[str]]) -> list[GrepMatch]:
-        """Search files for compiled patterns."""
+    def _search_files(self, compiled_patterns: list[re.Pattern[str]]) -> SearchResult:
+        """Search files for compiled patterns (single-pattern path).
+
+        At most one match is recorded per line (the first matching pattern
+        wins).  This differs from :meth:`search_batch_with_meta`, which
+        tests every pattern against each line so that per-pattern results
+        are independent.
+        """
         matches: list[GrepMatch] = []
+        files_searched = 0
+        was_truncated = False
+        truncation_reason: str | None = None
         deadline = time.monotonic() + self._search_timeout
 
         for rel_path in self._file_paths:
             if len(matches) >= self._max_total:
+                was_truncated = True
+                truncation_reason = "max_total"
                 break
             if time.monotonic() > deadline:
                 log_message(
                     f"GrepEngine: search timeout ({self._search_timeout}s) reached "
                     f"after {len(matches)} matches"
                 )
+                was_truncated = True
+                truncation_reason = "timeout"
                 break
 
             abs_path = self._repo_root / str(rel_path)
@@ -193,11 +298,14 @@ class GrepEngine:
             if lines is None:
                 continue
 
+            files_searched += 1
             file_match_count = 0
             for line_idx, line in enumerate(lines):
                 if file_match_count >= self._max_per_file:
                     break
                 if len(matches) >= self._max_total:
+                    was_truncated = True
+                    truncation_reason = "max_total"
                     break
 
                 for regex in compiled_patterns:
@@ -213,19 +321,70 @@ class GrepEngine:
                         file_match_count += 1
                         break  # One match per line per search call
 
-        return matches
+        return SearchResult(
+            matches=matches,
+            meta=SearchMeta(
+                total_matches_found=len(matches),
+                files_searched=files_searched,
+                files_total=len(self._file_paths),
+                was_truncated=was_truncated,
+                truncation_reason=truncation_reason,
+            ),
+        )
 
     def _read_file_lines(self, abs_path: Path) -> list[str] | None:
         """Read a file into lines, or return None if unreadable/binary/too large."""
         try:
+            file_size = abs_path.stat().st_size
             # Check file size via stat() BEFORE reading to avoid loading
             # multi-GB files into memory just to reject them.
-            if abs_path.stat().st_size > self._max_file_size:
+            if file_size > self._max_file_size:
                 return None
+            # Stream line-by-line for files 1-5 MB to halve peak memory
+            if file_size > 1_000_000:
+                return self._read_file_lines_streaming(abs_path)
             raw = abs_path.read_bytes()
             if b"\x00" in raw[:8192]:
                 return None
-            return raw.decode("utf-8", errors="replace").splitlines()
+            text = raw.decode("utf-8", errors="replace")
+            if "\ufffd" in text:
+                log_message(f"GrepEngine: encoding replacements in {abs_path.name}")
+            return text.splitlines()
+        except OSError:
+            return None
+
+    def _read_file_lines_streaming(self, abs_path: Path) -> list[str] | None:
+        """Read a large file line-by-line to reduce peak memory."""
+        try:
+            with abs_path.open("r", encoding="utf-8", errors="replace") as f:
+                # Check for binary content in first chunk
+                first_chunk = f.read(8192)
+                if "\x00" in first_chunk:
+                    return None
+                has_replacement = "\ufffd" in first_chunk
+                # The chunk may end mid-line.  Keep the trailing partial
+                # (a fragment without a terminating newline) and prepend it
+                # to the first line the iterator yields so no line is split.
+                chunk_lines = first_chunk.splitlines(True)
+                if chunk_lines and not chunk_lines[-1].endswith(("\n", "\r")):
+                    leftover = chunk_lines.pop()
+                else:
+                    leftover = ""
+                lines: list[str] = list(chunk_lines)
+                first_from_iter = True
+                for line in f:
+                    if not has_replacement and "\ufffd" in line:
+                        has_replacement = True
+                    if first_from_iter and leftover:
+                        line = leftover + line
+                        first_from_iter = False
+                    lines.append(line)
+                # If the file ended exactly at the chunk boundary, flush leftover.
+                if first_from_iter and leftover:
+                    lines.append(leftover)
+            if has_replacement:
+                log_message(f"GrepEngine: encoding replacements in {abs_path.name}")
+            return [line.rstrip("\n").rstrip("\r") for line in lines]
         except OSError:
             return None
 
@@ -241,4 +400,4 @@ class GrepEngine:
             return tuple(lines[line_idx + 1 : end])
 
 
-__all__ = ["GrepEngine", "GrepMatch"]
+__all__ = ["GrepEngine", "GrepMatch", "SearchMeta", "SearchResult"]

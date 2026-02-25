@@ -34,7 +34,58 @@ _KEYWORD_RE = re.compile(
     r"|[a-z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)+"  # camelCase: checkAndAlert
     r"|[a-z]+(?:_[a-z]+)+"  # snake_case: register_metric, check_status
     r"|[a-z_]{2,}\.[a-z_]{2,}"  # dotted: some.config.key
+    r"|[A-Z][A-Z0-9]{1,5}(?=[^a-zA-Z]|$)"  # ACRONYMS: AWS, S3, EC2, SQS (2-6 chars)
     r")"
+)
+
+# All-caps English words to filter from acronym matches.
+_ACRONYM_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "THE",
+        "AND",
+        "FOR",
+        "BUT",
+        "NOT",
+        "ARE",
+        "WAS",
+        "ALL",
+        "ANY",
+        "CAN",
+        "HAS",
+        "HER",
+        "HIS",
+        "HOW",
+        "ITS",
+        "MAY",
+        "NEW",
+        "NOW",
+        "OLD",
+        "SEE",
+        "WAY",
+        "WHO",
+        "DID",
+        "GET",
+        "HIM",
+        "LET",
+        "SAY",
+        "SHE",
+        "TOO",
+        "USE",
+        "ADD",
+        "END",
+        "FEW",
+        "GOT",
+        "HAD",
+        "SET",
+        "TOP",
+        "TRY",
+        "TWO",
+        "YET",
+        "FIX",
+        "BUG",
+        "RUN",
+        "PUT",
+    }
 )
 
 
@@ -47,6 +98,8 @@ class LocalDiscoveryReport:
     module_graph: ModuleGraph | None = None
     test_mappings: dict[str, list[PurePosixPath]] = field(default_factory=dict)
     keywords_used: list[str] = field(default_factory=list)
+    was_truncated: bool = False
+    truncation_reasons: list[str] = field(default_factory=list)
 
     @property
     def is_empty(self) -> bool:
@@ -90,6 +143,14 @@ class LocalDiscoveryReport:
                 test_paths = ", ".join(f"`{t}`" for t in tests[:3])
                 test_lines.append(f"  - `{src}` → {test_paths}")
             sections.append("\n".join(test_lines))
+
+        # Truncation warning
+        if self.was_truncated and self.truncation_reasons:
+            reasons = ", ".join(sorted(self.truncation_reasons))
+            sections.append(
+                f"> **Note**: Search results were truncated ({reasons}). "
+                f"Some matches may be missing."
+            )
 
         if not sections:
             return ""
@@ -154,6 +215,8 @@ def extract_keywords(text: str, max_keywords: int = _MAX_KEYWORDS) -> list[str]:
     for m in matches:
         if m.lower() in _STOPWORDS:
             continue
+        if m.isupper() and m in _ACRONYM_STOPWORDS:
+            continue
         if m.lower() not in seen:
             seen.add(m.lower())
             result.append(m)
@@ -176,9 +239,17 @@ class ContextBuilder:
         repo_root: Path,
         *,
         max_report_budget: int = _DEFAULT_REPORT_BUDGET,
+        grep_max_per_file: int = 5,
+        grep_max_total: int = 100,
+        grep_timeout: float = 30.0,
+        large_repo_threshold: int = _LARGE_REPO_THRESHOLD,
     ) -> None:
         self._repo_root = repo_root.resolve()
         self._budget = max_report_budget
+        self._grep_max_per_file = grep_max_per_file
+        self._grep_max_total = grep_max_total
+        self._grep_timeout = grep_timeout
+        self._large_repo_threshold = large_repo_threshold
 
     def build(
         self,
@@ -223,7 +294,7 @@ class ContextBuilder:
             try:
                 # For large repos, limit search scope to reduce search time
                 search_paths = file_index.all_paths()
-                if file_index.file_count > _LARGE_REPO_THRESHOLD:
+                if file_index.file_count > self._large_repo_threshold:
                     search_paths = self._scope_paths_for_large_repo(file_index, keywords)
                     log_message(
                         f"ContextBuilder: large repo ({file_index.file_count} files), "
@@ -234,18 +305,30 @@ class ContextBuilder:
                     self._repo_root,
                     search_paths,
                     context_lines=0,
-                    max_matches_per_file=5,
-                    max_matches_total=100,
+                    max_matches_per_file=self._grep_max_per_file,
+                    max_matches_total=self._grep_max_total,
+                    search_timeout=self._grep_timeout,
                 )
                 escaped_keywords = [re.escape(kw) for kw in keywords]
-                report.keyword_matches = engine.search_batch(
+                batch_results = engine.search_batch_with_meta(
                     escaped_keywords,
                     ignore_case=False,
                 )
                 # Map back to original keywords (search_batch used escaped patterns)
                 original_matches: dict[str, list[GrepMatch]] = {}
                 for kw, escaped in zip(keywords, escaped_keywords, strict=True):
-                    original_matches[kw] = report.keyword_matches.get(escaped, [])
+                    sr = batch_results.get(escaped)
+                    if sr is not None:
+                        original_matches[kw] = sr.matches
+                        if sr.meta.was_truncated:
+                            report.was_truncated = True
+                            if (
+                                sr.meta.truncation_reason
+                                and sr.meta.truncation_reason not in report.truncation_reasons
+                            ):
+                                report.truncation_reasons.append(sr.meta.truncation_reason)
+                    else:
+                        original_matches[kw] = []
                 report.keyword_matches = original_matches
             except Exception as exc:
                 log_message(f"ContextBuilder: GrepEngine failed: {exc}")

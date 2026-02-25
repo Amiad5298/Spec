@@ -106,3 +106,57 @@ class TestExtractIdentifiers:
         """Two-char PascalCase words (like 'Ok') are excluded (need 3+ chars)."""
         ids = extract_identifiers("Ok value = process();")
         assert "Ok" not in ids
+
+
+# ------------------------------------------------------------------
+# Cross-validator tests (Issue 6)
+# ------------------------------------------------------------------
+
+
+class TestCitationCrossValidation:
+    """Verify both validators produce identical identifier sets from same input."""
+
+    def test_same_identifiers_extracted(self):
+        """Both CitationContentValidator and PatternSourceValidator
+        use the same IDENTIFIER_RE, so identical text should yield
+        identical identifier sets."""
+        from ingot.discovery.citation_utils import IDENTIFIER_RE
+
+        snippet = """\
+@Component
+public class FooService {
+    private final DistributionSummary summary;
+    public void register_metric(String name) {
+        builder.register(registry);
+    }
+}
+"""
+        ids = set(IDENTIFIER_RE.findall(snippet))
+        assert "@Component" in ids
+        assert "FooService" in ids
+        assert "DistributionSummary" in ids
+        assert "builder.register" in ids
+        assert "register_metric" in ids
+
+    def test_citation_formats_intentionally_different(self):
+        """The two citation regex patterns match their own format, not the other."""
+        import re
+
+        # PatternSourceValidator's regex
+        pattern_source_re = re.compile(
+            r"Pattern\s+source:\s*`?([^`\n]+?\.\w{1,8}):(\d+)(?:-(\d+))?`?",
+            re.IGNORECASE,
+        )
+        # CitationVerifier uses "Source: <file>" — a different pattern
+        source_re = re.compile(r"Source:\s*`?([^`\n]+?\.\w{1,8})`?")
+
+        pattern_source_text = "Pattern source: src/Foo.java:10-20"
+        source_text = "Source: src/Foo.java"
+
+        # Each regex matches its own format
+        assert pattern_source_re.search(pattern_source_text) is not None
+        assert source_re.search(source_text) is not None
+
+        # And does NOT match the other's format
+        assert pattern_source_re.search(source_text) is None
+        assert source_re.search(pattern_source_text) is None

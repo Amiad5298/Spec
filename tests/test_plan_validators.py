@@ -2123,6 +2123,114 @@ public class Config {
         cross_block = [f for f in findings if "cross-block" in f.message.lower()]
         assert cross_block == []
 
+    def test_cross_block_interface_vs_impl_warns(self):
+        """@Component class MyServiceImpl + @Bean MyService across blocks → warning."""
+        plan = """\
+## Step 1
+```java
+@Component
+public class MyServiceImpl implements MyService {
+    // impl
+}
+```
+
+## Step 2
+```java
+@Configuration
+public class Config {
+    @Bean
+    public MyService myService() { return new MyServiceImpl(); }
+}
+```
+"""
+        validator = RegistrationIdempotencyValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        cross_block = [f for f in findings if "cross-block" in f.message.lower()]
+        assert len(cross_block) == 1
+
+    def test_three_block_cross_registration(self):
+        """Annotation in block 1, unrelated block 2, bean in block 3 → warning."""
+        plan = """\
+## Step 1
+```java
+@Component
+public class MyService {
+    // component
+}
+```
+
+## Step 2
+```java
+public class SomethingUnrelated {
+    // no registration here
+}
+```
+
+## Step 3
+```java
+@Configuration
+public class Config {
+    @Bean
+    public MyService myService() { return new MyService(); }
+}
+```
+"""
+        validator = RegistrationIdempotencyValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        cross_block = [f for f in findings if "cross-block" in f.message.lower()]
+        assert len(cross_block) == 1
+        assert "MyService" in cross_block[0].message
+
+    def test_bean_with_intermediate_annotations(self):
+        """@Bean followed by @Scope and other annotations should still extract type."""
+        plan = """\
+```java
+@Component
+public class MyService {
+}
+
+@Bean
+@Scope("prototype")
+@Primary
+public MyService myService() {
+    return new MyService();
+}
+```
+"""
+        validator = RegistrationIdempotencyValidator()
+        ctx = ValidationContext()
+        findings = validator.validate(plan, ctx)
+        # Should detect dual registration within the same block
+        assert len(findings) >= 1
+
+    def test_normalize_strips_impl_suffix(self):
+        """_normalize_class_name should strip 'Impl' suffix."""
+        assert (
+            RegistrationIdempotencyValidator._normalize_class_name("MyServiceImpl") == "MyService"
+        )
+        assert RegistrationIdempotencyValidator._normalize_class_name("FooAdapter") == "Foo"
+        assert RegistrationIdempotencyValidator._normalize_class_name("BarDecorator") == "Bar"
+
+    def test_normalize_preserves_short_name(self):
+        """_normalize_class_name should not strip suffix if name would be empty."""
+        assert RegistrationIdempotencyValidator._normalize_class_name("Impl") == "Impl"
+        assert RegistrationIdempotencyValidator._normalize_class_name("Default") == "Default"
+
+    def test_normalize_strips_default_prefix(self):
+        """_normalize_class_name should strip 'Default' prefix."""
+        assert (
+            RegistrationIdempotencyValidator._normalize_class_name("DefaultMyService")
+            == "MyService"
+        )
+
+    def test_normalize_default_adapter_strips_prefix(self):
+        """DefaultAdapter → prefix stripped → 'Adapter' (suffix guard prevents empty)."""
+        assert RegistrationIdempotencyValidator._normalize_class_name("DefaultAdapter") == "Adapter"
+        # DefaultFooAdapter → 'Default' stripped → 'FooAdapter' → 'Adapter' stripped → 'Foo'
+        assert RegistrationIdempotencyValidator._normalize_class_name("DefaultFooAdapter") == "Foo"
+
 
 # =============================================================================
 # TestRegistryIncludesNewValidators

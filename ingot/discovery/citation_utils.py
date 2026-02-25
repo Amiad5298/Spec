@@ -2,6 +2,9 @@
 
 Provides path-safety checks and a canonical identifier regex used by
 both :class:`CitationVerifier` and :class:`CitationContentValidator`.
+
+Note: The ``Source:`` and ``Pattern source:`` citation regexes live in their
+respective validator classes — only :data:`IDENTIFIER_RE` is shared here.
 """
 
 from __future__ import annotations

@@ -315,6 +315,79 @@ class TestGradleParsing:
         assert len(graph.modules) == 1
         assert graph.modules[0].path == "."
 
+    def test_gradle_three_level_nesting(self, tmp_path):
+        """Three-level nested module: ':services:billing:internal'."""
+        settings = textwrap.dedent(
+            """\
+            rootProject.name = 'deep-app'
+            include ':services:billing:internal'
+        """
+        )
+        (tmp_path / "settings.gradle").write_text(settings)
+        (tmp_path / "services" / "billing" / "internal").mkdir(parents=True)
+        (tmp_path / "services" / "billing" / "internal" / "build.gradle").write_text("")
+
+        parser = ManifestParser(tmp_path)
+        graph = parser.parse()
+        names = {m.name for m in graph.modules}
+        assert "services:billing:internal" in names
+        paths = {m.path for m in graph.modules}
+        assert "services/billing/internal" in paths
+
+    def test_gradle_kotlin_dsl_include_function(self, tmp_path):
+        """settings.gradle.kts with include(\":api\") Kotlin DSL syntax."""
+        settings = textwrap.dedent(
+            """\
+            rootProject.name = "kts-app"
+            include(":api")
+        """
+        )
+        (tmp_path / "settings.gradle.kts").write_text(settings)
+        (tmp_path / "api").mkdir()
+        (tmp_path / "api" / "build.gradle.kts").write_text("")
+
+        parser = ManifestParser(tmp_path)
+        graph = parser.parse()
+        names = {m.name for m in graph.modules}
+        assert "api" in names
+        # Should pick up .kts manifest file
+        api_mod = next(m for m in graph.modules if m.name == "api")
+        assert api_mod.manifest_file == "build.gradle.kts"
+
+    def test_gradle_mixed_include_styles(self, tmp_path):
+        """Mix of include ':a' and include(':b:c', ':b:d') on separate lines."""
+        settings = textwrap.dedent(
+            """\
+            rootProject.name = 'mixed'
+            include ':a'
+            include(':b:c', ':b:d')
+        """
+        )
+        (tmp_path / "settings.gradle").write_text(settings)
+        for mod_path in ["a", "b/c", "b/d"]:
+            (tmp_path / mod_path).mkdir(parents=True, exist_ok=True)
+            (tmp_path / mod_path / "build.gradle").write_text("")
+
+        parser = ManifestParser(tmp_path)
+        graph = parser.parse()
+        names = {m.name for m in graph.modules}
+        assert "a" in names
+        assert "b:c" in names
+        assert "b:d" in names
+
+    def test_gradle_module_with_dots(self, tmp_path):
+        """Module name containing dots: ':com.example.service'."""
+        settings = "include ':com.example.service'\n"
+        (tmp_path / "settings.gradle").write_text(settings)
+        # Dots don't map to directories in Gradle (they stay as-is)
+        (tmp_path / "com.example.service").mkdir()
+        (tmp_path / "com.example.service" / "build.gradle").write_text("")
+
+        parser = ManifestParser(tmp_path)
+        graph = parser.parse()
+        names = {m.name for m in graph.modules}
+        assert "com.example.service" in names
+
 
 # ------------------------------------------------------------------
 # npm tests

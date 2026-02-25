@@ -79,19 +79,80 @@ class TestMapper:
                         seen.add(candidate)
                         results.append(candidate)
 
-        # Prefer test files in recognised test directories.
-        results.sort(key=self._score_test_path)
+        # Prefer test files in recognised test directories, with proximity awareness.
+        results.sort(key=lambda c: self._score_test_path(c, path))
         return results
 
     _TEST_DIR_NAMES: frozenset[str] = frozenset({"test", "tests", "__tests__", "spec", "specs"})
 
+    _STRIP_PREFIXES: frozenset[str] = frozenset(
+        {
+            "src",
+            "lib",
+            "app",
+            "test",
+            "tests",
+            "__tests__",
+            "spec",
+            "specs",
+        }
+    )
+
     @staticmethod
-    def _score_test_path(path: PurePosixPath) -> int:
-        """Score a path so files in test directories sort first (lower = better)."""
-        parts = {p.lower() for p in path.parts}
-        if parts & TestMapper._TEST_DIR_NAMES:
-            return 0
-        return 1
+    def _extract_package_path(path: PurePosixPath) -> tuple[str, ...]:
+        """Strip common source/test prefixes, return package components."""
+        parts = list(path.parts[:-1])  # exclude filename
+        # Strip leading src/{main,test}/{java,kotlin,scala}
+        if len(parts) >= 3 and parts[0] == "src" and parts[1] in ("main", "test"):
+            if parts[2] in ("java", "kotlin", "scala"):
+                parts = parts[3:]
+            else:
+                parts = parts[2:]
+        # Strip single common prefix dirs (src/, lib/, tests/, etc.)
+        elif parts and parts[0].lower() in TestMapper._STRIP_PREFIXES:
+            parts = parts[1:]
+        return tuple(parts)
+
+    @staticmethod
+    def _score_test_path(test_path: PurePosixPath, source_path: PurePosixPath) -> tuple[int, int]:
+        """Score a test path relative to a source path.
+
+        Returns ``(tier, -shared_components)`` — lower is better.
+
+        Tier 0: Same parent dir (Go convention)
+        Tier 1: Mirror structure under recognized test dir
+        Tier 2: Any recognized test directory
+        Tier 3: Everything else
+        """
+        test_parts = {p.lower() for p in test_path.parts}
+        has_test_dir = bool(test_parts & TestMapper._TEST_DIR_NAMES)
+
+        # Shared prefix component count for tie-breaking
+        src_pkg = TestMapper._extract_package_path(source_path)
+        test_pkg = TestMapper._extract_package_path(test_path)
+        shared = 0
+        for s, t in zip(src_pkg, test_pkg, strict=False):
+            if s == t:
+                shared += 1
+            else:
+                break
+
+        # Tier 0: same parent directory
+        if test_path.parent == source_path.parent:
+            return (0, -shared)
+
+        # Tier 1: recognized test dir AND package path mirrors source.
+        # Both must be non-empty — flat projects with no package structure
+        # (empty tuples) fall through to tier 2 since there is nothing to mirror.
+        if has_test_dir and src_pkg and test_pkg and src_pkg == test_pkg:
+            return (1, -shared)
+
+        # Tier 2: any recognized test directory
+        if has_test_dir:
+            return (2, -shared)
+
+        # Tier 3: fallback
+        return (3, -shared)
 
     def map_all(self, source_paths: list[str | PurePosixPath]) -> dict[str, list[PurePosixPath]]:
         """Map multiple source files to their tests.

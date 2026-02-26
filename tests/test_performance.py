@@ -473,6 +473,7 @@ class TestCitationFileSizeGuard:
 
                 class FakeStat:
                     st_size = 20 * 1024 * 1024  # 20 MB
+                    st_mode = result.st_mode  # keep real mode so is_file() works
 
                 return FakeStat()
             return result

@@ -459,3 +459,75 @@ class TestMapAll:
         )
         result = mapper.map_all([PurePosixPath("pkg/handler.go")])
         assert "pkg/handler.go" in result
+
+
+# ------------------------------------------------------------------
+# Static helper methods (R1)
+# ------------------------------------------------------------------
+
+
+class TestTestMapperStaticMethods:
+    """R1: Direct tests for static helper methods."""
+
+    # -- _extract_package_path --
+
+    def test_extract_package_path_java_main(self):
+        path = PurePosixPath("src/main/java/com/example/Foo.java")
+        assert TestMapper._extract_package_path(path) == ("com", "example")
+
+    def test_extract_package_path_java_test(self):
+        path = PurePosixPath("src/test/java/com/example/FooTest.java")
+        assert TestMapper._extract_package_path(path) == ("com", "example")
+
+    def test_extract_package_path_python(self):
+        path = PurePosixPath("src/utils/helpers.py")
+        assert TestMapper._extract_package_path(path) == ("utils",)
+
+    def test_extract_package_path_flat(self):
+        path = PurePosixPath("Foo.java")
+        assert TestMapper._extract_package_path(path) == ()
+
+    # -- _score_test_path --
+
+    def test_score_same_dir_tier_0(self):
+        source = PurePosixPath("pkg/handler.go")
+        test = PurePosixPath("pkg/handler_test.go")
+        tier, _ = TestMapper._score_test_path(test, source)
+        assert tier == 0
+
+    def test_score_mirror_dir_tier_1(self):
+        source = PurePosixPath("src/main/java/com/example/Foo.java")
+        test = PurePosixPath("src/test/java/com/example/FooTest.java")
+        tier, _ = TestMapper._score_test_path(test, source)
+        assert tier == 1
+
+    def test_score_test_dir_tier_2(self):
+        source = PurePosixPath("src/foo.py")
+        test = PurePosixPath("tests/test_foo.py")
+        tier, _ = TestMapper._score_test_path(test, source)
+        assert tier == 2
+
+    def test_score_fallback_tier_3(self):
+        source = PurePosixPath("src/foo.py")
+        test = PurePosixPath("docs/examples/test_foo.py")
+        tier, _ = TestMapper._score_test_path(test, source)
+        assert tier == 3
+
+    # -- _compatible_extension --
+
+    def test_compatible_same_ext(self):
+        assert TestMapper._compatible_extension(".py", ".py") is True
+
+    def test_compatible_ts_tsx(self):
+        assert TestMapper._compatible_extension(".ts", ".tsx") is True
+        assert TestMapper._compatible_extension(".tsx", ".ts") is True
+
+    def test_compatible_js_jsx(self):
+        assert TestMapper._compatible_extension(".js", ".jsx") is True
+        assert TestMapper._compatible_extension(".jsx", ".js") is True
+
+    def test_incompatible_py_java(self):
+        assert TestMapper._compatible_extension(".py", ".java") is False
+
+    def test_incompatible_ts_js(self):
+        assert TestMapper._compatible_extension(".ts", ".js") is False

@@ -50,6 +50,7 @@ _DEFAULT_MAX_MATCHES_PER_FILE = 50
 _DEFAULT_MAX_MATCHES_TOTAL = 500
 _DEFAULT_MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 _DEFAULT_SEARCH_TIMEOUT = 30.0  # seconds
+_DEFAULT_MAX_LINE_LENGTH = 10_000
 
 
 class GrepEngine:
@@ -74,6 +75,7 @@ class GrepEngine:
         max_matches_total: int = _DEFAULT_MAX_MATCHES_TOTAL,
         max_file_size: int = _DEFAULT_MAX_FILE_SIZE,
         search_timeout: float = _DEFAULT_SEARCH_TIMEOUT,
+        max_line_length: int = _DEFAULT_MAX_LINE_LENGTH,
     ) -> None:
         self._repo_root = repo_root.resolve()
         self._file_paths = file_paths
@@ -82,8 +84,9 @@ class GrepEngine:
         self._max_total = max_matches_total
         self._max_file_size = max_file_size
         self._search_timeout = search_timeout
+        self._max_line_length = max_line_length
         # Pattern-keyed result cache (session-scoped)
-        self._cache: dict[str, list[GrepMatch]] = {}
+        self._cache: dict[str, SearchResult] = {}
 
     def search(self, pattern: str, *, ignore_case: bool = False) -> list[GrepMatch]:
         """Search all indexed files for a single regex pattern.
@@ -112,16 +115,7 @@ class GrepEngine:
         """
         cache_key = f"{pattern}::{ignore_case}"
         if cache_key in self._cache:
-            cached = self._cache[cache_key]
-            return SearchResult(
-                matches=list(cached),
-                meta=SearchMeta(
-                    total_matches_found=len(cached),
-                    files_searched=len(self._file_paths),
-                    files_total=len(self._file_paths),
-                    was_truncated=False,
-                ),
-            )
+            return self._cache[cache_key]
 
         flags = re.IGNORECASE if ignore_case else 0
         try:
@@ -139,7 +133,7 @@ class GrepEngine:
             )
 
         result = self._search_files([compiled])
-        self._cache[cache_key] = result.matches
+        self._cache[cache_key] = result
         return result
 
     def search_batch(
@@ -242,13 +236,12 @@ class GrepEngine:
                         file_counts[pat_idx] = file_counts.get(pat_idx, 0) + 1
                         total_count += 1
 
-        # Populate per-pattern cache so subsequent single-pattern searches hit cache
+        # Populate per-pattern cache so subsequent single-pattern searches hit cache.
+        # Only cache when the batch was NOT truncated — truncated results may be
+        # incomplete and must not pollute the single-pattern cache.
         results: dict[str, SearchResult] = {}
         for pat in patterns:
-            cache_key = f"{pat}::{ignore_case}"
-            if cache_key not in self._cache:
-                self._cache[cache_key] = matches[pat]
-            results[pat] = SearchResult(
+            sr = SearchResult(
                 matches=matches[pat],
                 meta=SearchMeta(
                     total_matches_found=len(matches[pat]),
@@ -258,6 +251,11 @@ class GrepEngine:
                     truncation_reason=truncation_reason,
                 ),
             )
+            results[pat] = sr
+            if not was_truncated:
+                cache_key = f"{pat}::{ignore_case}"
+                if cache_key not in self._cache:
+                    self._cache[cache_key] = sr
 
         return results
 
@@ -332,6 +330,12 @@ class GrepEngine:
             ),
         )
 
+    def _cap_line(self, line: str) -> str:
+        """Truncate a line exceeding ``max_line_length`` to prevent memory issues."""
+        if len(line) > self._max_line_length:
+            return line[: self._max_line_length]
+        return line
+
     def _read_file_lines(self, abs_path: Path) -> list[str] | None:
         """Read a file into lines, or return None if unreadable/binary/too large."""
         try:
@@ -349,7 +353,7 @@ class GrepEngine:
             text = raw.decode("utf-8", errors="replace")
             if "\ufffd" in text:
                 log_message(f"GrepEngine: encoding replacements in {abs_path.name}")
-            return text.splitlines()
+            return [self._cap_line(ln) for ln in text.splitlines()]
         except OSError:
             return None
 
@@ -384,7 +388,7 @@ class GrepEngine:
                     lines.append(leftover)
             if has_replacement:
                 log_message(f"GrepEngine: encoding replacements in {abs_path.name}")
-            return [line.rstrip("\n").rstrip("\r") for line in lines]
+            return [self._cap_line(line.rstrip("\n").rstrip("\r")) for line in lines]
         except OSError:
             return None
 

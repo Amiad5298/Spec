@@ -987,6 +987,25 @@ class CitationContentValidator(Validator):
                     )
                     continue
 
+                try:
+                    file_size = abs_path.stat().st_size
+                except OSError:
+                    continue
+                if file_size > 10 * 1024 * 1024:  # 10 MB
+                    findings.append(
+                        ValidationFinding(
+                            validator_name=self.name,
+                            severity=ValidationSeverity.INFO,
+                            message=(
+                                f"Skipping oversized file: `{file_path_str}` "
+                                f"({file_size // 1024 // 1024} MB, cited at line {citation_line_num})"
+                            ),
+                            line_number=citation_line_num,
+                            suggestion="Large files are skipped to avoid memory issues.",
+                        )
+                    )
+                    continue
+
                 file_lines = abs_path.read_text(errors="replace").splitlines()
                 range_start = max(0, start_line - 1)
                 range_end = min(len(file_lines), end_line)
@@ -1261,7 +1280,12 @@ class SnippetCompletenessValidator(Validator):
 
     # Detect field declarations (Java/Kotlin/C#/TypeScript)
     _FIELD_PATTERNS = [
-        re.compile(r"private\s+(final\s+)?\w+\s+\w+\s*;"),  # Java: private final Foo foo;
+        re.compile(  # Java: annotations, generics, arrays — private final List<String> foo;
+            r"(?:@\w+(?:\([^)]*\))?\s+)*"
+            r"(?:private|protected)\s+(?:final\s+)?"
+            r"[\w.]+(?:<[\w.,\s<>?]+>)?(?:\[\])?"
+            r"\s+\w+\s*;"
+        ),
         re.compile(r"private\s+\w+:\s*\w+"),  # TypeScript: private foo: Foo
         re.compile(r"self\.\w+\s*="),  # Python: self.foo =
         re.compile(r"val\s+\w+:\s*\w+"),  # Kotlin: val foo: Foo
@@ -1341,7 +1365,9 @@ class OperationalCompletenessValidator(Validator):
         (
             "threshold value",
             re.compile(
-                r"(?:threshold|>|<|>=|<=)\s*\d+",
+                r"(?:threshold\s*(?:[:=]|of|is|at)?\s*(?:[><=]+\s*)?\d+"
+                r"|(?:alert|metric|sla|slo|latency|error.?rate|cpu|memory|disk|queue)"
+                r"\w*\s*(?:>|<|>=|<=)\s*\d+)",
                 re.IGNORECASE,
             ),
         ),

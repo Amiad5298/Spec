@@ -114,7 +114,10 @@ class ManifestParser:
         modules: list[Module] = []
         edges: list[Dependency] = []
 
-        tree = ET.parse(pom_path)
+        try:
+            tree = ET.parse(pom_path)
+        except ET.ParseError as exc:
+            raise ET.ParseError(f"Invalid XML in {pom_path.name}: {exc}") from exc
         root = tree.getroot()
         ns = self._maven_ns(root)
 

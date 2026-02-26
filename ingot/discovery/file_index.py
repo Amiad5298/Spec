@@ -39,6 +39,8 @@ class FileIndex:
         self._by_ext: dict[str, list[PurePosixPath]] = defaultdict(list)
         # All indexed paths (relative PurePosixPath)
         self._all_paths: list[PurePosixPath] = []
+        # Glob result cache (session-scoped)
+        self._glob_cache: dict[str, list[PurePosixPath]] = {}
 
         self._build_index()
 
@@ -127,13 +129,19 @@ class FileIndex:
     def find_by_glob(self, pattern: str) -> list[PurePosixPath]:
         """Find files matching a glob pattern.
 
+        Results are cached by pattern for the lifetime of this index.
+
         Args:
             pattern: Glob pattern (e.g. ``"src/**/*.java"``).
 
         Returns:
             List of matching relative paths.
         """
-        return [p for p in self._all_paths if fnmatch(str(p), pattern)]
+        if pattern in self._glob_cache:
+            return list(self._glob_cache[pattern])
+        result = [p for p in self._all_paths if fnmatch(str(p), pattern)]
+        self._glob_cache[pattern] = result
+        return result
 
     def fuzzy_find(self, filename: str) -> PurePosixPath | None:
         """Find a file by fuzzy matching — stem + extension, then stem only.

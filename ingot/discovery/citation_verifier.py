@@ -151,6 +151,29 @@ class CitationVerifier:
                     reason=f"file not found: {file_path}",
                 )
 
+            try:
+                file_size = abs_path.stat().st_size
+            except OSError as exc:
+                return CitationCheck(
+                    file_path=file_path,
+                    start_line=start_line,
+                    end_line=end_line,
+                    is_verified=False,
+                    expected_ids=frozenset(snippet_ids),
+                    found_ids=frozenset(),
+                    reason=f"cannot stat file: {exc}",
+                )
+            if file_size > 10 * 1024 * 1024:  # 10 MB
+                return CitationCheck(
+                    file_path=file_path,
+                    start_line=start_line,
+                    end_line=end_line,
+                    is_verified=False,
+                    expected_ids=frozenset(snippet_ids),
+                    found_ids=frozenset(),
+                    reason=f"file too large ({file_size // 1024 // 1024} MB)",
+                )
+
             all_lines = abs_path.read_text(errors="replace").splitlines()
 
             # Extract cited range (1-based → 0-based)

@@ -231,29 +231,39 @@ class CitationVerifier:
     def _extract_snippet_identifiers(self, lines: list[str], citation_idx: int) -> set[str]:
         """Extract identifiers from the code block near a citation.
 
-        Looks for a fenced code block within 3 lines after the citation.
+        Looks for the nearest fenced code block within 3 lines of the
+        citation line (before or after). This supports both layouts:
+        - Source before code block
+        - Source after code block
         """
-        search_range = min(len(lines), citation_idx + 4)
-        block_start = None
-        block_end = None
+        code_blocks: list[tuple[int, int]] = []
+        open_line: int | None = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("```"):
+                if open_line is None:
+                    open_line = i
+                else:
+                    code_blocks.append((open_line, i))
+                    open_line = None
 
-        for j in range(citation_idx + 1, search_range):
-            if lines[j].strip().startswith("```"):
-                block_start = j + 1
-                break
+        best_block: tuple[int, int] | None = None
+        best_distance = float("inf")
+        for block_open, block_close in code_blocks:
+            if block_open <= citation_idx <= block_close:
+                distance = 0
+            elif citation_idx < block_open:
+                distance = block_open - citation_idx
+            else:
+                distance = citation_idx - block_close
 
-        if block_start is None:
+            if distance <= 3 and distance < best_distance:
+                best_distance = distance
+                best_block = (block_open, block_close)
+
+        if best_block is None:
             return set()
 
-        for j in range(block_start, len(lines)):
-            if lines[j].strip().startswith("```"):
-                block_end = j
-                break
-
-        if block_end is None:
-            return set()
-
-        snippet_text = "\n".join(lines[block_start:block_end])
+        snippet_text = "\n".join(lines[best_block[0] + 1 : best_block[1]])
         return set(IDENTIFIER_RE.findall(snippet_text))
 
 

@@ -69,7 +69,6 @@ class FileIndex:
         entries = result.stdout.split("\0")
         count = 0
         for entry in entries:
-            entry = entry.strip()
             if not entry:
                 continue
             if count >= self._max_files:

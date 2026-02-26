@@ -538,8 +538,10 @@ def _run_local_discovery(
         ticket_text = " ".join(filter(None, [state.ticket.title, state.ticket.description]))
         keywords = extract_keywords(ticket_text)
         if not keywords:
-            log_message("Local discovery: no keywords extracted from ticket text")
-            return ""
+            log_message(
+                "Local discovery: no keywords extracted from ticket text; "
+                "running manifest/module discovery only"
+            )
 
         builder = ContextBuilder(repo_root)
         report = builder.build(keywords=keywords, file_index=file_index)
